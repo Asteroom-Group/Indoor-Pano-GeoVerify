@@ -1,0 +1,235 @@
+{
+  "exp": "cos_joint_l4",
+  "store_logit": true,
+  "houses": {
+    "DollhouseTask_58533_NoOutdoor": {
+      "fold": 0,
+      "n_images": 32
+    },
+    "DollhouseTask_58546_NoOutdoor": {
+      "fold": 0,
+      "n_images": 24
+    },
+    "DollhouseTask_58558": {
+      "fold": 0,
+      "n_images": 19
+    },
+    "DollhouseTask_58664": {
+      "fold": 0,
+      "n_images": 22
+    },
+    "DollhouseTask_58691_NoOutdoor": {
+      "fold": 0,
+      "n_images": 35
+    },
+    "DollhouseTask_58715": {
+      "fold": 0,
+      "n_images": 11
+    },
+    "DollhouseTask_59179_NoOutdoor": {
+      "fold": 0,
+      "n_images": 9
+    },
+    "DollhouseTask_59863_NoOutdoor": {
+      "fold": 0,
+      "n_images": 33
+    },
+    "DollhouseTask_67838_NoOutdoor": {
+      "fold": 0,
+      "n_images": 30
+    },
+    "DollhouseTask_68478_NoOutdoor": {
+      "fold": 0,
+      "n_images": 78
+    },
+    "DollhouseTask_59203_NoOutdoor": {
+      "fold": 1,
+      "n_images": 59
+    },
+    "DollhouseTask_59215_NoOutdoor": {
+      "fold": 1,
+      "n_images": 10
+    },
+    "DollhouseTask_60573_NoOutdoor": {
+      "fold": 1,
+      "n_images": 34
+    },
+    "DollhouseTask_61939_NoOutdoor": {
+      "fold": 1,
+      "n_images": 33
+    },
+    "DollhouseTask_61968_NoOutdoor": {
+      "fold": 1,
+      "n_images": 38
+    },
+    "DollhouseTask_63108": {
+      "fold": 1,
+      "n_images": 28
+    },
+    "DollhouseTask_64538_NoOutdoor": {
+      "fold": 1,
+      "n_images": 17
+    },
+    "DollhouseTask_65148_NoOutdoor": {
+      "fold": 1,
+      "n_images": 21
+    },
+    "DollhouseTask_66500_NoOutdoor": {
+      "fold": 1,
+      "n_images": 42
+    },
+    "DollhouseTask_66682": {
+      "fold": 1,
+      "n_images": 23
+    },
+    "DollhouseTask_66790": {
+      "fold": 1,
+      "n_images": 6
+    },
+    "DollhouseTask_69127_NoOutdoor": {
+      "fold": 1,
+      "n_images": 30
+    },
+    "DollhouseTask_58472_NoOutdoor": {
+      "fold": 2,
+      "n_images": 22
+    },
+    "DollhouseTask_58489_NoOutdoor": {
+      "fold": 2,
+      "n_images": 34
+    },
+    "DollhouseTask_58498_NoOutdoor": {
+      "fold": 2,
+      "n_images": 42
+    },
+    "DollhouseTask_58603_NoOutdoor": {
+      "fold": 2,
+      "n_images": 25
+    },
+    "DollhouseTask_59868_NoOutdoor": {
+      "fold": 2,
+      "n_images": 32
+    },
+    "DollhouseTask_60621_NoOutdoor": {
+      "fold": 2,
+      "n_images": 29
+    },
+    "DollhouseTask_63261_NoOutdoor": {
+      "fold": 2,
+      "n_images": 18
+    },
+    "DollhouseTask_65147_NoOutdoor": {
+      "fold": 2,
+      "n_images": 15
+    },
+    "DollhouseTask_65827_NoOutdoor": {
+      "fold": 2,
+      "n_images": 40
+    },
+    "DollhouseTask_66502_NoOutdoor": {
+      "fold": 2,
+      "n_images": 51
+    },
+    "DollhouseTask_69126_NoOutdoor": {
+      "fold": 2,
+      "n_images": 37
+    },
+    "DollhouseTask_58499_NoOutdoor": {
+      "fold": 3,
+      "n_images": 28
+    },
+    "DollhouseTask_58553": {
+      "fold": 3,
+      "n_images": 13
+    },
+    "DollhouseTask_58599_NoOutdoor": {
+      "fold": 3,
+      "n_images": 38
+    },
+    "DollhouseTask_58713": {
+      "fold": 3,
+      "n_images": 8
+    },
+    "DollhouseTask_61267_NoOutdoor": {
+      "fold": 3,
+      "n_images": 50
+    },
+    "DollhouseTask_61295_NoOutdoor": {
+      "fold": 3,
+      "n_images": 21
+    },
+    "DollhouseTask_63927_NoOutdoor": {
+      "fold": 3,
+      "n_images": 34
+    },
+    "DollhouseTask_63933_NoOutdoor": {
+      "fold": 3,
+      "n_images": 19
+    },
+    "DollhouseTask_65000": {
+      "fold": 3,
+      "n_images": 33
+    },
+    "DollhouseTask_65849": {
+      "fold": 3,
+      "n_images": 26
+    },
+    "DollhouseTask_67192_NoOutdoor": {
+      "fold": 3,
+      "n_images": 35
+    },
+    "DollhouseTask_69734_NoOutdoor": {
+      "fold": 3,
+      "n_images": 46
+    },
+    "DollhouseTask_58582_NoOutdoor": {
+      "fold": 4,
+      "n_images": 49
+    },
+    "DollhouseTask_58589_NoOutdoor": {
+      "fold": 4,
+      "n_images": 28
+    },
+    "DollhouseTask_58712": {
+      "fold": 4,
+      "n_images": 10
+    },
+    "DollhouseTask_62615_NoOutdoor": {
+      "fold": 4,
+      "n_images": 8
+    },
+    "DollhouseTask_63247_NoOutdoor": {
+      "fold": 4,
+      "n_images": 33
+    },
+    "DollhouseTask_63925_NoOutdoor": {
+      "fold": 4,
+      "n_images": 47
+    },
+    "DollhouseTask_63934_NoOutdoor": {
+      "fold": 4,
+      "n_images": 20
+    },
+    "DollhouseTask_65826_NoOutdoor": {
+      "fold": 4,
+      "n_images": 33
+    },
+    "DollhouseTask_67184_NoOutdoor": {
+      "fold": 4,
+      "n_images": 36
+    },
+    "DollhouseTask_67202_NoOutdoor": {
+      "fold": 4,
+      "n_images": 26
+    },
+    "DollhouseTask_67839_NoOutdoor": {
+      "fold": 4,
+      "n_images": 21
+    },
+    "DollhouseTask_69750_NoOutdoor": {
+      "fold": 4,
+      "n_images": 38
+    }
+  },
+  "generated_by": "export_oof_matrices.py (base)"
+}

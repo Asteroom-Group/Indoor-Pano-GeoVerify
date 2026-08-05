@@ -1,0 +1,332 @@
+"""
+[腳本用途]
+把 block_match_v2 產出的「連通性矩陣 (OOF)」整理成前端拼接工具可直接讀取的 house JSON。
+
+輸入 (每間房子):
+  oof_matrices/<exp>/<house>.npy            (N, N, 3)  ch0=連通 logit(對稱), ch1=sin(az), ch2=cos(az)
+  oof_matrices/<exp>/<house>_images.json    長度 N 的影像檔名 (與矩陣 row/col 對齊)
+  oof_matrices/<exp>/<house>_doormap.npy     (N, 8)     每張圖的門方位 8-bin aux logits
+  datasets/<house>/.../*.jpg                 ERP 全景圖 (讀寬高)
+  datasets/<house>/.../*_HOTSPOT.json        Ground Truth 連接 (可選, 供除錯對照)
+  Output/roma_regions/_ranking_eval.csv       幾何驗證排序欄位 (geo_*，可選；join key = house+img 檔名集合)
+  Output/roma_regions/_summary.csv           幾何驗證方位 az_ab/az_ba (取代粗篩方向頭，可選；同上 join)
+
+輸出:
+  stitch_tool/data/<house>.json
+
+方位規約 (與 dataset_builder._calculate_azimuth 完全一致):
+  az(x) = ((x / W) * 360 - 180) mod 360
+  反解 (前端用): u = ((az + 180) mod 360) / 360     # ERP 影像水平比例 / three.js 貼圖 u
+
+[用法]
+  python stitch_tool/prepare_house_data.py                # 全部房子
+  python stitch_tool/prepare_house_data.py --houses DollhouseTask_58472_NoOutdoor
+"""
+import os
+import sys
+import csv
+import json
+import glob
+import math
+import argparse
+import numpy as np
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(SCRIPT_DIR)  # 專案根目錄
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+from config import datasets_root, matrices_root    # noqa: E402（要先補 sys.path）
+
+DATA_ROOT = datasets_root()                        # 可用 ROMA_GEO_DATASETS 覆寫，見 config.py
+# 連通性矩陣來源。優先序：--oof_dir > 環境變數 ROMA_GEO_MATRICES > matrices/<版本>/
+DEFAULT_OOF = matrices_root()
+OUT_DIR = os.path.join(SCRIPT_DIR, "data")
+# Optional: run_roma_above_threshold.py's aggregated per-pair RoMa evidence (match_count +
+# confidence sum/mean), written by its aggregate_roma_scores() step. Only covers pairs whose
+# coarse-filter score cleared the LOO threshold in that run, so most houses/pairs will have none -
+# every pair without a cached entry simply gets roma_* = null (fully backward compatible).
+DEFAULT_ROMA_SCORES = os.path.join(ROOT_DIR, "roma_match", "roma_scores.npz")
+# Optional: pose_experiment 幾何驗證批次輸出的 pair-level CSV（皆已入 git，7,069/7,070 列）。
+# _ranking_eval.csv -> geo_n_inlier/geo_inlier_rate/geo_n_regions/geo_conf_used/geo_posed
+#   （佇列「幾何驗證」排序取代原始 roma_conf_* 聚合，見 queue.js）。
+# _summary.csv      -> az_ab_deg/az_ba_deg 取代粗篩方向頭 az_ij/az_ji（粗篩模型不輸出通道方位，
+#   評估依據見 matrices/README.md「通道方位角的來源已經改變」）。
+# 兩者都缺此對時該 house 完全不受影響：geo_* 全 null、az_ij/az_ji 保留 coarse 舊行為。
+DEFAULT_RANKING_EVAL = os.path.join(ROOT_DIR, "Output", "roma_regions", "_ranking_eval.csv")
+DEFAULT_SUMMARY_CSV = os.path.join(ROOT_DIR, "Output", "roma_regions", "_summary.csv")
+
+if ROOT_DIR not in sys.path:
+    sys.path.append(ROOT_DIR)
+try:
+    from roma_match.roma_score_cache import RomaScoreCache
+except ImportError:
+    RomaScoreCache = None  # optional: RoMa-score sorting is skipped, everything else still works
+
+from house_dirs import resolve_task_dir
+
+AZ_BINS = [0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0]  # doormap 8-bin 中心
+
+
+def read_image_size(path: str):
+    """只讀 header 拿寬高，避免載入整張大圖。"""
+    try:
+        from PIL import Image
+        with Image.open(path) as im:
+            return int(im.size[0]), int(im.size[1])
+    except Exception:
+        return 8192, 4096  # ERP 常見預設
+
+
+def az_from_matrix(M, i, j):
+    """方位(度) i->j = atan2(ch1=sin, ch2=cos)。已對 localization CSV 驗證一致。"""
+    sin_v = float(M[i, j, 1])
+    cos_v = float(M[i, j, 2])
+    return math.degrees(math.atan2(sin_v, cos_v)) % 360.0
+
+
+def _csv_num(s, cast=float):
+    """CSV 欄位轉數值；空字串一律轉 None（而非 NaN 或 0）。posed=0 列的 conf_used 等欄位常是
+    空字串，用這個 helper 才不會意外炸成 ValueError 或混進 NaN。"""
+    s = (s or "").strip()
+    return cast(s) if s != "" else None
+
+
+def load_pair_csv(path: str) -> dict:
+    """讀取 pose_experiment 幾何驗證批次輸出的 pair-level CSV（_ranking_eval.csv 或
+    _summary.csv，兩者前三欄都是 house,img_a,img_b），回傳
+    {(house, frozenset({img_a, img_b})): row_dict}。
+    img_a/img_b 檔名不含副檔名、pair 無序——用 frozenset 當 key 一次處理這兩項，
+    呼叫端 join 時只需把影像檔名去副檔名即可比對。檔案不存在回傳空 dict（呼叫端等同「不 join」）。"""
+    lookup = {}
+    if not os.path.exists(path):
+        return lookup
+    with open(path, encoding="utf-8", newline="") as f:
+        for row in csv.DictReader(f):
+            lookup[(row["house"], frozenset({row["img_a"], row["img_b"]}))] = row
+    return lookup
+
+
+def load_gt(task_dir: str):
+    """讀 *_HOTSPOT.json，回傳 {src_img: {tgt_img: az_deg}} 有向連接 + 門方位。"""
+    gt = {}
+    W = None
+    # 先估一張圖寬 (HSLoc x 需要 W 換算方位)
+    jpgs = sorted(glob.glob(os.path.join(task_dir, "*.jpg")))
+    if jpgs:
+        W, _ = read_image_size(jpgs[0])
+    for hs_path in glob.glob(os.path.join(task_dir, "*HOTSPOT*.json")):
+        try:
+            J = json.load(open(hs_path, encoding="utf-8"))
+        except Exception:
+            continue
+        for room in J.get("HOTSPOTOFROOM", []):
+            src = room.get("IDName")
+            if not src:
+                continue
+            tgts = (room.get("ToIDName", {}) or {}).get("IDName", []) or []
+            coords = (room.get("HSLoc", {}) or {}).get("Coordinate", []) or []
+            d = gt.setdefault(src, {})
+            for k, tgt in enumerate(tgts):
+                az = None
+                if k < len(coords) and W:
+                    x = float(coords[k].get("x", 0.0))
+                    az = ((x / W) * 360.0 - 180.0) % 360.0
+                d[tgt] = az
+    return gt
+
+
+def build_house(house: str, oof_dir: str, roma_cache=None, ranking_lookup=None, summary_lookup=None) -> dict | None:
+    npy = os.path.join(oof_dir, f"{house}.npy")
+    imgs_json = os.path.join(oof_dir, f"{house}_images.json")
+    door_npy = os.path.join(oof_dir, f"{house}_doormap.npy")
+    if not (os.path.exists(npy) and os.path.exists(imgs_json)):
+        print(f"[skip] {house}: 缺 .npy 或 _images.json")
+        return None
+
+    M = np.load(npy)                       # (N, N, 3)
+    images = json.load(open(imgs_json, encoding="utf-8"))
+    N = len(images)
+    door = np.load(door_npy) if os.path.exists(door_npy) else None
+
+    task_dir = resolve_task_dir(DATA_ROOT, house)
+    if task_dir is None:
+        print(f"[warn] {house}: 找不到 datasets 影像資料夾，仍輸出(無 GT/寬高預設)")
+        W, H = 8192, 4096
+    else:
+        W, H = read_image_size(os.path.join(task_dir, images[0]))
+
+    gt = load_gt(task_dir) if task_dir else {}
+
+    # 建立 pairs (上三角 i<j)，依連通機率(sigmoid logit)由高到低
+    pairs = []
+    for i in range(N):
+        for j in range(i + 1, N):
+            logit = float(M[i, j, 0])
+            prob = 1.0 / (1.0 + math.exp(-logit))
+            ai, aj = images[i], images[j]
+            ai_base = os.path.splitext(ai)[0]
+            aj_base = os.path.splitext(aj)[0]
+            gt_ij = gt.get(ai, {})
+            gt_ji = gt.get(aj, {})
+            gt_conn = (aj in gt_ij) or (ai in gt_ji)
+
+            # 通道方位：預設粗篩方向頭(coarse)；若此對在 _summary.csv 有位姿(az 欄非空)，
+            # 改吃幾何驗證 az_ab/az_ba（粗篩模型不輸出方位，見 matrices/README.md）。
+            # summary 的 img_a/img_b 順序可能與 (i,j)=(ai,aj) 相反，用檔名判斷方向對映。
+            az_ij_coarse = az_from_matrix(M, i, j)
+            az_ji_coarse = az_from_matrix(M, j, i)
+            az_ij, az_ji, az_source = az_ij_coarse, az_ji_coarse, "coarse"
+            srow = summary_lookup.get((house, frozenset({ai_base, aj_base}))) if summary_lookup else None
+            if srow is not None:
+                az_ab = _csv_num(srow.get("az_ab_deg"))
+                az_ba = _csv_num(srow.get("az_ba_deg"))
+                if az_ab is not None and az_ba is not None:
+                    if srow["img_a"] == ai_base:   # 同序：img_a=i圖(ai)，img_b=j圖(aj)
+                        az_ij, az_ji = az_ab % 360.0, az_ba % 360.0
+                    else:                            # 反序：img_a=j圖(aj)，img_b=i圖(ai)
+                        az_ij, az_ji = az_ba % 360.0, az_ab % 360.0
+                    az_source = "geo"
+
+            pair = {
+                "i": i, "j": j,
+                "logit": round(logit, 4),
+                "prob": round(prob, 4),
+                "az_ij": round(az_ij, 2),   # 在 i 圖中指向 j 的方位（posed 時來自 az_ab/az_ba）
+                "az_ji": round(az_ji, 2),   # 在 j 圖中指向 i 的方位
+                "az_source": az_source,     # "geo"=幾何驗證取代值；"coarse"=粗篩方向頭(舊行為)
+                "az_coarse_ij": round(az_ij_coarse, 2),   # 粗篩方向頭原始值備份，QA 對照用
+                "az_coarse_ji": round(az_ji_coarse, 2),
+                "gt_connected": bool(gt_conn),
+                "gt_az_ij": (round(gt_ij[aj], 2) if aj in gt_ij and gt_ij[aj] is not None else None),
+                "gt_az_ji": (round(gt_ji[ai], 2) if ai in gt_ji and gt_ji[ai] is not None else None),
+                # RoMa 聚合分數（可選，未經幾何驗證的原始匹配聚合）：只有跑過
+                # run_roma_above_threshold.py 且此對通過閾值才有值，其餘一律 null。佇列排序已
+                # 改用下面的 geo_* 欄位，這組留著純作向後相容／除錯對照。
+                "roma_match_count": None,
+                "roma_conf_sum": None,
+                "roma_conf_mean": None,
+                # 幾何驗證欄位（join _ranking_eval.csv）：三層語意——
+                # null=不在 CSV(未過粗篩/沒跑 RoMa，佇列沉底)；geo_posed=0(跑了但無位姿，
+                # n_inlier=0 自然墊底)；geo_posed=1=正常值。取代 roma_conf_* 做佇列「幾何驗證」排序。
+                "geo_n_inlier": None,
+                "geo_inlier_rate": None,
+                "geo_n_regions": None,
+                "geo_conf_used": None,
+                "geo_posed": None,
+            }
+            if roma_cache is not None:
+                rec = roma_cache.get(house, ai, aj)
+                if rec is not None:
+                    pair["roma_match_count"] = rec["match_count"]
+                    pair["roma_conf_sum"] = round(rec["conf_sum"], 4)
+                    pair["roma_conf_mean"] = round(rec["conf_mean"], 4)
+            grow = ranking_lookup.get((house, frozenset({ai_base, aj_base}))) if ranking_lookup else None
+            if grow is not None:
+                pair["geo_n_inlier"] = _csv_num(grow.get("n_inlier"), int)
+                pair["geo_inlier_rate"] = _csv_num(grow.get("inlier_rate"), float)
+                pair["geo_n_regions"] = _csv_num(grow.get("n_regions"), int)
+                pair["geo_conf_used"] = _csv_num(grow.get("conf_used"), float)
+                pair["geo_posed"] = _csv_num(grow.get("posed"), int)
+            pairs.append(pair)
+    pairs.sort(key=lambda p: p["prob"], reverse=True)
+
+    # 每張圖的候選門方位 (doormap 8-bin -> softmax 機率 + 方位)
+    doors = []
+    if door is not None:
+        for i in range(N):
+            row = np.asarray(door[i], dtype=np.float64)
+            ex = np.exp(row - row.max())
+            sm = ex / ex.sum()
+            doors.append({
+                "i": i,
+                "dirs": [{"az": AZ_BINS[b], "score": round(float(sm[b]), 4)} for b in range(len(AZ_BINS))],
+            })
+
+    return {
+        "house": house,
+        "n_images": N,
+        "width": W,
+        "height": H,
+        "images": images,
+        "pairs": pairs,
+        "doors": doors,
+        "az_convention": "az(x)=((x/W)*360-180)%360 ; u=((az+180)%360)/360",
+        "n_gt_connected_pairs": sum(1 for p in pairs if p["gt_connected"]),
+    }
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--oof_dir", default=DEFAULT_OOF)
+    ap.add_argument("--houses", nargs="*", default=None, help="指定房子；預設全部")
+    ap.add_argument("--out_dir", default=OUT_DIR)
+    ap.add_argument("--roma_scores", default=DEFAULT_ROMA_SCORES,
+                     help="run_roma_above_threshold.py 產出的 roma_scores.npz（可選；不存在則跳過）")
+    ap.add_argument("--no_roma_scores", action="store_true", help="即使檔案存在也不附加 RoMa 分數")
+    ap.add_argument("--ranking_eval", default=DEFAULT_RANKING_EVAL,
+                     help="_ranking_eval.csv：附加幾何驗證排序欄位 geo_*（可選；不存在則全 null）")
+    ap.add_argument("--no_ranking_eval", action="store_true", help="即使檔案存在也不附加幾何驗證欄位")
+    ap.add_argument("--summary_csv", default=DEFAULT_SUMMARY_CSV,
+                     help="_summary.csv：az_ij/az_ji 改吃幾何驗證 az_ab/az_ba（可選；不存在則保留 coarse 方位）")
+    ap.add_argument("--no_summary_csv", action="store_true", help="即使檔案存在也不做方位遷移（保留 coarse）")
+    args = ap.parse_args()
+
+    os.makedirs(args.out_dir, exist_ok=True)
+
+    roma_cache = None
+    if not args.no_roma_scores and RomaScoreCache is not None and os.path.exists(args.roma_scores):
+        roma_cache = RomaScoreCache.load(args.roma_scores)
+        print(f"[roma] Loaded {roma_cache.num_edges()} aggregated RoMa pair scores from {args.roma_scores}")
+
+    ranking_lookup = None
+    if not args.no_ranking_eval and os.path.exists(args.ranking_eval):
+        ranking_lookup = load_pair_csv(args.ranking_eval)
+        print(f"[geo] Loaded {len(ranking_lookup)} ranking-eval rows from {args.ranking_eval}")
+
+    summary_lookup = None
+    if not args.no_summary_csv and os.path.exists(args.summary_csv):
+        summary_lookup = load_pair_csv(args.summary_csv)
+        print(f"[geo] Loaded {len(summary_lookup)} summary rows from {args.summary_csv}")
+
+    if args.houses:
+        houses = args.houses
+    else:
+        houses = sorted({
+            os.path.basename(p)[:-4]
+            for p in glob.glob(os.path.join(args.oof_dir, "*.npy"))
+            if not p.endswith("_doormap.npy")
+        })
+        # 沒有輸入就中止：繼續下去會把 data/_index.json 覆寫成空陣列，
+        # 而 server.py 優先讀該檔，導致 /api/houses 回空。
+        if not houses:
+            raise SystemExit(
+                "[abort] %s 底下找不到任何 *.npy（連通性矩陣）。\n"
+                "        沒有輸入就不會產生任何 house JSON，繼續執行只會把\n"
+                "        %s/_index.json 覆寫成空陣列並讓工具打不開。\n"
+                "        請用 --oof_dir 指定正確路徑，或先取得矩陣檔。"
+                % (args.oof_dir, args.out_dir))
+
+    index = []
+    for h in houses:
+        data = build_house(h, args.oof_dir, roma_cache=roma_cache,
+                            ranking_lookup=ranking_lookup, summary_lookup=summary_lookup)
+        if data is None:
+            continue
+        out = os.path.join(args.out_dir, f"{h}.json")
+        json.dump(data, open(out, "w", encoding="utf-8"), ensure_ascii=False)
+        index.append({
+            "house": h,
+            "n_images": data["n_images"],
+            "n_pairs": len(data["pairs"]),
+            "n_gt_connected_pairs": data["n_gt_connected_pairs"],
+        })
+        print(f"[ok] {h}: N={data['n_images']} pairs={len(data['pairs'])} "
+              f"gt_conn={data['n_gt_connected_pairs']} -> {out}")
+
+    json.dump(index, open(os.path.join(args.out_dir, "_index.json"), "w", encoding="utf-8"),
+              ensure_ascii=False, indent=2)
+    print(f"\n[done] {len(index)} 房子 -> {args.out_dir}/_index.json")
+
+
+if __name__ == "__main__":
+    main()
