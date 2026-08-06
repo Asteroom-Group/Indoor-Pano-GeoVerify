@@ -35,7 +35,7 @@ let draggingMarker = null, dragMoved = false;
 /** 目前場景中的 THREE.Sprite 標記。 */
 let markers = [];
 
-/** 需求 3：目前 hover 的可點圈圈（cursor:pointer + 微放大）。 */
+/** 目前 hover 的可點圈圈（cursor:pointer + 微放大）。 */
 let hoveredMarker = null;
 /** hover 放大倍率。 */
 const HOVER_SCALE = 1.18;
@@ -152,7 +152,7 @@ function onPointerMove(e){
     if(Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY) > 3) dragMoved = true;
     return;
   }
-  // 需求 3：非拖曳時，hover 可點圈 -> cursor:pointer + 微放大。
+  // 非拖曳時，hover 可點圈 -> cursor:pointer + 微放大。
   updateMouse(e);
   const hov = pickMarker();
   setHover((hov && isClickableMarker(hov)) ? hov : null);
@@ -363,7 +363,7 @@ export function makeMarker(az, color, opts){
   spr.renderOrder = 10;
   spr.userData = { az:az, role:opts.role || '', color:color, shape:shape,
                    draggable:!!opts.draggable, i:opts.i, j:opts.j, targetImg:opts.targetImg,
-                   faint:!!opts.faint, baseScale:sz };   // baseScale 供 hover 微放大復原（需求 3）
+                   faint:!!opts.faint, baseScale:sz };   // baseScale 供 hover 微放大復原
   scene.add(spr); markers.push(spr);
   return spr;
 }
@@ -460,7 +460,7 @@ export function buildMarkersForImage(imgIdx, pair){
     }
   }
 
-  // 4) 已否決/淘汰的目前 pair（需求 1）：畫紅圈（不可拖曳，點擊 no-op/toast）。
+  // 4) 已否決/淘汰的目前 pair：畫紅圈（不可拖曳，點擊 no-op/toast）。
   //    讓從佇列點到已否決項時，3D 也看得到紅圈（與 ERP 主標記紅色一致）。
   if(pair){
     const stp = pairStatus(pair);

@@ -59,7 +59,7 @@
   #info .pairline{font-size:13px;margin-top:4px;}
   #hint{position:absolute;top:14px;right:14px;background:rgba(0,0,0,.5);padding:7px 11px;border-radius:8px;
     font-size:11px;color:var(--muted);pointer-events:none;user-select:none;line-height:1.5;text-align:right;}
-  /* 模式橫幅（第三輪需求 3）：模式名稱 + 操作提示 + 退出(Esc) 鈕，固定於檢視器頂部置中。
+  /* 模式橫幅：模式名稱 + 操作提示 + 退出(Esc) 鈕，固定於檢視器頂部置中。
      取代原 #mode-flag 純提示條；none 模式時隱藏。 */
   #mode-banner{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:11;
     display:none;align-items:center;gap:10px;max-width:74%;
@@ -75,7 +75,7 @@
   #toast{position:absolute;bottom:90px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.85);
     padding:9px 16px;border-radius:20px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:6;}
 
-  /* action bar — 第三輪需求 3：分組（導覽/判定/工具/危險）+ 組間細分隔線 */
+  /* action bar — 分組（導覽/判定/工具/危險）+ 組間細分隔線 */
   #actions{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:6px;align-items:center;
     background:rgba(20,28,38,.9);padding:9px 12px;border-radius:30px;box-shadow:0 4px 18px rgba(0,0,0,.4);
     flex-wrap:wrap;justify-content:center;max-width:94%;z-index:5;}
@@ -89,7 +89,7 @@
   #actions button.no{background:#e05a3a;color:#fff;border-color:#e05a3a;}
   #actions button.danger{color:#ff9a86;border-color:#6b3b33;}
   #actions button.danger:hover{background:#e05a3a;color:#fff;border-color:#e05a3a;}
-  /* 停用狀態（第三輪需求 3）：btn.disabled + .disabled 半透明/游標禁止 + title 說明原因 */
+  /* 停用狀態：btn.disabled + .disabled 半透明/游標禁止 + title 說明原因 */
   #actions button:disabled, #actions button.disabled{opacity:.38;cursor:not-allowed;transform:none;pointer-events:auto;}
   #actions button:disabled:hover, #actions button.disabled:hover{background:var(--panel2);transform:none;}
   #actions button.yes:disabled, #actions button.yes.disabled{background:var(--panel2);color:var(--muted);border-color:var(--line);}
@@ -110,11 +110,11 @@
     background:rgba(15,22,30,.82);padding:2px 8px;border-radius:5px;display:none;}
 
   /* ERP 對比模式（v3：canvas 上下兩 pane 各半高，可縮放平移，不捲動）
-     第三輪：每個 pane 改為「控制列(erp-ctrl) + 圖框(erp-pane-body)」上下堆疊。
+     每個 pane 改為「控制列(erp-ctrl) + 圖框(erp-pane-body)」上下堆疊。
      控制列在圖片外、不遮圖；換圖箭頭移到控制列（移除疊圖的 .erp-arrow-btn）。 */
   #erp-mode{position:absolute;inset:0;background:#0d1218;display:none;flex-direction:column;gap:8px;
     overflow:hidden;z-index:4;padding:8px 8px 74px;}
-  /* 檢視模式插件共用 overlay(WP2:crop / morph…)。蓋過 ERP(z4)、低於動作列(z5)。 */
+  /* 檢視模式插件共用 overlay(crop / morph…)。蓋過 ERP(z4)、低於動作列(z5)。 */
   .viewmode-overlay{position:absolute;inset:0;background:#0d1218;display:none;flex-direction:column;
     gap:8px;overflow:hidden;z-index:4;padding:10px 12px 74px;}
   .viewmode-overlay .vm-head{font-size:13px;font-weight:bold;color:var(--txt);opacity:.85;flex:0 0 auto;}
@@ -294,7 +294,7 @@
     transform: translate(-50%, -50%) scale(1.2);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.85);
   }
-  /* 任務6(2026-07-29)：本對主標記改為通道頂帶（與 marker.js 視覺語言一致）。
+  /* 本對主標記改為通道頂帶（與 marker.js 視覺語言一致）。
      舊門框 SVG 樣式註解保留（零刪除慣例）。
   .erp-main-dot 舊門框版 / .erp-door-svg / erp-door-glow — 2026-07-29 停用
   */
@@ -383,13 +383,13 @@
     0%, 100% { box-shadow: 0 0 3px currentColor; border-color: currentColor; }
     50% { box-shadow: 0 0 10px currentColor; border-color: currentColor; }
   }
-  /* 舊門框 CSS（2026-07-29 任務6 停用，保留備查）
+  /* 舊門框 CSS（已停用，保留備查）
   .erp-main-dot .erp-door-svg { ... }
   @keyframes erp-door-glow { ... }
   */
 
   /* minimap — z-index 高於 #erp-mode(z-index:4)，讓路線圖在 ERP 對比模式下仍可見。
-     需求 2：3D 單張(#minimap-wrap) 與 ERP 雙張(#minimap-erp-wrap) 由 minimap.js 依模式切換顯示；
+     3D 單張(#minimap-wrap) 與 ERP 雙張(#minimap-erp-wrap) 由 minimap.js 依模式切換顯示；
      toggle 鈕(#minimap-toggle)永遠可見；位置在右下但避開底部動作列（bottom 較高）與 ERP 側邊箭頭。 */
   #minimap-toggle{position:absolute;right:14px;bottom:70px;z-index:9;background:rgba(15,22,30,.92);
     color:var(--muted);border:1px solid var(--line);border-radius:14px;padding:4px 10px;font-size:11px;
@@ -409,13 +409,13 @@
   .minimap-erp-label{font-size:11px;color:var(--muted);text-align:center;margin-bottom:2px;}
   #save-ind{position:absolute;right:14px;top:14px;font-size:11px;color:var(--muted);}
 
-  /* 需求 1：路線圖「⤢ 放大」小鈕（標題列內） */
+  /* 路線圖「⤢ 放大」小鈕（標題列內） */
   #minimap-expand{float:right;cursor:pointer;color:var(--accent);font-size:11px;padding:0 2px;user-select:none;}
   #minimap-expand:hover{color:#fff;text-decoration:underline;}
   .minimap-expand-sm{cursor:pointer;color:var(--accent);user-select:none;padding:0 3px;}
   .minimap-expand-sm:hover{color:#fff;}
 
-  /* 需求 1：路線圖放大彈窗（modal）。z-index 999 高於一切既有層。 */
+  /* 路線圖放大彈窗（modal）。z-index 999 高於一切既有層。 */
   #map-modal{position:fixed;inset:0;z-index:999;display:none;align-items:center;justify-content:center;
     background:rgba(4,8,12,.72);backdrop-filter:blur(3px);}
   #map-modal-box{width:70vw;height:78vh;max-width:1200px;background:var(--panel);border:1px solid var(--line);
@@ -437,7 +437,7 @@
   .iso-chip:hover{background:#3a4a5e;border-color:var(--accent);}
   .iso-chip i{width:8px;height:8px;border-radius:50%;background:#667;display:inline-block;}
 
-  /* 需求 2/3：側邊浮動面板（批量否決 / unconn 推薦）共用外框。固定螢幕右側，z-index 高於 ERP/minimap。 */
+  /* 側邊浮動面板（批量否決 / unconn 推薦）共用外框。固定螢幕右側，z-index 高於 ERP/minimap。 */
   .side-panel{position:absolute;top:70px;right:14px;width:270px;max-height:calc(100vh - 180px);z-index:60;
     background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 34px rgba(0,0,0,.5);
     display:none;flex-direction:column;overflow:hidden;}
@@ -561,7 +561,7 @@
       3D：<kbd>←</kbd><kbd>→</kbd>換圖 · ERP：<kbd>←</kbd><kbd>→</kbd>換上圖 <kbd>⇧←</kbd><kbd>⇧→</kbd>換下圖<br>
       <kbd>Esc</kbd>回目前對 · 點候選/預測圈=跳對面 · 綠圈=穿門<br>右鍵：橘圈=刪除 · 綠圈=改否決
     </div>
-    <!-- 模式橫幅（需求 3）：模式名 + 提示 + 退出(Esc)。內容由 modes.updateModeFlags 填。 -->
+    <!-- 模式橫幅：模式名 + 提示 + 退出(Esc)。內容由 modes.updateModeFlags 填。 -->
     <div id="mode-banner">
       <span class="mb-name" id="mode-banner-name"></span>
       <span class="mb-hint" id="mode-banner-hint"></span>
@@ -570,14 +570,14 @@
     <div id="save-ind"></div>
     <div id="toast"></div>
     <div id="loading">載入全景中…</div>
-    <!-- 需求 2：路線圖 toggle 鈕（永遠可見）-->
+    <!-- 路線圖 toggle 鈕（永遠可見）-->
     <button id="minimap-toggle" title="顯示/隱藏路線圖（點節點可跳到該圖）">▣ 路線圖</button>
-    <!-- 3D 單張路線圖（需求 1：力導向；標題列加「⤢ 放大」開彈窗，雙擊小圖亦可放大）-->
+    <!-- 3D 單張路線圖（力導向；標題列加「⤢ 放大」開彈窗，雙擊小圖亦可放大）-->
     <div id="minimap-wrap">
       <div id="minimap-title">路線圖（點節點跳圖）<span id="minimap-expand" title="放大路線圖（雙擊小圖亦可）">⤢ 放大</span></div>
       <canvas id="minimap" width="220" height="220"></canvas>
     </div>
-    <!-- 需求 2：ERP 雙路線圖（上/下 或 左/右）；各自可放大 -->
+    <!-- ERP 雙路線圖（上/下 或 左/右）；各自可放大 -->
     <div id="minimap-erp-wrap">
       <div class="minimap-erp-cell">
         <div class="minimap-erp-label" id="minimap-erp-label-top">上圖 <span class="minimap-expand-sm" id="minimap-expand-top" title="放大">⤢</span></div>
@@ -588,7 +588,7 @@
         <canvas id="minimap-erp-bot" width="150" height="150"></canvas>
       </div>
     </div>
-    <!-- 需求 1：路線圖放大彈窗（全螢幕 70% modal）。z-index 高於一切既有層（ERP z4 / minimap z8-9 / banner z11）。
+    <!-- 路線圖放大彈窗（全螢幕 70% modal）。z-index 高於一切既有層（ERP z4 / minimap z8-9 / banner z11）。
          內含：放大力導向圖 canvas + 未連接圖片快速入口列 + 關閉鈕。Esc/點背景關閉。 -->
     <div id="map-modal">
       <div id="map-modal-box">
@@ -607,7 +607,7 @@
         </div>
       </div>
     </div>
-    <!-- 需求 2：批量否決浮動面板（reject 模式點圈後彈出，列同方向候選）。內容由 batch-panel.js 填。 -->
+    <!-- 批量否決浮動面板（reject 模式點圈後彈出，列同方向候選）。內容由 batch-panel.js 填。 -->
     <div id="batch-panel" class="side-panel">
       <div class="sp-head">
         <span class="sp-title" id="batch-panel-title">批量否決</span>
@@ -619,7 +619,7 @@
         <button class="sp-btn ghost" id="batch-panel-cancel">取消</button>
       </div>
     </div>
-    <!-- 需求 3：unconn 放圈推薦面板（列出同方向 pending 候選，可瀏覽/連通/否決）。內容由 erp.js 填。 -->
+    <!-- unconn 放圈推薦面板（列出同方向 pending 候選，可瀏覽/連通/否決）。內容由 erp.js 填。 -->
     <div id="reco-panel" class="side-panel">
       <div class="sp-head">
         <span class="sp-title" id="reco-panel-title">推薦連通候選</span>
@@ -698,7 +698,7 @@
       <svg id="erp-match-svg"></svg>
       <div id="roma-match-badge"></div>
     </div>
-    <!-- 動作列（需求 3）：導覽 | 判定 | 工具 | 危險，四組以細分隔線分開 -->
+    <!-- 動作列：導覽 | 判定 | 工具 | 危險，四組以細分隔線分開 -->
     <div id="actions">
       <!-- 導覽類：換圖 / 回目前對 / 重置視角 / ERP 回3D雙鈕 / unconn 連接 -->
       <div class="act-group" id="grp-nav">
@@ -726,7 +726,7 @@
       <div class="act-group" id="grp-tools">
         <button id="btn-unconn">未連接通道 <kbd>U</kbd></button>
         <button id="btn-erp">ERP對比 <kbd>E</kbd></button>
-        <button id="btn-erp-regions" title="在目前 ERP 對比圖上疊加 WP1 共視區域（非獨立模式）">區域遮罩</button>
+        <button id="btn-erp-regions" title="在目前 ERP 對比圖上疊加 共視區域（非獨立模式）">區域遮罩</button>
         <!-- 檢視模式插件按鈕(由 viewmodes/registry 依 js/viewmodes/index.js 清單自動生成) -->
         <span id="viewmode-btns" style="display:contents;"></span>
         <button id="btn-erp-layout" style="display:none;">ERP 左右排列</button>

@@ -1,6 +1,6 @@
 /* =========================================================================
    info.js — 中央資訊面板 / 狀態列（目前對 / 穿門檢視 / 門位角度 / 無配對提示）
-   第三輪需求 1：ERP/3D 無衍生配對時，「目前沒有配對」提示改顯示於此狀態列（#i-pair），
+   ERP/3D 無衍生配對時，「目前沒有配對」提示改顯示於此狀態列（#i-pair），
      不再取代面板內容；面板兩張圖照常顯示、可換圖、可放圈。
    訂閱 'view-changed' / 'state-changed' / 'erp-derived' 自動更新。
    依賴：state / nav / erp(isErpOn,getErpDerived) / scene3d(getCandidateMarker) / util / events。
@@ -29,7 +29,7 @@ export function refreshInfoPair(){
     const st = (d.kind === 'confirmed') ? 'confirmed' : pairStatus(p);
     const probTxt = (p.prob != null && p.prob > 0) ? (' · prob ' + (p.prob * 100).toFixed(1) + '%') : '';
     let azSrcTxt = p.az_source ? (' · az:' + p.az_source) : '';
-    // 任務8：語意輔助開啟時，用觸發結果覆蓋來源標籤（沿用既有 az_source 顯示位置）。
+    // 語意輔助開啟時，用觸發結果覆蓋來源標籤（沿用既有 az_source 顯示位置）。
     const si = getSemanticInfo();
     if(si && si.noSemanticForHouse){
       azSrcTxt += ' · <span style="color:var(--muted)">此房無語意圖</span>';

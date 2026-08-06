@@ -1,6 +1,6 @@
 """
 [腳本用途]
-把 block_match_v2 產出的「連通性矩陣 (OOF)」整理成前端拼接工具可直接讀取的 house JSON。
+把上游粗篩產出的連通性矩陣整理成前端拼接工具可直接讀取的 house JSON。
 
 輸入 (每間房子):
   oof_matrices/<exp>/<house>.npy            (N, N, 3)  ch0=連通 logit(對稱), ch1=sin(az), ch2=cos(az)
@@ -35,7 +35,8 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(SCRIPT_DIR)  # 專案根目錄
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
-from config import datasets_root, matrices_root    # noqa: E402（要先補 sys.path）
+import upstream_direction                          # noqa: E402（要先補 sys.path）
+from config import datasets_root, matrices_root, regions_root   # noqa: E402
 
 DATA_ROOT = datasets_root()                        # 可用 ROMA_GEO_DATASETS 覆寫，見 config.py
 # 連通性矩陣來源。優先序：--oof_dir > 環境變數 ROMA_GEO_MATRICES > matrices/<版本>/
@@ -46,14 +47,16 @@ OUT_DIR = os.path.join(SCRIPT_DIR, "data")
 # coarse-filter score cleared the LOO threshold in that run, so most houses/pairs will have none -
 # every pair without a cached entry simply gets roma_* = null (fully backward compatible).
 DEFAULT_ROMA_SCORES = os.path.join(ROOT_DIR, "roma_match", "roma_scores.npz")
-# Optional: pose_experiment 幾何驗證批次輸出的 pair-level CSV（皆已入 git，7,069/7,070 列）。
+# Optional: 幾何驗證批次輸出的 pair-level CSV（皆已入 git）。
 # _ranking_eval.csv -> geo_n_inlier/geo_inlier_rate/geo_n_regions/geo_conf_used/geo_posed
 #   （佇列「幾何驗證」排序取代原始 roma_conf_* 聚合，見 queue.js）。
 # _summary.csv      -> az_ab_deg/az_ba_deg 取代粗篩方向頭 az_ij/az_ji（粗篩模型不輸出通道方位，
-#   評估依據見 matrices/README.md「通道方位角的來源已經改變」）。
+#   規則見 matrices/README.md「方位通道：型態可換」）；並在 _ranking_eval.csv
+#   缺此對時作為 geo_* 的來源（外來資料無 *_HOTSPOT.json，排序評估產不出來，見 build_house）。
 # 兩者都缺此對時該 house 完全不受影響：geo_* 全 null、az_ij/az_ji 保留 coarse 舊行為。
-DEFAULT_RANKING_EVAL = os.path.join(ROOT_DIR, "Output", "roma_regions", "_ranking_eval.csv")
-DEFAULT_SUMMARY_CSV = os.path.join(ROOT_DIR, "Output", "roma_regions", "_summary.csv")
+# 產出位置可用 ROMA_GEO_OUTPUT 覆寫（批次在別台機器跑時），見 config.py。
+DEFAULT_RANKING_EVAL = os.path.join(regions_root(), "_ranking_eval.csv")
+DEFAULT_SUMMARY_CSV = os.path.join(regions_root(), "_summary.csv")
 
 if ROOT_DIR not in sys.path:
     sys.path.append(ROOT_DIR)
@@ -78,10 +81,12 @@ def read_image_size(path: str):
 
 
 def az_from_matrix(M, i, j):
-    """方位(度) i->j = atan2(ch1=sin, ch2=cos)。已對 localization CSV 驗證一致。"""
-    sin_v = float(M[i, j, 1])
-    cos_v = float(M[i, j, 2])
-    return math.degrees(math.atan2(sin_v, cos_v)) % 360.0
+    """方位(度) i->j = atan2(ch1=sin, ch2=cos)。已對 localization CSV 驗證一致。
+
+    解碼本身在 `upstream_direction.py`：上游粗篩之後會由子計畫的模型整體取代，
+    屆時方向可能不是 sin/cos 而是影像上的框，換來源時只改那個模組。
+    """
+    return upstream_direction.from_sincos(M[i, j, 1], M[i, j, 2])
 
 
 def _csv_num(s, cast=float):
@@ -114,7 +119,10 @@ def load_gt(task_dir: str):
     jpgs = sorted(glob.glob(os.path.join(task_dir, "*.jpg")))
     if jpgs:
         W, _ = read_image_size(jpgs[0])
-    for hs_path in glob.glob(os.path.join(task_dir, "*HOTSPOT*.json")):
+    # ⚠ 必須排序：多樓層的房子每層一個 HOTSPOT 檔，樓梯配對在相鄰兩層皆有標註，
+    # 座標略有差異（實測 5~120 px）。下方為後寫覆蓋前寫，未排序時採用哪一筆取決於
+    # 檔案系統的列舉順序，Linux 與 Windows 會得到不同的 gt_az。
+    for hs_path in sorted(glob.glob(os.path.join(task_dir, "*HOTSPOT*.json"))):
         try:
             J = json.load(open(hs_path, encoding="utf-8"))
         except Exception:
@@ -170,8 +178,11 @@ def build_house(house: str, oof_dir: str, roma_cache=None, ranking_lookup=None, 
             gt_ji = gt.get(aj, {})
             gt_conn = (aj in gt_ij) or (ai in gt_ji)
 
-            # 通道方位：預設粗篩方向頭(coarse)；若此對在 _summary.csv 有位姿(az 欄非空)，
-            # 改吃幾何驗證 az_ab/az_ba（粗篩模型不輸出方位，見 matrices/README.md）。
+            # 通道方位有兩個來源，優先序固定：
+            #   geo    = 幾何驗證的 az_ab/az_ba（此對在 _summary.csv 有位姿時採用）
+            #   coarse = 上游粗篩的方向輸出（其餘情況的唯一來源）
+            # coarse 目前由矩陣 ch1/ch2 提供，後續由子計畫的模型整體取代；解碼集中在
+            # upstream_direction.py，換來源時只改那個模組（見該檔與 matrices/README.md）。
             # summary 的 img_a/img_b 順序可能與 (i,j)=(ai,aj) 相反，用檔名判斷方向對映。
             az_ij_coarse = az_from_matrix(M, i, j)
             az_ji_coarse = az_from_matrix(M, j, i)
@@ -193,7 +204,7 @@ def build_house(house: str, oof_dir: str, roma_cache=None, ranking_lookup=None, 
                 "prob": round(prob, 4),
                 "az_ij": round(az_ij, 2),   # 在 i 圖中指向 j 的方位（posed 時來自 az_ab/az_ba）
                 "az_ji": round(az_ji, 2),   # 在 j 圖中指向 i 的方位
-                "az_source": az_source,     # "geo"=幾何驗證取代值；"coarse"=粗篩方向頭(舊行為)
+                "az_source": az_source,     # "geo"=幾何驗證；"coarse"=上游粗篩的方向輸出
                 "az_coarse_ij": round(az_ij_coarse, 2),   # 粗篩方向頭原始值備份，QA 對照用
                 "az_coarse_ji": round(az_ji_coarse, 2),
                 "gt_connected": bool(gt_conn),
@@ -227,6 +238,17 @@ def build_house(house: str, oof_dir: str, roma_cache=None, ranking_lookup=None, 
                 pair["geo_n_regions"] = _csv_num(grow.get("n_regions"), int)
                 pair["geo_conf_used"] = _csv_num(grow.get("conf_used"), float)
                 pair["geo_posed"] = _csv_num(grow.get("posed"), int)
+            elif srow is not None:
+                # 退回 _summary.csv。_ranking_eval.csv 需要 GT 才產得出來（它要算 y 與
+                # topology distance），但 geo_* 這五欄本身與 GT 無關。外來資料沒有
+                # *_HOTSPOT.json 時走這條，佇列的「幾何驗證」排序才不會整欄落空。
+                # posed 的定義與 covis_ranking_eval.py 相同：有位姿且非 no_covisibility。
+                pair["geo_n_inlier"] = _csv_num(srow.get("n_inlier"), int)
+                pair["geo_inlier_rate"] = _csv_num(srow.get("inlier_rate"), float)
+                pair["geo_n_regions"] = _csv_num(srow.get("n_regions"), int)
+                pair["geo_conf_used"] = _csv_num(srow.get("conf_used"), float)
+                pair["geo_posed"] = int(srow.get("flag_no_covisibility") != "1"
+                                        and srow.get("conf_used", "") != "")
             pairs.append(pair)
     pairs.sort(key=lambda p: p["prob"], reverse=True)
 

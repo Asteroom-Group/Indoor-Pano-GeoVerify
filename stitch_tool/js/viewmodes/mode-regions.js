@@ -1,8 +1,8 @@
 /* =========================================================================
-   viewmodes/mode-regions.js — 模式 B「共視區域遮罩」插件(WP2)
-   讀 WP1 Step 3 的區域 JSON(/api/regions,schema wp1-step3-v1):兩張 ERP 上下
+   viewmodes/mode-regions.js — 「共視區域遮罩」檢視模式插件
+   讀 區域 JSON(/api/regions,schema wp1-step3-v1):兩張 ERP 上下
    並排,同一 region 兩側塗同色半透明遮罩+編號 —「A 的這塊 和 B 的那塊 是同一塊
-   實體空間」。方向資訊不畫(使用者回饋:遮罩直觀、方位線不直觀;方向請用
+   實體空間」。方向資訊不畫(遮罩直觀、方位線不直觀;方向請用
    「裁切對」模式看,那才是為方向設計的呈現)。
 
    過縫約定(見 pose_regions/README.md):polygon x 可能超出 [0,W) 以保連續;
@@ -44,7 +44,7 @@ function buildDom(){
   _root.id = 'regions-mode';
   _root.className = 'viewmode-overlay';
   _root.innerHTML =
-    '<div class="vm-head">共視區域遮罩(WP1 幾何驗證產物;同色 = 同一塊實體空間)</div>' +
+    '<div class="vm-head">共視區域遮罩(幾何驗證產物;同色 = 同一塊實體空間)</div>' +
     '<div class="vm-body vcol">' +
       '<div class="regions-pane"><div class="crop-label" id="regions-label-a"></div>' +
         '<canvas id="regions-canvas-a" width="' + CW + '" height="' + CH + '"></canvas></div>' +
@@ -164,7 +164,7 @@ function refresh(){
 registerViewMode({
   id: 'regions',
   label: '區域遮罩',
-  title: '共視區域遮罩:WP1 幾何驗證的多邊形,兩側同色 = 同一塊實體空間',
+  title: '共視區域遮罩:幾何驗證的多邊形,兩側同色 = 同一塊實體空間',
   ownButton: true,
   isActive(){ return _visible; },
   enter(){ buildDom(); _visible = true; _root.style.display = 'flex'; _lastKey = ''; syncBandBtn(); refresh(); },

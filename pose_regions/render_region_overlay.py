@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-WP1 Step 4:共視區域 overlay 渲染器(供 WP2 模式 B 參考與驗收視覺抽查)。
+共視區域 overlay 渲染器(供 區域遮罩模式 參考與驗收視覺抽查)。
 
 讀 Output/roma_regions/{pair}.json(schema wp1-step3-v1/v2),把 regions 畫在 A/B 兩張
 ERP 上:同一 region 兩側同色半透明遮罩 + 邊框 + 編號;另標 az_ab / az_ba 方位線
@@ -8,7 +8,7 @@ ERP 上:同一 region 兩側同色半透明遮罩 + 邊框 + 編號;另標 az_ab
 A 上、B 下堆疊 + 資訊列(conf_used / inlier 率 / 旗標 / 區域數)。
 
 過縫處理:polygon x 可能超出 [0, W)(JSON 約定,保多邊形連續)——繪製時同一多邊形
-平移 -W/0/+W 各畫一次,超界部分自然裁掉。WP2 前端請用同樣手法。
+平移 -W/0/+W 各畫一次,超界部分自然裁掉。前端請用同樣手法。
 
 按工作計畫備註「overlay 不全量產出」:
   # 單對(on-demand)
@@ -34,7 +34,13 @@ except ImportError:
 
 PALETTE = [(230, 25, 75), (60, 180, 75), (67, 99, 216), (245, 130, 48),
            (145, 30, 180), (66, 212, 244), (240, 50, 230), (191, 239, 69)]
-OUT_DIR = os.path.join("Output", "roma_regions", "overlays")
+# 產出位置可用 ROMA_GEO_OUTPUT 覆寫(同 config.regions_root)。此處直接讀環境變數
+# 而不 import config,以保住 pose_regions 可獨立匯入。
+REG_DIR = os.path.join(
+    os.path.abspath(os.path.expanduser(os.environ["ROMA_GEO_OUTPUT"]))
+    if os.environ.get("ROMA_GEO_OUTPUT") else os.path.join(ROOT, "Output"),
+    "roma_regions")
+OUT_DIR = os.path.join(REG_DIR, "overlays")
 
 
 def _font(size):
@@ -125,7 +131,7 @@ def render_pair(json_path, out_dir=OUT_DIR, target_w=2048, draw_az=True):
 def pick_samples(n_per):
     """驗收抽樣(決定性:各類按 house+img 排序取前 N):
     doorway / 同房 / 跨房非門洞 / 0.3 撈回 / 過縫 region / 多區(>=3)。"""
-    rows = list(csv.DictReader(open(os.path.join("Output", "roma_regions", "_summary.csv"), encoding="utf-8")))
+    rows = list(csv.DictReader(open(os.path.join(REG_DIR, "_summary.csv"), encoding="utf-8")))
     posed = [r for r in rows if r["az_ab_deg"]]
     key = lambda r: (r["house"], r["img_a"], r["img_b"])
     cats = {
@@ -145,7 +151,7 @@ def pick_samples(n_per):
                 seen.add(k)
                 picked.append((cname, r))
     # 過縫案例:region1 az_range 上界 > 180(polygon x 會超出 [0,W))
-    for f in sorted(glob.glob(os.path.join("Output", "roma_regions", "*.json"))):
+    for f in sorted(glob.glob(os.path.join(REG_DIR, "*.json"))):
         d = json.load(open(f, encoding="utf-8"))
         regs = d.get("regions") or []
         if regs and regs[0]["a"]["az_range"][1] > 180.0:
@@ -169,10 +175,10 @@ def main():
         render_pair(a.json, a.out, a.width, draw_az=not a.no_az)
     elif a.pair:
         h, na, nb = a.pair
-        render_pair(os.path.join("Output", "roma_regions", f"{h}_{na}_{nb}.json"), a.out, a.width, draw_az=not a.no_az)
+        render_pair(os.path.join(REG_DIR, f"{h}_{na}_{nb}.json"), a.out, a.width, draw_az=not a.no_az)
     elif a.sample:
         for cname, r in pick_samples(a.sample):
-            jp = os.path.join("Output", "roma_regions", f"{r['house']}_{r['img_a']}_{r['img_b']}.json")
+            jp = os.path.join(REG_DIR, f"{r['house']}_{r['img_a']}_{r['img_b']}.json")
             try:
                 out = render_pair(jp, a.out, a.width)
                 print(f"  [{cname}] {os.path.basename(out)}")

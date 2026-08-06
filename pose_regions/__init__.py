@@ -2,8 +2,7 @@
 pose_regions — 相對位姿與共視區域估計(RoMa 匹配的幾何驗證層)
 
 從 ERP 全景的像素對應點(RoMa matches)估計兩張圖的相對位姿(R、t 方向),並萃取
-幾何驗證過的共視區域多邊形。前身為 pose_experiment/(2026-07-23 模組化改名,
-git 歷史保留)。
+幾何驗證過的共視區域多邊形。
 
 核心 API(純 numpy,無 GPU / cv2 依賴,匯入無副作用,cwd 無關):
 

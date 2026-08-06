@@ -2,10 +2,10 @@
 [腳本用途]
 把子計畫一的門語意圖（經 semantic_doors/semantic_door_eval.py 的 extract_doors() 抽取、快取於
 _door_cache.json）轉存成 stitch_tool/semantic/<house>.json，供 server.py 的
-GET /api/semantic_doors/<house> 讀取（見 任務8_語意門校正接入工具.md）。
+GET /api/semantic_doors/<house> 讀取。
 
 門抽取邏輯（過縫接倍去重 / pipeline 方位角約定 / 門後有門合併但角寬不超過 90°）完全沿用
-semantic_door_eval.extract_doors()（直接 import，不複製一份），任務卡要求「照做即可，不要改」。
+semantic_door_eval.extract_doors()（直接 import，不複製一份）。
 
 輸出格式（每個房子一個檔案）:
   {"house": "DollhouseTask_58553",
@@ -14,7 +14,7 @@ semantic_door_eval.extract_doors()（直接 import，不複製一份），任務
 
 [用法]
   venv/Scripts/python.exe stitch_tool/prepare_semantic_doors.py
-      預設模式：只讀現成的 semantic_doors/_door_cache.json 轉檔（409 張圖已全部抽好，不重跑抽取，
+      預設模式：只讀現成的 semantic_doors/_door_cache.json 轉檔（不重跑抽取，
       不需要 cv2/PIL，秒級完成）。
 
   venv/Scripts/python.exe stitch_tool/prepare_semantic_doors.py --refresh

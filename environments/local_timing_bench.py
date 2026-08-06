@@ -1,32 +1,22 @@
 """本機（PC）RoMa v2 + 幾何驗證 端到端計時基準（兩段分開計時）。
 
-背景：本機實測明顯快於 Kaggle，需要可引用的本機數字；
-另外要把「匹配」與「幾何驗證」串在一起跑（部署時本來就該一起），但時間分開算。
+「匹配」與「幾何驗證」串在一起跑（部署時為同一階段），但兩段時間分開計。
 
-現成腳本盤點（本檔存在的理由）：
-  run_roma_above_threshold.py  Kaggle 全量平行批次，無「限制對數」選項，且以 zip 產出為主。
-  pose_regions/batch_pose_from_cache.py  只吃『已存在的 cache』做驗證，不含匹配本身。
-  ⇒ 沒有「同一支腳本跑匹配+驗證、分段計時、可限制對數」的東西，故有本檔。
-
-量測設計（重點，數字要能對外講就得照這樣）：
-  * **RoMa 一律關快取**（use_cache=False）。7,069 對已在 roma_match/cache 內，
+量測設計（數字要能對外引用就必須照這樣）：
+ * **RoMa 一律關快取**（use_cache=False）。抽到的配對多半已在 roma_match/cache 內，
     開快取只會量到讀檔速度。關快取也不會污染既有 cache（match_direct 不寫回）。
   * matcher.conf_threshold 設 0.1 → 取回與 cache 同一口徑的原始匹配（floor 0.1），
     驗證階段才和生產一致（analyze_pair 內部自己用 conf 0.65 / 撈回 0.3）。
   * **暖機**：第一對含 CUDA 初始化與權重載入，統計時排除前 --warmup 對，另外單獨報
     「模型建構耗時」與「暖機對耗時」。
   * 影像尺寸讀取（PIL 讀檔頭）在兩個計時器之外，避免把 I/O 算進推論。
-  * 抽樣：族群 = Output/roma_regions/_summary.csv 的 7,069 對（粗篩 R90 存活者，
-    與 Kaggle 那次同一批）。**決定性等距抽樣**（排序後取等間隔），跨房分散、可重現。
+ * 抽樣：族群 = `Output/roma_regions/_summary.csv` 全部列。
+ **決定性等距抽樣**（排序後取等間隔），跨房分散、可重現。
 
 用法：
   venv/Scripts/python.exe environments/local_timing_bench.py --n 120
   venv/Scripts/python.exe environments/local_timing_bench.py --n 20 --out /tmp/smoke.csv   # 煙霧測試
-Docker（有 fused-local-corr 加速核心）內跑同一支：
-  （Docker 對照組的映像未隨本專案交付；如需比較容器環境，請自行建置後改用
-   對應的直譯器路徑執行本腳本。原始指令形式：
-  docker run --rm -it --gpus all -v <專案根>:/workspace -w /workspace/Roma_Geo \
-    romav2-fused-env python environments/local_timing_bench.py --n 120 --tag docker-fused
+本腳本亦可於容器內以相同參數執行，改用容器內的直譯器路徑即可。
 """
 import argparse
 import csv
@@ -78,12 +68,22 @@ def env_report():
     return info
 
 
+#: 母體規模與母體位姿率，由 load_population 從 _summary.csv 現算。
+#: 報告字串一律引用這兩個值，不可寫死成某次執行的數字（換資料集即不成立）。
+n_pop = 0
+n_pop_posed = None
+
+
 def load_population():
-    rows = []
+    global n_pop, n_pop_posed
+    rows, posed = [], 0
     with open(SUMMARY, encoding="utf-8") as f:
         for r in csv.DictReader(f):
             rows.append((r["house"], r["img_a"], r["img_b"]))
+            if r.get("az_ab_deg"):
+                posed += 1
     rows.sort()
+    n_pop, n_pop_posed = len(rows), posed
     return rows
 
 
@@ -133,8 +133,8 @@ def main():
               % env["fused_kernel_note"], flush=True)
 
     pairs = sample_pairs(load_population(), args.n)
-    print("[sample] 族群 7,069 對中決定性抽樣 %d 對，跨 %d 間房"
-          % (len(pairs), len({p[0] for p in pairs})), flush=True)
+    print("[sample] 母體 %d 對中決定性抽樣 %d 對，跨 %d 間房"
+          % (n_pop, len(pairs), len({p[0] for p in pairs})), flush=True)
 
     t0 = time.perf_counter()
     matcher = RoMaMatcher(conf_threshold=0.1, use_cache=args.use_cache, model_type="roma_v2",
@@ -213,9 +213,10 @@ def main():
     out.append("環境：GPU %s · torch %s · **fused-local-corr 加速核心：%s**\n"
                % (env["gpu"], env["torch"],
                   "可用" if env["fused_kernel_usable"] else "**不可用**（%s）" % env["fused_kernel_note"]))
-    out.append("樣本：7,069 對（粗篩 R90 存活者，與 Kaggle 那次同族群）中決定性等距抽樣 "
-               "%d 對，成功 %d 對；統計已排除前 %d 對暖機。RoMa 快取：%s。\n"
-               % (len(pairs), len(recs), args.warmup, "開（不可用於計時）" if args.use_cache else "關"))
+    out.append("樣本：母體 %s 對中決定性等距抽樣 %d 對，成功 %d 對；"
+               "統計已排除前 %d 對暖機。RoMa 快取：%s。\n"
+               % (f"{n_pop:,}", len(pairs), len(recs), args.warmup,
+                  "開（不可用於計時）" if args.use_cache else "關"))
     out.append("模型建構（一次性，不計入每對）：%.2f s\n" % t_build)
     out.append("雙向推論策略：**%s**（一對 = A→B ＋ B→A；串行=兩次 forward、"
                "batch=打包成 batch2 一次 forward、VRAM ×2）\n"
@@ -255,11 +256,14 @@ def main():
                   ("%.1f%%" % (statistics.fmean(tv_yes) /
                                (statistics.fmean(tm) + statistics.fmean(tv_yes)) * 100))
                   if tv_yes else "本樣本無位姿成功對，無法計算"))
-    out.append("外推全量 7,069 對（單卡序列、含驗證）：**%.1f 分鐘**（%.2f 小時）。\n"
-               % (tot * 7069 / 60, tot * 7069 / 3600))
+    out.append("外推全量 %s 對（單卡序列、含驗證）：**%.1f 分鐘**（%.2f 小時）。\n"
+               % (f"{n_pop:,}", tot * n_pop / 60, tot * n_pop / 3600))
     n_posed = sum(r["posed"] for r in stat)
-    out.append("位姿成功率（本樣本）：%d/%d = %.1f%%（全量基準 47.3%%，用來確認抽樣沒偏）。\n"
-               % (n_posed, len(stat), n_posed / len(stat) * 100))
+    # 全量位姿率由母體現算，不可寫死成某次執行的數字（換資料集即不成立）。
+    out.append("位姿成功率（本樣本）：%d/%d = %.1f%%%s\n"
+               % (n_posed, len(stat), n_posed / len(stat) * 100,
+                  "（全量 %.1f%%，用來確認抽樣沒偏）" % (100.0 * n_pop_posed / n_pop)
+                  if n_pop_posed is not None and n_pop else "。"))
     text = "\n".join(out)
     with open(args.md, "w", encoding="utf-8") as f:
         f.write(text)

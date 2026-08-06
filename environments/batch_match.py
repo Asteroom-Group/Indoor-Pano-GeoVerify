@@ -8,8 +8,12 @@
     prepare_house_data.py     → stitch_tool/data/*.json
     prepare_semantic_doors.py → stitch_tool/semantic/*.json
 
-配對來源為 `Output/roma_regions/_summary.csv`（粗篩存活的 7,069 對），與既有結果
-同一族群，重跑後才能逐對比較。
+配對來源優先序：`--pairs` > `_pairs.csv` > 從 `_summary.csv` 快照一份。
+
+`_pairs.csv` 有兩種來源：
+  1. `environments/select_pairs.py` —— 從連通性矩陣按門檻挑出（換上游模型走這條）
+  2. 從既有 `_summary.csv` 快照（粗篩存活者）—— 與既有結果同一族群，
+     重跑後才能逐對比較，驗證遷移正確性時用這條。
 
 **多 GPU**：偵測到多張 GPU 時走 `roma_match.parallel_matcher.ParallelScorer`，
 每張卡一個 worker（`CUDA_VISIBLE_DEVICES` 隔離），可在雙 T4 環境約略減半總時間。
@@ -36,7 +40,9 @@ import time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-REGIONS_DIR = os.path.join(ROOT, "Output", "roma_regions")
+from config import regions_root                   # noqa: E402（要先補 sys.path）
+
+REGIONS_DIR = regions_root()                    # 可用 ROMA_GEO_OUTPUT 覆寫，見 config.py
 SUMMARY = os.path.join(REGIONS_DIR, "_summary.csv")
 
 # 配對來源與批次產物分開存放:batch_pose_from_cache.py 會把 _summary.csv 重寫成
@@ -54,7 +60,8 @@ def ensure_pair_source(explicit=None):
     if not os.path.exists(SUMMARY):
         raise SystemExit(
             "找不到配對來源:%s 與 %s 都不存在。\n"
-            "        _summary.csv 應隨 repo 入庫,請確認 clone 完整。" % (PAIRS, SUMMARY))
+            "        _summary.csv 應隨 repo 入庫,請確認 clone 完整;\n"
+            "        或用 environments/select_pairs.py 從連通性矩陣挑一份出來。" % (PAIRS, SUMMARY))
     with open(SUMMARY, encoding="utf-8", newline="") as fi:
         rows = list(csv.DictReader(fi))
     os.makedirs(REGIONS_DIR, exist_ok=True)

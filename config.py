@@ -1,15 +1,22 @@
 """
 [模組用途]
-專案層級的路徑設定 —— 目前只有「資料集根目錄」這一項。
+專案層級的路徑與門檻設定 —— 所有「會隨部署環境改變」的位置統一由本模組解析，
+呼叫端不寫死路徑。
 
-資料集的擺放位置依部署環境而異，所有讀取資料集的地方統一經由本模組解析。
+外部交界處有三類：上游（連通性粗篩的矩陣）、資料集、以及本專案的產出位置。
+每一項皆可由環境變數覆寫，無須修改程式碼。
 
-解析優先序：
-  1. 環境變數 `ROMA_GEO_DATASETS`（支援 ~ 展開；相對路徑會轉成絕對路徑）
-  2. 專案根目錄底下的 `datasets/`
+| 項目 | 環境變數 | 預設 | 誰在用 |
+|---|---|---|---|
+| 全景資料集 | `ROMA_GEO_DATASETS` | `datasets/` | 匹配、幾何驗證、工具 |
+| 門語意圖 | （跟隨資料集） | `<datasets>/semantic/` | `semantic_doors/`、工具 |
+| 連通性矩陣（上游輸入） | `ROMA_GEO_MATRICES` | `matrices/<版本>/` | 挑配對、工具資料、排序評估 |
+| 挑配對門檻 | `ROMA_GEO_PAIR_THRESHOLD` | `PAIR_THRESHOLD` | `environments/select_pairs.py` |
+| 產出根目錄 | `ROMA_GEO_OUTPUT` | `Output/` | 幾何驗證產物、工具讀區域 |
+| 匹配快取 | `ROMA_GEO_CACHE` | `roma_match/cache/` | 匹配、批次幾何驗證 |
 
 [用法]
-  from config import datasets_root, semantic_root
+  from config import datasets_root, semantic_root, regions_root
   img_dir = os.path.join(datasets_root(), house)
 
 換路徑時不必改任何程式碼：
@@ -17,7 +24,7 @@
   PowerShell:  $env:ROMA_GEO_DATASETS = "D:\panorama_data"
   bash:        export ROMA_GEO_DATASETS=/mnt/data/panorama
 
-  檢查目前解析到哪裡：  python config.py
+  檢查目前全部解析到哪裡：  python config.py
 """
 import os
 
@@ -38,13 +45,33 @@ ENV_MATRICES = "ROMA_GEO_MATRICES"
 MATRICES_VERSION = "cos_joint_l4"
 DEFAULT_MATRICES_ROOT = os.path.join(PROJECT_ROOT, "matrices")
 
+#: 挑配對門檻：矩陣 ch0 的分數 ≥ 此值才送進 RoMa 匹配。
+#: 單位由矩陣決定，不做 sigmoid 轉換；⚠ **換矩陣來源必須重新校準此值**。
+#: 現值對應 `cos_joint_l4` 的既有操作點；換來源後以 `select_pairs.py --inspect` 重新校準。
+ENV_PAIR_THRESHOLD = "ROMA_GEO_PAIR_THRESHOLD"
+PAIR_THRESHOLD = -3.0
+
+#: 產出根目錄（幾何驗證的 per-pair JSON 與各項 CSV）。
+#: 獨立成一項的理由：批次作業常在其他機器上執行（Kaggle 或協作者的機器），
+#: 產物需能寫入掛載的共享位置而非 repo 內，否則結果只能以人工複製方式取回。
+ENV_OUTPUT = "ROMA_GEO_OUTPUT"
+DEFAULT_OUTPUT = os.path.join(PROJECT_ROOT, "Output")
+
+#: RoMa 匹配快取。屬暫存檔且可重新產生，但全量體積達數百 MB，常需指向外部位置。
+ENV_CACHE = "ROMA_GEO_CACHE"
+DEFAULT_CACHE = os.path.join(PROJECT_ROOT, "roma_match", "cache")
+
+
+def _from_env(name: str, default: str) -> str:
+    p = os.environ.get(name)
+    if p:
+        return os.path.abspath(os.path.expanduser(p))
+    return default
+
 
 def datasets_root() -> str:
     """ERP 全景資料集根目錄，底下是 `<house>/.../*.jpg` 與 `*_HOTSPOT.json`。"""
-    p = os.environ.get(ENV_DATASETS)
-    if p:
-        return os.path.abspath(os.path.expanduser(p))
-    return DEFAULT_DATASETS
+    return _from_env(ENV_DATASETS, DEFAULT_DATASETS)
 
 
 def semantic_root() -> str:
@@ -60,11 +87,11 @@ def matrices_version_root() -> str:
     """連通性矩陣的版本目錄，底下是各矩陣變體的子目錄（`refined_matrices/` 等）。
 
     解析優先序：環境變數 `ROMA_GEO_MATRICES` > `matrices/<MATRICES_VERSION>/`。
+
+    此為**上游交界點**：本變數指向連通性粗篩輸出矩陣的目錄，兩邊僅透過檔案往來，
+    不互相 import。格式契約見 `matrices/README.md`。
     """
-    p = os.environ.get(ENV_MATRICES)
-    if p:
-        return os.path.abspath(os.path.expanduser(p))
-    return os.path.join(DEFAULT_MATRICES_ROOT, MATRICES_VERSION)
+    return _from_env(ENV_MATRICES, os.path.join(DEFAULT_MATRICES_ROOT, MATRICES_VERSION))
 
 
 def matrices_root(variant: str = "refined") -> str:
@@ -92,6 +119,44 @@ def matrices_versions() -> list:
         return []
 
 
+def pair_threshold() -> float:
+    """挑配對門檻。矩陣 ch0 的分數 ≥ 此值才進 RoMa 匹配。
+
+    ⚠ 單位由矩陣決定（logit 或機率），本函式不做轉換。上游變更輸出型態時僅需調整門檻值。
+    優先序：`select_pairs.py --threshold` > 環境變數 > `PAIR_THRESHOLD`。
+    """
+    v = os.environ.get(ENV_PAIR_THRESHOLD)
+    if v:
+        return float(v)
+    return float(PAIR_THRESHOLD)
+
+
+def output_root() -> str:
+    """產出根目錄。批次在其他機器上執行時，指向掛載位置即可免去人工搬移檔案。"""
+    return _from_env(ENV_OUTPUT, DEFAULT_OUTPUT)
+
+
+def regions_root() -> str:
+    """幾何驗證產物：per-pair JSON + `_summary.csv` / `_ranking_eval.csv` / `_pairs.csv`。"""
+    return os.path.join(output_root(), "roma_regions")
+
+
+def cache_root() -> str:
+    """RoMa 匹配快取目錄（`*.npz`）。暫存檔、可重生，不屬於交付內容。"""
+    return _from_env(ENV_CACHE, DEFAULT_CACHE)
+
+
+def _src(env_name: str, default_desc: str) -> str:
+    return "環境變數 %s" % env_name if os.environ.get(env_name) else default_desc
+
+
+def _count(d: str, ext: str) -> str:
+    try:
+        return "{:,}".format(sum(1 for f in os.listdir(d) if f.endswith(ext)))
+    except OSError:
+        return "-"
+
+
 def describe() -> str:
     src = "環境變數 %s" % ENV_DATASETS if os.environ.get(ENV_DATASETS) else "預設（專案內 datasets/）"
     msrc = ("環境變數 %s" % ENV_MATRICES if os.environ.get(ENV_MATRICES)
@@ -110,11 +175,25 @@ def describe() -> str:
         "  來源        : %s\n"
         "  存在        : %s（%d 個 .npy）\n"
         "  變體        : %s\n"
-        "  可用版本    : %s"
+        "  可用版本    : %s\n"
+        "pair_threshold: %s（單位由矩陣決定：logit 或機率，本模組不做轉換）\n"
+        "  來源        : %s\n"
+        "output_root   : %s\n"
+        "  來源        : %s\n"
+        "regions_root  : %s\n"
+        "  存在        : %s（%s 個 .json）\n"
+        "cache_root    : %s\n"
+        "  來源        : %s\n"
+        "  存在        : %s（%s 個 .npz）"
         % (d, src, os.path.isdir(d), s, os.path.isdir(s),
            m, msrc, os.path.isdir(m), n_npy,
            variants or "（無子目錄，.npy 直接置於版本目錄）",
-           matrices_versions() or "（無）")
+           matrices_versions() or "（無）",
+           pair_threshold(), _src(ENV_PAIR_THRESHOLD, "PAIR_THRESHOLD=%s" % PAIR_THRESHOLD),
+           output_root(), _src(ENV_OUTPUT, "預設（專案內 Output/）"),
+           regions_root(), os.path.isdir(regions_root()), _count(regions_root(), ".json"),
+           cache_root(), _src(ENV_CACHE, "預設（roma_match/cache/）"),
+           os.path.isdir(cache_root()), _count(cache_root(), ".npz"))
     )
 
 

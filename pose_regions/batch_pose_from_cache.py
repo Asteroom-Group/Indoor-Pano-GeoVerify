@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-WP1 Step 2:全量批次 — 7,069 個 cache pair 逐對估計相對位姿 + 品質指標,輸出 per-pair JSON。
+全量批次:快取內每一對逐對估計相對位姿 + 品質指標,輸出 per-pair JSON。
 
-輸入:roma_match/cache/*.npz(座標約定 = 原圖 ERP 像素,Step 1 已驗證,見 README)
+輸入:roma_match/cache/*.npz(座標約定 = 原圖 ERP 像素,見 README)
 輸出:
   Output/roma_regions/{house}_{imgA}_{imgB}.json   per-pair 結果(schema 見 README)
   Output/roma_regions/_summary.csv                 每 pair 一列的指標總表(供驗收/出圖)
   pose_regions/batch_pose_report.md             耗時 + 指標分佈報告(自動生成)
 
-品質指標(工作計畫 Step 2 指定):
+品質指標:
   - inlier 率(對極 RANSAC 內點 / 使用點數)
   - 方位覆蓋度 / 楔形寬度:內點在 A/B 兩側的方位角分佈 — 「涵蓋幾成 10° bin」與
     「包住 80% 內點的最窄圓弧」。跨房穿門 pair 的 match 本來就集中在門洞楔形,
@@ -16,11 +16,11 @@ WP1 Step 2:全量批次 — 7,069 個 cache pair 逐對估計相對位姿 + 品�
   - rot-only 殘差:內點被純旋轉解釋的中位角誤差(近零基線偵測)
   - 重投影(Sampson)殘差統計:內點的中位數 / p90(角度)
 
-自適應 conf(Step 3 補,工作計畫備註):基準 conf 0.65;若「點數<30 或 RANSAC 內點<8」
+自適應 conf:基準 conf 0.65;若「點數<30 或 RANSAC 內點<8」
 則降到 retry_conf(0.3)重試;實際使用的門檻記入 JSON `conf_used`。兩級都失敗才標
 `no_covisibility`。穿門窄楔形 pair 在 0.65 常只剩 <20 點,這一步是拼接位姿覆蓋率的關鍵。
 
-旗標(閾值為暫定值,五類抽查驗收後可調;定義同步寫在 README):
+旗標(定義同步寫在 README):
   low_matches         conf>=0.65 的點 < 30(品質註記;自適應後不再是「跳過原因」)
   no_covisibility     兩級 conf 都湊不出 >=8 內點 → 無位姿(語意=無共視證據,非「不連通」)
   degenerate_rot_only rot-only 中位殘差 < 1.5×thresh_deg(近零基線,t 方向不可靠)
@@ -28,12 +28,11 @@ WP1 Step 2:全量批次 — 7,069 個 cache pair 逐對估計相對位姿 + 品�
                       (窄但有效的門洞叢集)
 
 GT 欄位(供驗收交叉比對,非計算輸入):
-  gt_label   metadata/{house}_metadata.csv 的連通標註(cache pair 不在表中則空)
+  gt_label   由 *_HOTSPOT.json 的 ToIDName 推導(該房完全沒有 HOTSPOT 檔時為空)
   gt_az_*    datasets 內 *_HOTSPOT.json 的 GT hotspot 方位(僅直接相鄰 pair 有)。
              注意語意:hotspot 標的是「通道位置」;只有同房 pair 才近似指向對方相機。
-             但直接相鄰 pair 的 B 相機通常就在通道後方,兩語意的方位高度重合
-             (實測同房誤差中位 9.1° vs 跨房 10.7°),故 err_az_* 當一致性檢核用,
-             不當嚴格位姿精度。
+             但直接相鄰 pair 的 B 相機通常就在通道後方,兩語意的方位高度重合,
+             故 err_az_* 當一致性檢核用,不當嚴格位姿精度。
   same_room  兩 pano 的 HOTSPOT.json (floor, Roomidx) 相同 → 同房(缺 Roomidx 則空)
   位姿方位 az_ab = A 幀中 B 相機方向(-R^T t);與 gt_az_ab 的圓角誤差 = err_az_ab
 
@@ -62,7 +61,16 @@ except ImportError:
                                         CACHE_SUFFIX)
 
 SCHEMA_VERSION = "wp1-step3-v2"   # v2(2026-07-23):nadir 前濾預設開啟(lat_filter 60);params.lat_max / n.lat_drop 欄位
-CACHE_DIR = os.path.join(ROOT, "roma_match", "cache")
+
+# 快取與產出位置可由環境變數覆寫(同 config.cache_root / regions_root)。此處直接讀取
+# 環境變數而不 import config,以維持 pose_regions 可獨立匯入;變數名異動需三處一致。
+CACHE_DIR = (os.path.abspath(os.path.expanduser(os.environ["ROMA_GEO_CACHE"]))
+             if os.environ.get("ROMA_GEO_CACHE")
+             else os.path.join(ROOT, "roma_match", "cache"))
+DEFAULT_OUT = os.path.join(
+    os.path.abspath(os.path.expanduser(os.environ["ROMA_GEO_OUTPUT"]))
+    if os.environ.get("ROMA_GEO_OUTPUT") else os.path.join(ROOT, "Output"),
+    "roma_regions")
 
 
 # ---------- 方位統計 ----------
@@ -114,7 +122,10 @@ class HouseGT:
         d = os.path.dirname(sample_img_path)
         # 連通 label:由 dataset 的 HOTSPOT.json 推導,ToIDName = 直接相鄰清單。
         # 與 stitch_tool/prepare_house_data.load_gt() 同源。
-        _hs_files = glob.glob(os.path.join(d, "*_HOTSPOT.json"))
+        # ⚠ 必須排序:多樓層房子每層一個 HOTSPOT 檔,樓梯配對在相鄰兩層皆有標註且座標不同;
+        # 下方 self.room 與 GT 方位為後寫覆蓋前寫,未排序時採用哪一筆取決於檔案系統的
+        # 列舉順序(Linux 與 Windows 不一致)。與 prepare_house_data.load_gt 同源同修。
+        _hs_files = sorted(glob.glob(os.path.join(d, "*_HOTSPOT.json")))
         for hj in _hs_files:
             try:
                 data = json.load(open(hj, encoding="utf-8"))
@@ -132,7 +143,7 @@ class HouseGT:
         if _hs_files:
             self._has_hs.add(house)
         # GT hotspot 方位(owner pano 的 ERP x → 方位)
-        for hj in glob.glob(os.path.join(d, "*_HOTSPOT.json")):
+        for hj in _hs_files:                      # 已排序,理由見上
             try:
                 data = json.load(open(hj, encoding="utf-8"))
             except Exception:
@@ -161,7 +172,7 @@ class HouseGT:
         return lab, self.hs_az.get((house, na, nb)), self.hs_az.get((house, nb, na)), same_room
 
 
-# ---------- 共視區域萃取(Step 3) ----------
+# ---------- 共視區域萃取 ----------
 REGION_EPS_DEG = 12.0     # DBSCAN 鄰接半徑:兩側「各約 12°」的 6D 弦距(鏈接距離,非區域大小)
 REGION_MIN_FRAC = 0.02    # min_samples = max(8, ceil(2% × 內點數)):速斑/殘噪不成區
 
@@ -398,30 +409,48 @@ def write_report(rows, total_s, args, out_path):
     r_all = [r for r in rows if r["inlier_rate"] is not None]
     by_lab = {lab: [r for r in r_all if r["gt_label"] == lab] for lab in (1, 0)}          # 有跑 RANSAC 的
     by_lab_all = {lab: [r for r in rows if r["gt_label"] == lab] for lab in (1, 0)}      # 全部(含 low_matches)
+    # 外來資料通常不含 *_HOTSPOT.json ⇒ gt_label / same_room / gt_az 全為 None。
+    # 此時整段略過 GT 相關小節,避免輸出大量 None 而被誤判為計算失敗。
+    has_gt = any(r["gt_label"] is not None for r in rows)
+    has_gt_az = any(r["err_az_ab"] is not None for r in rows)
+    NO_GT = "*(此資料集無 GT 標註,略過。GT 來自 datasets 內的 `*_HOTSPOT.json`。)*"
     compute_s = sum(r["time_ms"] for r in rows) / 1000.0    # 累計計算時間(resume 重生報告也不失真)
-    lines = ["# WP1 Step 2+3 全量批次報告(自動生成)", "",
+    lines = ["# +3 全量批次報告(自動生成)", "",
              f"日期:{time.strftime('%Y-%m-%d %H:%M')} | 參數:conf>={args.conf}, max_pts={args.max_pts}, "
              f"thresh={args.thresh_deg}°, iters={args.iters}, sampler={args.sampler}"
              + (f", lat_filter=±{args.lat_filter}°" if getattr(args, 'lat_filter', 0) and args.lat_filter > 0 else ""), "",
              f"**{len(rows)} pair 跑完,累計計算 {compute_s/60:.1f} 分鐘"
              f"(平均 {1000*compute_s/max(len(rows),1):.0f} ms/pair,含 JSON 寫出;本機 CPU 向量化 RANSAC,無 GPU)**", "",
-             "## inlier 率分佈(gt_label 來自 metadata 連通標註;有跑 RANSAC 的 pair,按 conf 層拆開)", "",
+             "## inlier 率分佈(gt_label 由 datasets 的 `*_HOTSPOT.json` 推導;"
+             "有跑 RANSAC 的 pair,按 conf 層拆開)", "",
              "| 組 | pair 數 | inlier率 p25 | 中位 | p75 |",
              "|---|---|---|---|---|"]
     tiers = [("conf0.65 級", lambda r: r["conf_used"] == 0.65),
              ("conf0.3 撈回級", lambda r: r["conf_used"] == args.retry_conf)]
-    for lab_name, lab in (("label=1", 1), ("label=0", 0)):
+    if has_gt:
+        for lab_name, lab in (("label=1", 1), ("label=0", 0)):
+            for t_name, t_sel in tiers:
+                grp = [r for r in by_lab[lab] if t_sel(r)]
+                ir = [r["inlier_rate"] for r in grp]
+                lines.append(f"| {lab_name}・{t_name} | {len(grp)} | {q(ir,25)} | {q(ir,50)} | {q(ir,75)} |")
+    else:
         for t_name, t_sel in tiers:
-            grp = [r for r in by_lab[lab] if t_sel(r)]
+            grp = [r for r in r_all if t_sel(r)]
             ir = [r["inlier_rate"] for r in grp]
-            lines.append(f"| {lab_name}・{t_name} | {len(grp)} | {q(ir,25)} | {q(ir,50)} | {q(ir,75)} |")
+            lines.append(f"| {t_name}(無 GT,不分 label) | {len(grp)} | {q(ir,25)} | {q(ir,50)} | {q(ir,75)} |")
     ir = [r["inlier_rate"] for r in r_all]
     lines.append(f"| 全部(含無標註,兩層混合) | {len(r_all)} | {q(ir,25)} | {q(ir,50)} | {q(ir,75)} |")
-    lines += ["", f"## 旗標統計(全 {len(rows)} pair;label 欄含 low_matches pair)", "",
-              f"| 旗標 | 全部 | label=1 (n={len(by_lab_all[1])}) | label=0 (n={len(by_lab_all[0])}) |", "|---|---|---|---|"]
-    for fl in ("flag_low_matches", "flag_no_covisibility", "flag_degenerate_rot_only", "flag_doorway_wedge"):
-        cnt = lambda g: sum(r[fl] for r in g)
-        lines.append(f"| {fl} | {cnt(rows)} | {cnt(by_lab_all[1])} | {cnt(by_lab_all[0])} |")
+    lines += ["", f"## 旗標統計(全 {len(rows)} pair;label 欄含 low_matches pair)", ""]
+    if has_gt:
+        lines += [f"| 旗標 | 全部 | label=1 (n={len(by_lab_all[1])}) | label=0 (n={len(by_lab_all[0])}) |",
+                  "|---|---|---|---|"]
+        for fl in ("flag_low_matches", "flag_no_covisibility", "flag_degenerate_rot_only", "flag_doorway_wedge"):
+            cnt = lambda g: sum(r[fl] for r in g)
+            lines.append(f"| {fl} | {cnt(rows)} | {cnt(by_lab_all[1])} | {cnt(by_lab_all[0])} |")
+    else:
+        lines += ["| 旗標 | 全部 |", "|---|---|"]
+        for fl in ("flag_low_matches", "flag_no_covisibility", "flag_degenerate_rot_only", "flag_doorway_wedge"):
+            lines.append(f"| {fl} | {sum(r[fl] for r in rows)} |")
     n_p65 = sum(1 for r in rows if r["conf_used"] == 0.65 and r["az_ab_deg"] is not None)
     n_p30 = sum(1 for r in rows if r["conf_used"] == args.retry_conf and r["az_ab_deg"] is not None)
     n_noco = sum(r["flag_no_covisibility"] for r in rows)
@@ -431,33 +460,47 @@ def write_report(rows, total_s, args, out_path):
                and r["err_az_ab"] is not None and not r["flag_degenerate_rot_only"]]
     err_t30 = [r["err_az_ab"] for r in rows if r["conf_used"] == args.retry_conf
                and r["err_az_ab"] is not None and not r["flag_degenerate_rot_only"]]
+    n = max(len(rows), 1)
     lines += ["", "## 自適應 conf(0.65 → " + str(args.retry_conf) + " 重試)", "",
               f"- 位姿來自 conf 0.65:{n_p65} 對;**降級 {args.retry_conf} 撈回:{n_p30} 對**"
-              f"(其中 GT 連通 {rec1} 對);no_covisibility:{n_noco} 對(GT 連通僅 {noco1})",
-              f"- 位姿覆蓋率:{(n_p65+n_p30)}/{len(rows)} = {100*(n_p65+n_p30)/max(len(rows),1):.1f}%"
-              f"(升級前 38.6%)",
-              f"- **分層品質(az 誤差 vs GT,非退化)**:0.65 級中位 {q(err_t65,50)}°/p90 {q(err_t65,90)}°"
-              f"(n={len(err_t65)});{args.retry_conf} 撈回級中位 {q(err_t30,50)}°/p90 {q(err_t30,90)}°"
-              f"(n={len(err_t30)})— 撈回級重尾,下游必須以 conf_used 分層 gate"]
+              + (f"(其中 GT 連通 {rec1} 對)" if has_gt else "")
+              + f";no_covisibility:{n_noco} 對" + (f"(GT 連通僅 {noco1})" if has_gt else ""),
+              # 「升級前」= 僅有 conf 0.65 一級時的覆蓋率,須由本批次實算,
+              # 不可寫死成某次執行的數字(換資料集即不成立)。
+              f"- 位姿覆蓋率:{(n_p65+n_p30)}/{len(rows)} = {100*(n_p65+n_p30)/n:.1f}%"
+              f"(升級前,即僅 conf {args.conf} 級:{n_p65}/{len(rows)} = {100*n_p65/n:.1f}%)"]
+    if has_gt_az:
+        lines.append(
+            f"- **分層品質(az 誤差 vs GT,非退化)**:0.65 級中位 {q(err_t65,50)}°/p90 {q(err_t65,90)}°"
+            f"(n={len(err_t65)});{args.retry_conf} 撈回級中位 {q(err_t30,50)}°/p90 {q(err_t30,90)}°"
+            f"(n={len(err_t30)})— 撈回級重尾,下游必須以 conf_used 分層 gate")
+    else:
+        lines.append("- 分層品質(az 誤差 vs GT):" + NO_GT
+                     + " 撈回級品質重尾是既有結論,下游仍必須以 `conf_used` 分層 gate。")
     ok = [r for r in r_all if r["err_az_ab"] is not None and not r["flag_degenerate_rot_only"]]
     err_same = [r["err_az_ab"] for r in ok if r["same_room"] == 1]
     err_cross = [r["err_az_ab"] for r in ok if r["same_room"] == 0]
     err_unk = [r["err_az_ab"] for r in ok if r["same_room"] is None]
     err_deg = [r["err_az_ab"] for r in r_all if r["err_az_ab"] is not None and r["flag_degenerate_rot_only"]]
-    lines += ["", "## 位姿方位 vs GT hotspot 方位(直接相鄰 pair 才有 GT;A→B 方向)", "",
-              "GT hotspot 標的是「**通道位置**」,只有同房 pair 才近似指向對方相機;但直接相鄰",
-              "pair 的 B 相機通常就在通道正後方,兩種語意的方位高度重合,故此表當**一致性檢核**",
-              "看,不當嚴格位姿精度。", "",
-              "| 組 | n | 圓角誤差中位 | p90 |", "|---|---|---|---|",
-              f"| 同房(hotspot≈對方相機方向) | {len(err_same)} | {q(err_same,50)}° | {q(err_same,90)}° |",
-              f"| 跨房(hotspot=通道方位) | {len(err_cross)} | {q(err_cross,50)}° | {q(err_cross,90)}° |"]
-    if err_unk:
-        lines.append(f"| 房間歸屬不明 | {len(err_unk)} | {q(err_unk,50)}° | {q(err_unk,90)}° |")
-    lines += [f"| 退化(近零基線)對照 | {len(err_deg)} | {q(err_deg,50)}° | — |", "",
-              "退化組 t 方向本就不可靠,誤差≈隨機,恰證明退化旗標有效。", "",
-              "## 楔形寬度(A 側,非退化、有位姿的 pair)", "",
+    lines += ["", "## 位姿方位 vs GT hotspot 方位(直接相鄰 pair 才有 GT;A→B 方向)", ""]
+    if has_gt_az:
+        lines += ["GT hotspot 標的是「**通道位置**」,只有同房 pair 才近似指向對方相機;但直接相鄰",
+                  "pair 的 B 相機通常就在通道正後方,兩種語意的方位高度重合,故此表當**一致性檢核**",
+                  "看,不當嚴格位姿精度。", "",
+                  "| 組 | n | 圓角誤差中位 | p90 |", "|---|---|---|---|",
+                  f"| 同房(hotspot≈對方相機方向) | {len(err_same)} | {q(err_same,50)}° | {q(err_same,90)}° |",
+                  f"| 跨房(hotspot=通道方位) | {len(err_cross)} | {q(err_cross,50)}° | {q(err_cross,90)}° |"]
+        if err_unk:
+            lines.append(f"| 房間歸屬不明 | {len(err_unk)} | {q(err_unk,50)}° | {q(err_unk,90)}° |")
+        lines += [f"| 退化(近零基線)對照 | {len(err_deg)} | {q(err_deg,50)}° | — |", "",
+                  "退化組 t 方向本就不可靠,誤差≈隨機,恰證明退化旗標有效。"]
+    else:
+        lines.append(NO_GT)
+    lines += ["", "## 楔形寬度(A 側,非退化、有位姿的 pair)", "",
               "| 組 | 中位楔形寬° | 中位方位覆蓋度 |", "|---|---|---|"]
-    for name, grp in [("label=1", by_lab[1]), ("label=0", by_lab[0])]:
+    wedge_groups = ([("label=1", by_lab[1]), ("label=0", by_lab[0])] if has_gt
+                    else [("全部(無 GT,不分 label)", r_all)])
+    for name, grp in wedge_groups:
         g = [r for r in grp if r["az_wedge_a_deg"] is not None and not r["flag_degenerate_rot_only"]]
         w = [r["az_wedge_a_deg"] for r in g]; c = [r["az_cov_a"] for r in g]
         lines.append(f"| {name} | {q(w,50)} | {q(c,50)} |")
@@ -476,8 +519,16 @@ def write_report(rows, total_s, args, out_path):
         fr = [r["region1_frac"] for r in grp if r["region1_frac"] is not None]
         wd = [r["region1_az_width_a"] for r in grp if r["region1_az_width_a"] is not None]
         lines.append(f"| {name} | {len(grp)} | {q(nr,50)} | {one:.0f}% | {q(fr,50)} | {q(wd,50)}° |")
+    # 產出位於 repo 內時輸出相對路徑;經 ROMA_GEO_OUTPUT 導向外部時輸出絕對路徑。
+    sm = os.path.join(args.out, "_summary.csv")
+    try:
+        rel = os.path.relpath(sm, ROOT)
+        if not rel.startswith(".."):
+            sm = rel.replace(os.sep, "/")
+    except ValueError:                      # 跨磁碟機時 relpath 會拋出例外
+        pass
     lines += ["", "指標定義與旗標閾值見 `pose_regions/README.md`;逐 pair 明細見 "
-              "`Output/roma_regions/_summary.csv`(JSON 同資料夾)。"]
+              f"`{sm}`(JSON 同資料夾)。"]
     with open(out_path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
 
@@ -496,7 +547,8 @@ def main():
     ap.add_argument("--lat_filter", type=float, default=60.0,
                     help="RANSAC 前丟掉任一側 |lat|>此值(度)的匹配點(天底腳架/天頂帶假匹配;"
                          "2026-07-23 A/B 拍板採用,預設 60;設 0 關閉=舊行為,見 nadir_ab_report.md)")
-    ap.add_argument("--out", default=os.path.join("Output", "roma_regions"))
+    ap.add_argument("--out", default=DEFAULT_OUT,
+                    help="產出目錄(預設 <ROMA_GEO_OUTPUT|Output>/roma_regions)")
     ap.add_argument("--report", default=os.path.join(SCRIPT_DIR, "batch_pose_report.md"),
                     help="報告輸出路徑(A/B 實驗請另指路徑)")
     ap.add_argument("--limit", type=int, default=0, help="只跑前 N 對(冒煙用)")

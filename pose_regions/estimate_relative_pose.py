@@ -197,8 +197,8 @@ def match_pair(img_a, img_b, mode, conf, max_pts):
     print(f"RoMa({mode}) matched {len(m)} points on this pair")
     return m[:, :2], m[:, 2:4], m[:, 4]
 
-# ---------- 載入匹配:roma_match/cache 的 npz(WP1 Step 1) ----------
-# 檔名約定(7,069 檔全數符合,2026-07-22 查核):
+# ---------- 載入匹配:roma_match/cache 的 npz() ----------
+# 快取檔名約定:
 #   {house}_{imgA}_{imgB}_direct_roma_v2_std0.1_face512.npz
 # 內容:matches (K,5) = (x_a, y_a, x_b, y_b, conf),座標 = 原圖 ERP 像素
 # (連續值,雙線性 warp 取樣;x 觀測範圍 [5.12, 8186.88] = 內部網格半格 margin,W=8192。

@@ -63,7 +63,7 @@ compute capability，其餘欄位應完全相同。
 ..\venv\Scripts\python.exe environments\local_timing_bench.py --n 120 --tag <標籤>
 ```
 
-從 7,069 對母體中決定性等距抽樣，排除前 2 對暖機，關閉 RoMa 快取。
+從 `_summary.csv` 母體中決定性等距抽樣，排除前 2 對暖機，關閉 RoMa 快取。
 相同的 `--n` 會抽到相同的 pair，不同環境的結果可逐對相比。
 
 量測時關閉其他 GPU／CPU 負載。**幾何驗證時間**是判斷結果可信與否的對照變因：
@@ -122,7 +122,7 @@ repo 已在本機時也可直接當一般腳本執行，此時沿用既有目錄
 | 8 工具房屋資料 | `stitch_tool/prepare_house_data.py` | `stitch_tool/data/*.json` |
 | 9 工具語意門資料 | `stitch_tool/prepare_semantic_doors.py` | `stitch_tool/semantic/*.json` |
 
-第 5 步全量 7,069 對，特性：
+第 5 步跑完 `_pairs.csv` 的全部配對，特性：
 
 - **多 GPU**：`WORKERS = "auto"` 時每張卡一個 worker，由 `ParallelScorer` 分派。
   單張卡走序列路徑。

@@ -1,3 +1,8 @@
+"""
+[模組用途]
+多 GPU 平行匹配。偵測到多張 GPU 時，每張卡開一個 worker（以 `CUDA_VISIBLE_DEVICES` 隔離），
+由 `environments/batch_match.py` 呼叫。
+"""
 import multiprocessing as mp
 import torch
 import os
@@ -6,11 +11,10 @@ from tqdm import tqdm
 
 
 def _timing_append_row(csv_path, fieldnames, row):
-    """
-    Append-safe CSV write for the OPTIONAL match-stage timing hook: UTF-8, header written only
-    when the file is absent/empty. Fully exception-guarded - a failed timing write is silently
-    dropped and can never affect matching. (stdlib-only on purpose: workers are spawned
-    processes and must not depend on repo-specific sys.path setup.)
+    """選配計時鉤子用的附加式 CSV 寫入：UTF-8，檔案不存在或為空時才寫表頭。
+
+    全程以例外包住 —— 計時寫入失敗一律靜默略過，不得影響匹配本身。
+    刻意只用標準函式庫：worker 是 spawn 出來的行程，不應相依本專案的 sys.path 設定。
     """
     try:
         import csv
@@ -80,11 +84,9 @@ def _gpu_worker(gpu_id, task_queue, result_queue, stage, mode, model_type, conf_
         result_queue.put(("ERROR", f"Init Error: {e}\n{traceback.format_exc()}"))
         return
 
-    # --- Optional per-pair timing (additive): only active when the parent process exported
-    # BM2_TIMING_DIR before spawning workers (run_roma_above_threshold.py does this). Each
-    # worker writes to its OWN pid-suffixed CSV to avoid cross-process write races; the parent
-    # aggregates the records into per-house roma_times.csv after run_stage() returns. Fully
-    # guarded: any timing failure silently disables itself and never affects matching. ---
+    # --- 選配的逐對計時：父行程在 spawn worker 前設了 BM2_TIMING_DIR 才會啟用。
+    # 每個 worker 寫自己的 pid 後綴 CSV，避免跨行程寫入競爭；父行程在 run_stage 回傳後
+    # 彙整成 per-house 的 roma_times.csv。全程以例外包住：計時失敗即自行停用，不影響匹配。---
     _timing_csv = None
     _timing_cache_mode = {"core": "romascan", "cubemap": "cubemap"}.get(mode, "direct")
     try:

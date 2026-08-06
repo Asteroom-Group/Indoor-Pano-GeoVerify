@@ -41,10 +41,10 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(SCRIPT_DIR)
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
-from config import semantic_root                  # noqa: E402（要先補 sys.path）
+from config import semantic_root, regions_root    # noqa: E402（要先補 sys.path）
 
 SEM_DIR = semantic_root()                         # 可用 ROMA_GEO_DATASETS 覆寫，見 config.py
-REG_DIR = os.path.join(ROOT, "Output", "roma_regions")
+REG_DIR = regions_root()                        # 可用 ROMA_GEO_OUTPUT 覆寫，見 config.py
 DATA_DIR = os.path.join(ROOT, "stitch_tool", "data")
 CACHE = os.path.join(SCRIPT_DIR, "_door_cache.json")
 OUT_MD = os.path.join(SCRIPT_DIR, "semantic_door_eval.md")

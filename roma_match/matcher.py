@@ -92,7 +92,14 @@ class RoMaMatcher:
         self.conf_threshold = conf_threshold
         self.use_cache = use_cache
         self.batch_bidir = batch_bidir
-        self.cache_dir = cache_dir if cache_dir else os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")
+        # 快取位置：明確參數 > 環境變數 ROMA_GEO_CACHE（同 config.cache_root）> 模組同層的 cache/。
+        # 此處直接讀取環境變數而不 import config，以維持 roma_match 可獨立匯入。
+        if cache_dir:
+            self.cache_dir = cache_dir
+        elif os.environ.get("ROMA_GEO_CACHE"):
+            self.cache_dir = os.path.abspath(os.path.expanduser(os.environ["ROMA_GEO_CACHE"]))
+        else:
+            self.cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")
 
         # 核心改動：只有在不使用 Worker 的情況下，才在主進程初始化模型
         self.matcher = None

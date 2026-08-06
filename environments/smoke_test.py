@@ -27,7 +27,11 @@ HOUSE = "DollhouseTask_58553"
 IMG_A = "08ddb590-a6df-409d-850f-e45f59efa7a0"
 IMG_B = "08ddb590-ad9f-4647-8dab-ccfd0b14c8da"
 IMG_DIR = os.path.join(datasets_root(), HOUSE, HOUSE)
-REF = os.path.join(ROOT, "Output", "roma_regions", f"{HOUSE}_{IMG_A}_{IMG_B}.json")
+
+# ⚠ 參考結果**不可**放在 Output/roma_regions/ —— 那是 batch_pose_from_cache.py 的輸出
+# 目錄，不帶 --resume 跑一次全量就會把它覆蓋成當下環境的結果，此後本測試變成與自身
+# 比對而永遠通過。放在 environments/ 底下，批次寫不到。
+REF = os.path.join(os.path.dirname(os.path.abspath(__file__)), "smoke_ref_58553.json")
 
 
 def circ(a, b):

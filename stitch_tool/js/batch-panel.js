@@ -1,5 +1,5 @@
 /* =========================================================================
-   batch-panel.js — 批量否決浮動清單面板（需求 2）
+   batch-panel.js — 批量否決浮動清單面板
    reject 模式中點任何圈（3D 或 ERP）→ 不再只否決單一 pair，而是：
      以該圈方位所在「聚類」（clustering.clusterDoors 的同 cluster members）取出全部 pending 候選，
      彈出固定於螢幕右側的浮動面板：每列「i–j · prob% · az°」+ checkbox（預設全勾）、

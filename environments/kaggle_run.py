@@ -35,7 +35,7 @@ TAIL_LINES  = 15               # 每個步驟在儲存格顯示的末尾行數�
 
 # ---- 完整鏈條：批次匹配 → 幾何驗證 → 排序評估 → 工具資料 ----
 FULL_CHAIN   = True            # False 則只跑到一致性檢查為止
-BATCH_LIMIT  = 0               # 批次匹配的配對數上限；0 = 全部 7,069 對
+BATCH_LIMIT  = 0               # 批次匹配的配對數上限；0 = 全部
 WORKERS      = "auto"          # 平行 worker 數；auto = GPU 張數。Kaggle 雙 T4 會用上兩張
 TIME_BUDGET_H = 8.0            # 批次匹配的時間預算（小時）。Kaggle 單一工作階段有時限，
                                # 超過即停止並保留已完成的快取，下次重跑會接續。

@@ -3,7 +3,7 @@
    兩張 gnomonic 並排;可切對望/同向。
    互動:在 canvas 上拖曳改方位 —— 水平=yaw、垂直=俯仰(2026-07-30 加,上限 ±LAT_MAX);
    滾輪改 FOV。
-   疊圖(2026-07-29 會議):共視區域遮罩(兩側同色 = 同一塊實體空間)
+   疊圖:共視區域遮罩(兩側同色 = 同一塊實體空間)
    + 連通道頂帶(只吃方位角);兩者各自有開關,互動重繪時一起重畫。
    ========================================================================= */
 
@@ -70,7 +70,7 @@ function buildDom(){
     '<div class="vm-hint" id="crop-hint">' +
       '<button id="crop-dir-toggle" type="button" title="對望=互相看;同向=B 朝行進方向">對望 ⇄ 同向</button>' +
       '<button id="crop-reset-view" type="button" title="重置方位偏移與 FOV">重置視角</button>' +
-      '<button id="crop-reg" type="button" title="疊加 WP1 共視區域遮罩(兩側同色 = 同一塊實體空間)">遮罩 ON</button>' +
+      '<button id="crop-reg" type="button" title="疊加 共視區域遮罩(兩側同色 = 同一塊實體空間)">遮罩 ON</button>' +
       '<button id="crop-band" type="button" title="畫布頂緣的連通道方位標示(只吃方位角)">通道帶 ON</button>' +
       '<span id="crop-hint-text"></span>' +
     '</div>';
@@ -125,7 +125,7 @@ function syncToggleBtns(){
     regBtn.classList.toggle('on', _regOn && hasReg);
     regBtn.disabled = !hasReg;
     regBtn.title = hasReg
-      ? '疊加 WP1 共視區域遮罩(兩側同色 = 同一塊實體空間)'
+      ? '疊加 共視區域遮罩(兩側同色 = 同一塊實體空間)'
       : (_regNote || '此對沒有共視區域資料');
   }
   const bandBtn = document.getElementById('crop-band');

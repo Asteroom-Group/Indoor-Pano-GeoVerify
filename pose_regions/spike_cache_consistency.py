@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-WP1 Step 1 縮水版 spike:驗證 roma_match/cache/*.npz 的座標約定。
+ 縮水版 spike:驗證 roma_match/cache/*.npz 的座標約定。
 
 問題:cache 的 matches (K,5) 座標到底是「原圖 ERP 像素」還是 512 處理空間?
 (RoMaV2 輸入會被縮成 512×512 處理;下游 pose_regions / stitch_tool 都當原圖像素用,
@@ -18,7 +18,7 @@ WP1 Step 1 縮水版 spike:驗證 roma_match/cache/*.npz 的座標約定。
      交叉內點率會塌掉。
   4. 邊界指紋(參考用):兩邊的 x 極值是否同為半格 margin(W=8192 時 5.12 / 8186.88)。
 
-另附全量掃描(--skip_scan 可跳過):7,069 檔逐一檢查座標範圍不超出該房原圖 [0,W]x[0,H]。
+另附全量掃描(--skip_scan 可跳過):逐一檢查每個快取檔的座標範圍不超出該房原圖 [0,W]x[0,H]。
 
 輸出:stdout 報告 + spike_cache_consistency_report.md(供 README 引用)。
 用法:  venv/Scripts/python.exe pose_regions/spike_cache_consistency.py  [--skip_scan]
@@ -41,7 +41,9 @@ except ImportError:
     from estimate_relative_pose import (parse_cache_name, find_house_image,
                                         erp_to_bearing, ransac_E, sampson_residual)
 
-CACHE_DIR = os.path.join(ROOT, "roma_match", "cache")
+CACHE_DIR = (os.path.abspath(os.path.expanduser(os.environ["ROMA_GEO_CACHE"]))
+             if os.environ.get("ROMA_GEO_CACHE")          # 同 config.cache_root
+             else os.path.join(ROOT, "roma_match", "cache"))
 CONF = 0.65          # 分析用門檻(cache 底床 0.1 的低段雜訊多)
 FIT_MAX = 3000       # RANSAC fit 抽樣上限
 THRESH_DEG = 0.5     # 對極內點角度門檻(同 estimate_relative_pose 預設)
@@ -205,10 +207,10 @@ def scan_all(report_lines):
 if __name__ == "__main__":
     os.chdir(ROOT)   # CLI 相對路徑以 repo 根為準(repo 上層路徑含中文,部分函式庫吃不了)
     ap = argparse.ArgumentParser()
-    ap.add_argument("--skip_scan", action="store_true", help="跳過 7,069 檔全量範圍掃描")
+    ap.add_argument("--skip_scan", action="store_true", help="跳過全量範圍掃描")
     a = ap.parse_args()
 
-    lines = ["# cache npz 座標約定 spike 報告(WP1 Step 1)", "",
+    lines = ["# cache npz 座標約定 spike 報告()", "",
              f"日期:{time.strftime('%Y-%m-%d %H:%M')};方法與判準見 `spike_cache_consistency.py` docstring。", ""]
     ok = spike_three_pairs(lines)
     if not a.skip_scan:

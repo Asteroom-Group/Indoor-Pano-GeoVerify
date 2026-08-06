@@ -1,5 +1,5 @@
 /* =========================================================================
-   viewmodes/mode-morph.js — 模式 C「動態 morph」插件(WP2 首輪;教授點名「動態」)
+   viewmodes/mode-morph.js — 「動態 morph」檢視模式插件(已停用,見 viewmodes/index.js)
    用 RoMa cache 的稀疏 matches(/api/roma_match,同離線 cache,命中即秒回)建
    三角網格 warp,把「A 的裁切視角」向「B 的對應視角」漸變(來回播放)。
    真連通看起來像「走過去」;假連通(外觀相似誤匹配)會扭曲穿幫。
@@ -23,7 +23,7 @@ import { toast } from '../util.js';
 
 const FOV = 90, SIZE = 512;
 const GRID = 10;              // 網格格數(頂點 11×11;三角形 200/層)
-const CONF = 0.3;             // match 取樣門檻(窄門洞 pair 0.65 常不夠點,見 WP1)
+const CONF = 0.3;             // match 取樣門檻(窄門洞 pair 在 0.65 常湊不出足夠點數)
 const MAX_PTS = 250;          // IDW 用的對應點上限(conf 降冪)
 const CYCLE_MS = 1600;        // 一個來回週期
 

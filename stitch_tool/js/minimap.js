@@ -2,7 +2,7 @@
    minimap.js — 路線圖（2D canvas，力導向佈局，綠邊=已確認）+ 放大彈窗
    訂閱 'house-loaded' / 'state-changed' / 'view-changed' 自動重繪。
 
-   第三輪需求 1（力導向 + 彈窗）：
+   力導向佈局 + 放大彈窗：
    - 佈局改為力導向（layout.forceLayout）：已確認邊當彈簧、節點間庫倫斥力、孤立節點推外圈。
      確定性（無 random，初始圓形排列），結果 cache；house-loaded / state-changed 才重算，
      view-changed 只重繪（避免每次換圖跳動）。小圖與彈窗共用同一份佈局（各自依 canvas 尺寸縮放）。
@@ -179,7 +179,7 @@ function hitNode(cv, e, big){
 }
 
 // =========================================================================
-//  需求 1：放大彈窗（modal）
+//  放大彈窗（modal）
 // =========================================================================
 let _modalOpen = false;
 

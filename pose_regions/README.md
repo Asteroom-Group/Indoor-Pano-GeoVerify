@@ -2,27 +2,22 @@
 
 從 RoMa 的 ERP 全景匹配點估計兩張圖之間的相對位姿(R、t 方向;尺度未知),
 並以對極幾何過濾不合理匹配、萃取共視區域多邊形。不需要 GT pose / 深度 / layout。
-WP1(RoMaV2 有意義 correspondence,供子計畫三拼接)以本資料夾為核心逐步擴充。
 
-> **2026-07-23 模組化改名:`pose_experiment/` → `pose_regions/`**(git mv,歷史保留)。
-> 現在是可直接匯入的套件 — Kaggle 或即時 RoMa 匹配流程皆可
-> `from pose_regions import analyze_pair`(核心純 numpy、匯入零副作用、cwd 無關);
-> CLI 用法全部不變(只是資料夾名換掉)。公開 API 見 `__init__.py`。
-> 歷史文件/報告中的 `pose_experiment/` 路徑一律讀作 `pose_regions/`。
+可直接匯入:`from pose_regions import analyze_pair`。核心為純 numpy、匯入零副作用、
+與 cwd 無關,Kaggle 或即時匹配流程皆可使用。公開 API 見 `__init__.py`。
 
 ## 檔案
 
 | 檔案 | 用途 |
 |---|---|
 | `estimate_relative_pose.py` | 單對主程式:三種輸入 → RANSAC essential → R/t、內點 overlay、top-down 圖 |
-| `batch_pose_from_cache.py` | **Step 2 全量批次**:7,069 cache pair → per-pair JSON + `_summary.csv` + 報告 |
+| `batch_pose_from_cache.py` | 全量批次:快取內每一對 → per-pair JSON + `_summary.csv` + 報告 |
 | `batch_pose_report.md` | 全量批次自動報告(耗時、inlier 率分佈、GT 方位交叉誤差、旗標統計) |
-| `spike_cache_consistency.py` | WP1 Step 1 spike:驗證 cache npz 座標約定(可重跑) |
-| `spike_cache_consistency_report.md` | spike 執行結果(2026-07-22,總判定 PASS) |
-| `covis_ranking_eval.py` | 共視/幾何訊號當**連通性排序分數**的判別力評估;產生 `_ranking_eval.csv` |
-| `pose_out_cache_demo/` | `--cache_npz` 端到端範例輸出(不入 git;重生:見上方 A 用法) |
-| `covis_ranking_eval.py` | 共視/幾何訊號當**連通性排序分數**的判別力與上限評估(見下方章節) |
-| `covis_ranking_report.md` | 上述評估結果(2026-07-26) |
+| `spike_cache_consistency.py` | 驗證 cache npz 的座標約定(可重跑) |
+| `spike_cache_consistency_report.md` | 上述驗證的執行結果 |
+| `covis_ranking_eval.py` | 共視/幾何訊號當**連通性排序分數**的判別力與上限評估;產生 `_ranking_eval.csv` |
+| `covis_ranking_report.md` | 上述評估結果 |
+| `render_region_overlay.py` | 把共視區域畫在 A/B 兩張圖上(抽樣或 on-demand) |
 
 ## 三種輸入
 
@@ -34,7 +29,7 @@ venv/Scripts/python.exe pose_regions/estimate_relative_pose.py \
 # B) 單對 live 跑 RoMa(需 GPU venv)
 python estimate_relative_pose.py --match --img_a a.jpg --img_b b.jpg --mode core --conf 0.65
 
-# C) export_correspondences.py 匯出的 CSV
+# C) 匹配點 CSV(欄位:x_a, y_a, x_b, y_b, confidence)
 python estimate_relative_pose.py --csv a_to_b.csv --img_a a.jpg --img_b b.jpg
 
 # 幾何核心自我驗證(合成資料;目前 PASS)
@@ -45,9 +40,9 @@ python estimate_relative_pose.py --selftest
 - `--img_a/--img_b` 給反了會自動交換座標(同 `roma_match/matcher.py` 讀快取的 is_swapped 行為),R/t 隨之取逆(已驗證:R 恰為轉置)。
 - `--conf` 未指定時預設 **0.65**(cache 底床 0.1 的低段大多是雜訊)。
 
-## cache npz 座標約定(WP1 Step 1 已驗證,2026-07-22)
+## cache npz 座標約定
 
-`roma_match/cache/` 共 **7,069 檔**,檔名全數符合:
+`roma_match/cache/` 的檔名全數符合:
 
 ```
 {house}_{imgA}_{imgB}_direct_roma_v2_std0.1_face512.npz
@@ -56,21 +51,11 @@ python estimate_relative_pose.py --selftest
 - 內容:`matches` (K,5) = **(x_a, y_a, x_b, y_b, conf)**,座標 = **原圖 ERP 像素**(A 圖前兩欄、B 圖後兩欄)。
 - 座標為**連續值**(RoMaV2 內部 512×512 warp 雙線性取樣後放大回原圖;非格點量化)。
 - conf 底床 **0.1**(存完整結果供不同門檻共享;上層讀取時再過濾)。
-- **原圖尺寸依房子而異**(7 種:5376×2688 ~ 8192×4096)——批次處理(Step 2)換算球面射線時必須用**該房實際 W×H**,不能寫死 8192×4096。
+- **原圖尺寸依房子而異**(7 種:5376×2688 ~ 8192×4096)——換算球面射線時必須用
+ **該房實際 W×H**,不能寫死 8192×4096。
 
-### 驗證方法與結果(`spike_cache_consistency.py`)
-
-抽 3 對(3 棟房、字母序首/中/尾、各取 conf≥0.65 點數最多 pair),
-「cache 讀出」vs「同對 live 重跑 RoMa(繞過快取)」比對。
-RoMaV2 的 `sample()` 是隨機抽樣(5000 點/方向),兩次 draw 不會逐點相同,故比的是**約定與幾何**:
-
-1. **range/scale**:兩邊座標皆在 [0,W]×[0,H],max 比值 0.99~1.02(若 cache 是 512 處理空間,比值會是 ~16 倍)。
-2. **NN 距離**:cache→live 最近鄰中位數 11~31 px(8192 寬圖;同約定的兩次隨機 draw 就該是這個量級,約定錯會是數千 px)。
-3. **對極交叉驗證**:cache 點 fit 的 E 拿去算 live 點內點率(反向亦然),與自身內點率幾乎相同(例:0.510→0.514)。
-4. **全量掃描**:7,069 檔座標全數落在該房原圖範圍內,超界 0 檔。
-
-**總判定 PASS** — 明細見 `spike_cache_consistency_report.md`。
-程式碼佐證:私有核心 `matchers.py` 的 `to_pixel_coordinates(matches, ha, wa, hb, wb)` 收的就是原圖尺寸。
+此約定由 `spike_cache_consistency.py` 驗證(座標範圍、最近鄰距離、對極交叉驗證、
+全量超界掃描四項),結果見 `spike_cache_consistency_report.md`。
 
 ## RANSAC 取樣策略(`--sampler`,單對與批次共用)
 
@@ -87,24 +72,34 @@ RoMaV2 的 `sample()` 是隨機抽樣(5000 點/方向),兩次 draw 不會逐點�
 兩種取樣結束後都做 **LO 式迭代 refit**:全內點重擬合 → 重算內點,循環至內點集不再變大
 (只在變好時接受,最多 3 輪)。
 
-A/B(170 對,分層 hi/mid/lo inlier 率,LO refit 後):總耗時無差;內點數 hi 帶 +2、
-mid/lo 帶 −10~−16(uniform 的 max-consensus 會多吸門檻邊緣點);**外部精度(az 誤差
-vs GT hotspot)stratified 明顯較好:中位 11.3° vs 13.8°、p90 51.5° vs 63.0°** ——
-內點「數」是 RANSAC 自家目標,az 是外部檢核,以後者為準。conf 收益有限的原因:
-conf≥0.65 門檻已先吃掉大部分 conf 訊號;分桶/conf 池的效果主要反映在方向精度。
-selftest 兩種取樣都 PASS。
+**預設 `stratified`。** 兩者耗時相同;`uniform` 的內點「數」略多,但那是 RANSAC 自家的
+目標函數,外部檢核(方位誤差 vs GT hotspot)是 `stratified` 明顯較好,故以後者為準。
+`--selftest` 對兩種取樣都通過。
 
-## nadir 前濾(`--lat_filter`,批次限定;2026-07-23 A/B 實驗)
+## nadir 前濾(`--lat_filter`,批次限定)
 
-天底腳架帶(lat<−60°)在每張全景長一樣 → 系統性跨圖假匹配,過對極驗證但無語意
-(baseline 主區污染:0.65 級 6.8% / 0.3 撈回級 23.2%)。`--lat_filter 60` 在 RANSAC 前
-丟掉「任一側 |lat|>60°」的匹配點(天底+天頂對稱處理),丟點數記入 JSON `n.lat_drop`、
-參數記入 `params.lat_max`。全量 A/B(`nadir_ab_report.md`):az 誤差不退反進(0.3 級
-中位 19.45°→14.47°、跨房 p90 77°→54°)、nadir 主區歸零、假 degenerate 減半(343→166,
-腳架同位假「純旋轉」)、inlier 分離 4.2×→6.8×;覆蓋率 54.9%→47.3%,流失者追查多為
-假證據 pair(誠實拒絕)。**已採用:`--lat_filter 60` 為預設**(設 0 關閉=舊行為),
-schema 升 `wp1-step3-v2`,正式 `Output/roma_regions/` 已全量重生(3,345 對位姿,
-與實驗跑逐位一致;60621 示範 pair 完好);實驗對比目錄已刪除(可由本 flag 重生)。
+天底腳架帶(lat < −60°)在每張全景圖上長得一樣,會產生系統性的跨圖假匹配 ——
+這種匹配過得了對極驗證但沒有語意。`--lat_filter 60` 在 RANSAC 前丟掉「任一側
+|lat| > 60°」的匹配點(天底與天頂對稱處理),丟掉的點數記入 JSON 的 `n.lat_drop`、
+參數記入 `params.lat_max`。
+
+**預設 60;設 0 關閉。** 開啟後方位精度不降反升,退化旗標的誤報減半,代價是位姿
+覆蓋率下降(流失的多為假證據 pair)。採用依據與全量 A/B 的數字見 `nadir_ab_report.md`。
+
+## `Output/roma_regions/` 使用限制
+
+逐 pair 的 JSON 與 `_summary.csv` 由 `batch_pose_from_cache.py` 產生,
+數量、覆蓋率與各項分佈見同批產出的 `batch_pose_report.md`。
+
+- **逐對數值不跨 GPU 重現。** 稠密匹配的點集隨 GPU 而異,RANSAC 因此發散;
+  差異集中在 `conf_used=0.3` 的撈回層與低 inlier 的 pair。
+ **引用覆蓋率或逐對數值時必須註明產出環境。**
+- **`n_regions` 只能當統計量,不能當 per-pair 的穩定標籤。** DBSCAN 對點集微擾敏感,
+  同一對在不同環境可能落在不同的區域數;整體分佈則穩定。需要穩定的 per-pair 依據
+  時,改用主共視區域的中心方位。
+- ⚠ 目錄內有少數 GT 欄位(`gt_az`、`same_room`)產生於讀取端排序修正之前,其值取決於
+  當時作業系統的檔案列舉順序。僅影響 GT 對照欄位,不影響幾何輸出;執行一次不帶
+  `--resume` 的全量批次即可一致。
 
 ## 輸出與判讀
 
@@ -113,10 +108,10 @@ schema 升 `wp1-step3-v2`,正式 `Output/roma_regions/` 已全量重生(3,345 �
 - stdout:內點率、R、t(單位向量)、`median rot-only err`
   (內點若能被純旋轉解釋 → 疑似近零基線,t 方向不可靠,會印警告)。
 
-## Step 2:全量批次 + 品質指標(`batch_pose_from_cache.py`)
+## 全量批次 + 品質指標(`batch_pose_from_cache.py`)
 
 ```bash
-venv/Scripts/python.exe pose_regions/batch_pose_from_cache.py             # 全量 7,069 對
+venv/Scripts/python.exe pose_regions/batch_pose_from_cache.py             # 全量
 venv/Scripts/python.exe pose_regions/batch_pose_from_cache.py --limit 20  # 冒煙
 # --resume 跳過已有 JSON 續跑;--conf/--max_pts/--thresh_deg/--iters 可調
 ```
@@ -126,25 +121,24 @@ venv/Scripts/python.exe pose_regions/batch_pose_from_cache.py --limit 20  # 冒�
 2. `Output/roma_regions/_summary.csv` — 每 pair 一列指標總表(入 git,供驗收與出圖)
 3. `batch_pose_report.md` — 耗時與分佈自動報告
 
-### 自適應 conf(Step 3 補,`--retry_conf`,預設 0.3)
+### 自適應 conf(`--retry_conf`,預設 0.3)
 
 基準 conf 0.65 需 ≥30 點才進 RANSAC;**點數 <30 或內點 <8 時自動降到 0.3 重試**
 (需 ≥8 點),實際門檻記入 `conf_used`(0.65 / 0.3 / null)。兩級都湊不出 8 個內點
 才標 `no_covisibility`。動機:穿門窄楔形 pair 在 0.65 常只剩 <20 點(位姿覆蓋率是
 拼接可用性的關鍵)。
 
-實測(2026-07-22 backfill):位姿覆蓋率 38.6% → **54.9%**;0.3 級撈回 1,681 對
-(GT 連通 290、其中跨房 202 = 門洞 case 主要受益者)。**撈回層品質重尾**:az 誤差
-中位 19.4° 但 p90 142°——下游必須用 `conf_used` + inlier 率 + 旗標一起 gate,
-0.3 級位姿不可直接當 0.65 級用。語意提醒:`no_covisibility` = 無共視證據,
-**不是**「不連通」——幾何驗證驗的是共視+幾何一致,不是可通行。
+**⚠ 撈回層品質重尾**:0.3 級的方位誤差分佈,尾巴遠比 0.65 級長。下游必須用
+`conf_used` + inlier 率 + 旗標一起 gate,**0.3 級位姿不可直接當 0.65 級用**。
+各層的覆蓋率與誤差分位數見 `batch_pose_report.md`。
 
-### per-pair JSON schema(`schema_version: wp1-step3-v2`)
+語意提醒:`no_covisibility` = 無共視證據,**不是**「不連通」——
+幾何驗證驗的是共視 + 幾何一致,不是可通行。
 
-> 版本沿革:`wp1-step2-v1` = pose/quality/flags/inliers/gt;`wp1-step3-v1` 新增
-> `conf_used`、`flags.no_covisibility`、`regions`(共視區域);**`wp1-step3-v2`(2026-07-23)
-> = nadir 前濾預設開啟**,新增 `params.lat_max`、`n.lat_drop`(正式目錄已全量重生,
-> 位姿 3,345 對 = 47.3%;A/B 依據見 `nadir_ab_report.md`)。
+### per-pair JSON schema
+
+`schema_version` 欄位仍會寫入,供 `batch_pose_from_cache.py --resume` 判斷既有 JSON
+是否需要重算,不必當成對外的版本協商機制。
 
 ```jsonc
 {
@@ -178,8 +172,8 @@ venv/Scripts/python.exe pose_regions/batch_pose_from_cache.py --limit 20  # 冒�
     "no_covisibility": false,      // 兩級 conf 都湊不出 ≥8 內點(=無共視證據,非「不連通」)
     "degenerate_rot_only": false,  // rot_only_med < 1.5×thresh_deg → t 方向不可靠
     "doorway_wedge": false         // 非退化 且 inlier_rate≥0.3 且 n_inlier≥30 且兩側楔形≤75°
-  },                               //(閾值為暫定,五類抽查驗收後可調)
-  "regions": [                     // 共視區域(Step 3):內點 6D 聯合 DBSCAN 聚類,依 n 降冪
+  },
+  "regions": [                     // 共視區域:內點 6D 聯合 DBSCAN 聚類,依 n 降冪
     {"n": 1347, "frac_of_inliers": 0.965, "mean_conf": 0.872,
      "a": {"polygon": [[x,y], ...],   // A 側凸包頂點,原圖像素;過縫 pair x 可能超出 [0,W)
                                        // 以保多邊形連續,繪製時自行 mod W
@@ -190,30 +184,25 @@ venv/Scripts/python.exe pose_regions/batch_pose_from_cache.py --limit 20  # 冒�
                                    // 門 pair 預期單一門洞區,同房/大環預期大覆蓋或多區。
                                    // ⚠ 區域「代表方位」請用 pose.az_ab,勿用區域中心(已測負結果)
   "gt": {"label": 1, "same_room": true, "az_ab_deg": -132.19, "az_ba_deg": 43.5},
-                                   // label:metadata 連通標註;same_room:HOTSPOT.json 的
+                                   // label:HOTSPOT.json 的 ToIDName 推導;same_room:同檔的
                                    // (floor,Roomidx) 相同;az:GT hotspot 方位(直接相鄰才有)。
                                    // ⚠ hotspot 語意 = 「通道位置」,只有同房 pair 才近似指向對方
                                    // 相機;但直接相鄰 pair 的 B 通常就在通道正後方,兩語意方位
-                                   // 高度重合(實測同房誤差中位 9.1° / 跨房 10.7°),故 err_az_*
+                                   // 高度重合,故 err_az_*
                                    // 當一致性檢核,非嚴格位姿精度。僅供驗收,非計算輸入
   "inliers": [[x_a, y_a, x_b, y_b, conf], ...], // 原圖像素,0.1px 取整,最多 2000 點(seed 0 抽樣)
   "time_ms": 833.7
-  // "regions": Step 3 將加入 A/B 側共視多邊形遮罩
 }
 ```
 
 `_summary.csv` 欄位 = 上述指標攤平(`house,img_a,img_b,n_*,inlier_rate,conf_used,az_*,sampson_*,rot_only_med_deg,az_wedge_*,az_cov_*,flag_*,n_regions,region1_frac,region1_az_width_a,gt_label,same_room,gt_az_*,err_az_*,time_ms`);
-`err_az_ab` = 位姿方位與 GT hotspot 方位的圓角誤差(全量,stratified+LO:同房中位 9.5°、跨房 10.7°、退化對照 ~86°)。
+`err_az_ab` = 位姿方位與 GT hotspot 方位的圓角誤差;各組的實際數值見 `batch_pose_report.md`。
 
-注意:LO refit 會讓 FP pair 的虛假模型也多吸一些門檻邊緣點(label=0 inlier 率中位
-0.186→0.212),inlier 率的真/假分離比從 ~2.4 降至 ~2.1 — 仍清楚分離;判 pair 好壞
-請綜合 inlier 率+旗標+az 一致性,不要單看 inlier 率。
+⚠ **判斷 pair 好壞請綜合 inlier 率、旗標與 az 一致性,不要單看 inlier 率。**
+LO refit 會讓假配對的虛假模型也多納入一些門檻邊緣點,壓縮真假之間的 inlier 率差距
+(仍清楚分離,但比未 refit 時小)。
 
-附帶一個已測的**負結果**(供 Step 3 設計參考):「內點方位楔形中心」對 hotspot 方位的誤差
-中位 39°~62°(即使限定 doorway_wedge 旗標子集也 39°)——外觀叢集中心**不是**好的通道方位
-估計;對極位姿的 t 方向(az_ab)才是。
-
-## Step 4:overlay 渲染器(`render_region_overlay.py`,WP2 模式 B 參考 + 驗收抽查)
+## overlay 渲染器(`render_region_overlay.py`)
 
 ```bash
 # 單對 on-demand
@@ -223,17 +212,15 @@ venv/Scripts/python.exe pose_regions/render_region_overlay.py --sample 3
 ```
 
 輸出 `Output/roma_regions/overlays/*.jpg`(gitignore;A 上 B 下堆疊、region 兩側同色
-半透明 + 邊框 + 編號、az_ab/az_ba 黃線、GT hotspot 青色虛線、資訊列)。按工作計畫
-「overlay 不全量產出」,只做抽樣/on-demand(全量 7,069 張會吃爆磁碟)。
+半透明 + 邊框 + 編號、az_ab/az_ba 黃線、GT hotspot 青色虛線、資訊列)。
+**overlay 不全量產出**,只做抽樣或 on-demand —— 全量產出的磁碟用量不合理。
 
-**WP2 模式 B 過縫繪製約定(已在本渲染器驗證)**:polygon x 可能超出 [0,W) 以保連續;
+**過縫繪製約定**(已在本渲染器驗證):polygon x 可能超出 [0,W) 以保連續;
 繪製時同一多邊形平移 −W / 0 / +W 各畫一次,超界自然裁掉即可。
 
-**已知品質問題(2026-07-22 抽查發現,量化後留給驗收裁決)**:主區重心落在 nadir 帶
-(仰角 < −60°,即腳架/地面盲區)的比例 = **0.65 級 6.8%、0.3 撈回級 23.2%**——腳架
-在每張全景長一樣,是系統性假匹配熱點,0.3 撈回層污染尤重。候選對策:RANSAC 前濾掉
-|lat|>60° 的 match(但會同時砍掉真地板匹配,需 A/B 驗證後再定),或至少在 region
-加 nadir_frac 欄供下游過濾。下游短期先用「主區重心緯度」自行 gate。
+**⚠ 主區重心落在天底帶(仰角 < −60°,腳架與地面盲區)者不可直接採信** —— 該帶在各張
+全景圖上外觀相同,是系統性假匹配熱點。`--lat_filter`(預設 60,見上方章節)已在 RANSAC
+前濾掉這些點;渲染器與 `/api/regions` 另會對殘餘者標示警示。
 
 ## 共視訊號當排序分數:判別力與上限(`covis_ranking_eval.py`,2026-07-26)
 
@@ -241,28 +228,27 @@ venv/Scripts/python.exe pose_regions/render_region_overlay.py --sample 3
 python pose_regions/covis_ranking_eval.py          # 約 1 分鐘,純 CPU
 ```
 
-回答「幾何驗證後的共視證據能不能把真正連通的 pair 排到前面」。族群 = `_summary.csv`
-全 7,069 對(coarse filter R90 存活者),GT 用 `datasets/*_HOTSPOT.json` 完整鄰接重建
+回答「幾何驗證後的共視證據能不能把真正連通的 pair 排到前面」。
+族群 = `_summary.csv` 的全部列(粗篩存活者),GT 用 `datasets/*_HOTSPOT.json` 完整鄰接重建
 (不用 `metadata/*.csv`,那份只覆蓋 68%),另算 BFS topology distance。輸出
 `covis_ranking_report.md` + `Output/roma_regions/_ranking_eval.csv`(每 pair 一列,
 含 coarse logit —— 矩陣本身在 gitignore 內,這份 CSV 是唯一入庫的分數快照)。
 
-結論摘要(完整表格見報告):
+結論摘要(數字與完整表格見 `covis_ranking_report.md`):
 
-- 幾何 n_inlier 單獨 AP **0.650** > RoMa 匹配數 0.618 > coarse refined 0.596 > 基準率 0.256;
-  **與 coarse 組合 AP 0.711(免訓練 rank 平均)/ 0.713(house-5fold logistic OOF)**,
-  同 R≥0.90 下 FP 2,991 → 2,443(−18%)。組合增益不是擬合假象。
-- 但**上限沒被打破**:d1 vs d3+ 幾何 AP 0.787(強),d1 vs d2 只有 0.758 vs coarse 0.749;
-  限縮到兩邊都有位姿時 0.800 反而略低於 coarse 0.807。R90 被移除的 874 個 FP 中
-  **75% 是 d3 以上**,殘餘 FP 的 d2 佔比由 37% **升到 42%** —— 誤差被濃縮到
-  「看得到、走不到」那道牆上,不是穿過它。
-- 覆蓋率:僅 87.4% 正例有 inlier、82.6% 有位姿 ⇒ **只能當特徵,不能當獨立過濾器**。
-- 注意:coarse 在此族群的 AP 被截斷(族群本來就由它挑出),不可與全矩陣評測相比,
+- 幾何 `n_inlier` 單獨的判別力高於未經驗證的 RoMa 匹配數;與 coarse 分數組合後再有
+  提升,且免訓練的 rank 平均幾乎追平學習式組合,因此增益不是擬合假象。
+- **上限沒被打破**:增益幾乎都來自距離較遠的負例。在「看得到、走不到」的相鄰房間
+  這道牆上,幾何與 coarse 量的是同一件事,殘餘誤差被濃縮到牆上而不是穿過它。
+- **覆蓋率是硬限制**:並非所有正例都拿得到 inlier 或位姿,因此幾何分數
+ **只能當特徵,不能當獨立過濾器**。
+- ⚠ 此族群本來就由 coarse filter 挑出,coarse 的 AP 被截斷,不可與全矩陣評測相比,
   也不可讀成「幾何贏過模型」。
 
-## WP1 後續(見 進度報告/7-22/工作計畫.md)
+## 已知限制
 
-- ~~Step 3:自適應 conf + 共視區域萃取~~(2026-07-22 完成,schema `wp1-step3-v1`)。
-- ~~Step 4:overlay 資產~~(2026-07-22 完成,抽樣+on-demand 渲染器)。
-- 未排工項:同房統一尺度(每對 |t|=1,跨 pair 平移長度不可比;需尺度傳播或 HSLoc_3D 錨定)。
-- 已知事實:live 重跑 3~10 s/對(RTX 4060);cache 批次路徑純 CPU,毫秒級/對;**per-house 圖尺寸不同(7 種,5376×2688 ~ 8192×4096)**。
+- **沒有跨 pair 共用的尺度**:每對 `|t| = 1`,pair 之間的平移長度不可互相比較。
+  真實尺度依分工由子計畫三提供。
+- **per-house 圖尺寸不同**(7 種,5376×2688 ~ 8192×4096),任何 x/W 換算都必須用
+  該圖自己的寬。
+- 效能:live 重跑 3~10 s/對(RTX 4060);走 cache 的批次路徑為純 CPU,毫秒級/對。

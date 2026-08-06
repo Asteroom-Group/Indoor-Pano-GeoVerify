@@ -57,7 +57,7 @@ export function saveState(house, state){
  * @returns {Promise<object>}
  */
 /**
- * GET /api/regions/<house>?a=&b= -> WP1 共視區域 JSON（wp1-step3-v1；不含 inliers）＋ swap 旗標。
+ * GET /api/regions/<house>?a=&b= -> 共視區域 JSON（wp1-step3-v1；不含 inliers）＋ swap 旗標。
  * swap=true 表示檔案是 B_A 方向，regions 的 a/b 兩側要對調使用。404 = 此對沒跑過離線批次。
  * @param {string} house
  * @param {string} imgA 檔名（不含路徑）
@@ -71,11 +71,10 @@ export function fetchRegions(house, imgA, imgB){
 }
 
 /**
- * WP1 nadir 臨時 gate(2026-07-23 拍板:掛警示,不跳過):主區(regions[0],批次端按
- * 內點數降冪排序)任一側 polygon 重心落天底帶(lat < −60° 腳架/地板帶)→ 疑似腳架
- * 假匹配 — 該帶在每張全景都長一樣,過得了對極驗證但無語意。量化:0.65 級 6.8% /
- * 0.3 撈回級 23.2% 的 pair 會中。對策 A/B(RANSAC 前濾 vs nadir_frac 欄位)待拍板。
- * @param {object} rj /api/regions 回傳 JSON(wp1-step3-v1)
+ * 天底帶警示:主區(regions[0],批次端按內點數降冪排序)任一側 polygon 重心落在
+ * lat < −60° 的腳架/地板帶時,回傳警示字串(掛警示,不跳過該對)。該帶在各張全景圖上
+ * 外觀相同,是系統性假匹配熱點。批次端另有 --lat_filter 在 RANSAC 前先濾一次。
+ * @param {object} rj /api/regions 回傳 JSON
  * @returns {string|null} 警示文字;主區不在天底帶回 null
  */
 export function nadirWarning(rj){
@@ -99,7 +98,7 @@ export function nadirWarning(rj){
 /**
  * GET /api/semantic_doors/<house> -> {house, doors:{<image檔名不含副檔名>:[{az,az0,az1,width_deg,px}]}}。
  * 404（該房沒有語意圖，見 prepare_semantic_doors.py）或任何請求失敗一律回傳 null——呼叫端視為
- * 「此房無語意圖」，不拋例外（任務8：語意輔助勾選對沒有語意圖的房子必須完全不炸）。
+ * 「此房無語意圖」，不拋例外（語意輔助勾選對沒有語意圖的房子必須完全不炸）。
  * @param {string} house
  * @returns {Promise<object|null>}
  */

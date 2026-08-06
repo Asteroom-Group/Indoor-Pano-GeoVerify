@@ -32,7 +32,7 @@ function renderErpIfOn(){ if(erpOn()) renderERP(); }
 // =========================================================================
 /**
  * 建立/更新一條確認邊並收尾（寫入 confirmed、移除 rejected/eliminated、autoEliminate 兩端、存檔）。
- * 對「hd.pairs 裡不存在的孤立照片人工連接」也照樣寫入 STATE.confirmed（需求 6 重點）。
+ * 對「hd.pairs 裡不存在的孤立照片人工連接」也照樣寫入 STATE.confirmed。
  * 不負責 UI 導覽（caller 自行決定重畫/切換與 emit）。
  * @param {number} i 較小 index 那張圖
  * @param {number} j 另一張圖
@@ -115,7 +115,7 @@ export function toggleAllConnMode(){ toggleMode('allConn'); }
 export function toggleUnconn(){ toggleMode('unconn'); }
 
 // =========================================================================
-//  未連接通道：連接（需求 6）
+//  未連接通道：連接
 // =========================================================================
 /** 讀某圖目前的未連接通道橘圈方位陣列（兼容數字/字串 key）。 */
 function extraAzList(imgIdx){
@@ -131,7 +131,7 @@ function removeExtraAz(imgIdx, az){
 
 /**
  * 純邏輯：驗證「上下面板各恰好 1 個橘圈」並算出要建立的確認邊（方向對應正確）。
- * 不觸碰 DOM/nav/STATE，供單元測試直接呼叫（需求 6 驗證）。
+ * 不觸碰 DOM/nav/STATE，供單元測試直接呼叫。
  * @param {number} top 上面板圖 index
  * @param {number} bot 下面板圖 index
  * @param {number[]} exTop 上面板圖的橘圈方位陣列
@@ -207,7 +207,7 @@ export function clearAllUnconn(){
 }
 
 /**
- * 需求 3：unconn 推薦面板「就是這個(連通)」——把某推薦候選確認連通。
+ * unconn 推薦面板「就是這個(連通)」——把某推薦候選確認連通。
  * 此側（放圈圖 srcImg）方位優先用該圖的橘圈（若有），否則用候選在此圖看向對方的方位 candAz；
  * 對側方位優先用對側橘圈（若使用者也在對面放了橘圈），否則用候選的對面方位 oppAz。
  * 成功後移除此側用掉的橘圈（若有）與對側用掉的橘圈（若有），寫入 confirmed（含 autoEliminate、去重、存檔）。
@@ -385,11 +385,11 @@ export function rejectMarkerPair(clickedImgIdx, targetImgIdx, markerAz, whichPan
 }
 
 // =========================================================================
-//  批量否決（需求 2）：一次否決一串 pair，單次 save + 單次 state-changed + toast 總數
+//  批量否決：一次否決一串 pair，單次 save + 單次 state-changed + toast 總數
 // =========================================================================
 /**
  * 批量否決 list 內的每一對。逐一寫入 STATE.rejected（去重、若曾確認則走 rejectConfirmed 救回同門），
- * 全部處理完只 scheduleSave 一次、emit('state-changed') 一次、toast 總數一次（需求 2 語意）。
+ * 全部處理完只 scheduleSave 一次、emit('state-changed') 一次、toast 總數一次。
  * 不做導覽切換（面板留在原處，reject 模式維持，供繼續點下一個圈）。
  * @param {Array<{i:number,j:number}|[number,number]>} list 要否決的對（物件或 [i,j] 皆可）
  * @returns {number} 實際新否決的筆數
@@ -438,7 +438,7 @@ export function autoEliminate(p, azStar){
 }
 
 /**
- * autoEliminate 的基準圖參數化版本（需求 6：連接 helper 對兩端各跑一次）。
+ * autoEliminate 的基準圖參數化版本（連接 helper 對兩端各跑一次）。
  * @param {object} p 確認邊/pair（需 i/j/az_ij/az_ji 或作為 pairKey 排除自身用）
  * @param {number} base 基準圖 index
  * @param {number} star 該圖上的確認門方位

@@ -10,13 +10,13 @@ export const MARKER_R = 480;
 /** 標記 sprite 預設像素尺寸 */
 export const MARKER_SIZE = 26;
 
-/** 顏色圖例（沿用 SPEC 與原 app.js）。red = 已否決/淘汰配對的圈（需求 1）。muted = 非候選/停用灰。 */
+/** 顏色圖例（沿用 SPEC 與原 app.js）。red = 已否決/淘汰配對的圈。muted = 非候選/停用灰。 */
 export const COL = {
   amber:'#f4b400', green:'#12b886', blue:'#4c8dff', orange:'#ff7a45', gt:'#ff00ff',
   refdoor:'#f4b400', doormap:'#c9b6ff', red:'#fa5252', muted:'#93a4b8'
 };
 
-/** 路線圖節點著色（需求 1 力導向）。connected=有確認邊、isolated=孤立、hiTop/hiBot=ERP 雙圖各自高亮、hi3d=3D 高亮。 */
+/** 路線圖節點著色（力導向）。connected=有確認邊、isolated=孤立、hiTop/hiBot=ERP 雙圖各自高亮、hi3d=3D 高亮。 */
 export const MAP_COL = {
   connected:'#12b886',      // 有確認邊（綠系）
   isolated:'#61708a',        // 孤立（灰）
@@ -36,6 +36,6 @@ export const CLUSTER_DELTA = 7;
 /** doormap bin 顯著門檻 */
 export const DOORMAP_FLOOR = 0.18;
 
-/** 門顯示層開關預設值。minimap=路線圖顯示/隱藏（需求 2，預設 true，舊存檔向後相容）。
- * semanticAssist=語意輔助（任務8，用子計畫一門語意圖校正通道方位），預設關、舊存檔向後相容。 */
+/** 門顯示層開關預設值。minimap=路線圖顯示/隱藏（預設 true，舊存檔向後相容）。
+ * semanticAssist=語意輔助（用子計畫一門語意圖校正通道方位），預設關、舊存檔向後相容。 */
 export const UI_DEFAULT = { pairwise:true, doormap:false, compass:true, rings:true, minimap:true, semanticAssist:false };

@@ -126,7 +126,7 @@ function buildDom(){
       '<button id="walk-play" type="button">▶ 播放</button>' +
       '<button id="walk-dir" type="button" title="單程方向">A→B</button>' +
       '<button id="walk-pin" type="button" title="穿門後角落釘住 A 最後一幀">釘窗 ON</button>' +
-      '<button id="walk-reg" type="button" title="疊加 WP1 共視區域遮罩">遮罩 ON</button>' +
+      '<button id="walk-reg" type="button" title="疊加 共視區域遮罩">遮罩 ON</button>' +
       '<button id="walk-band" type="button" title="畫布頂緣的連通道方位標示(只吃方位角)">通道帶 ON</button>' +
       '<input id="walk-scrub" type="range" min="0" max="1000" value="0" step="1" />' +
       '<span id="walk-info"></span>' +
@@ -329,7 +329,7 @@ function sidePolysFrom(rj, walkAb){
     : { start:s.j, end:s.i, Ws:s.Wj, Hs:s.Hj, We:s.Wi, He:s.Hi };
 }
 
-/** polygon 重心 → 方位角。WP1 已把過縫的 x unwrap 成連續值(可超出 [0,W)),
+/** polygon 重心 → 方位角。已把過縫的 x unwrap 成連續值(可超出 [0,W)),
     所以算術平均 x 再換算即可,不需要圓形平均。 */
 function polyCentroidAz(poly, W){
   if(!poly || poly.length < 3 || !W) return null;

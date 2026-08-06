@@ -11,15 +11,15 @@ datasets/
 *.pth
 
 # --- 暫存與衍生產物（可重生，不是交付資產）---
-# RoMa 匹配快取：純加速用，砍掉可重生（全量單卡約 4.71 h）。
+# RoMa 匹配快取：純加速用，刪除後可重新產生（全量單卡數小時）。
 roma_match/cache/
 roma_match/results/
 # 共視區域 per-pair JSON：由 pose_regions/batch_pose_from_cache.py 重生。
 # 兩個 _*.csv 是排序與方位角的來源，體積小且要跟著走，故不忽略。
+# smoke_test.py 的參考結果不放在這裡,改放 environments/smoke_ref_58553.json ——
+# 本目錄是 batch_pose_from_cache.py 的輸出目錄,不帶 --resume 跑一次全量就會把
+# 錨點覆蓋成當下環境的結果,之後 smoke test 會變成與自身比對而永遠通過。
 Output/roma_regions/*.json
-# 例外:smoke_test.py 的參考結果。它是驗收用的測試資料而非批次產物,
-# 不入庫的話全新 clone 跑不了端到端測試(Kaggle 上就會直接失敗)。
-!Output/roma_regions/DollhouseTask_58553_08ddb590-a6df-409d-850f-e45f59efa7a0_08ddb590-ad9f-4647-8dab-ccfd0b14c8da.json
 Output/roma_regions/overlays/
 # 配對來源快照：由 environments/batch_match.py 於首次執行時從 _summary.csv 產生，
 # 屬本機執行狀態（記錄這一輪要算哪些對），不是交付資產。

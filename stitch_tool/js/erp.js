@@ -1,6 +1,6 @@
 /* =========================================================================
    erp.js — ERP 對比視圖（上下/左右兩張平面全景並排，標門、可拖曳、可換圖）
-   第三輪（結構解耦）：ERP 與 nav.curPair 徹底解耦。
+   結構解耦：ERP 與 nav.curPair 徹底解耦。
      - nav.erpTopImg/erpBotImg 為 ERP 顯示唯一真相，永遠有效（pairing.ensureErpPanes 保證）。
      - 「目前配對」為衍生值（pairing.derivePairForPanes）：
          kind='pair'      -> 主標記可拖曳、Y/N 可用
@@ -47,7 +47,7 @@ const SHOW_ERP_MAIN_LINE = false;     // 設 true 顯示本對的垂直參考線
 let _derived = { top:-1, bot:-1, kind:'none', pair:null };
 
 /**
- * 任務8：目前 pair 的語意校正結果快照（getPairOverride() 回傳值），供 info.js 顯示來源標籤。
+ * 目前 pair 的語意校正結果快照（getPairOverride() 回傳值），供 info.js 顯示來源標籤。
  * 每次 renderERP 開頭重設為 null，只有語意輔助開啟且 pair 未確認時才會由 applySemanticOverride 填入
  * ——所以永遠對應「目前」pair，不會有切換 pair 後殘留舊資料的問題。
  */
@@ -57,7 +57,7 @@ export function getSemanticInfo(){ return _semanticInfo; }
 let _semanticLoggedKey = '';   // 避免同一 pair 重覆 render 時 console 洗版（見 applySemanticOverride）
 
 /**
- * 需求 3：unconn 放圈推薦面板狀態。
+ * unconn 放圈推薦面板狀態。
  *   active   — 面板是否啟用
  *   srcImg   — 放橘圈的圖（此側）
  *   srcWhich — 該圖所在面板 'top'|'bot'
@@ -128,8 +128,8 @@ export function toggleErp(){
   if(layoutBtn) layoutBtn.style.display = erpMode ? 'inline-block' : 'none';
   if(!erpMode) clearErpAutoEntered();    // 手動或自動關閉都清旗標
   updateModeFlags();
-  updateErpBackButtons();                // 需求 4/6：更新兩顆回 3D 鈕與連接鈕
-  emit('apply-minimap-vis');             // 需求 2：ERP 開/關時切換單/雙路線圖顯示
+  updateErpBackButtons();                // 更新兩顆回 3D 鈕與連接鈕
+  emit('apply-minimap-vis');             // ERP 開/關時切換單/雙路線圖顯示
   if(erpMode) renderERP();
   emit('view-changed');                  // 刷新動作列可用性（Y/N/箭頭語意等）
 }
@@ -141,16 +141,16 @@ export function toggleErpLayout(){
   if(el) el.classList.toggle('horiz-layout', erpHoriz);
   const btn = document.getElementById('btn-erp-layout');
   if(btn) btn.textContent = erpHoriz ? 'ERP 上下排列' : 'ERP 左右排列';
-  updateErpBackButtons();                // 需求 4：連動改「回上/下」或「回左/右」字樣
-  emit('apply-minimap-vis');             // 需求 2：直/橫排標籤（上/下 vs 左/右）連動
+  updateErpBackButtons();                // 連動改「回上/下」或「回左/右」字樣
+  emit('apply-minimap-vis');             // 直/橫排標籤（上/下 vs 左/右）連動
   if(erpMode){ setTimeout(renderERP, 20); }
 }
 
-/** @returns {boolean} ERP 是否為左右排列（橫排）。供路線圖標籤用（需求 2）。 */
+/** @returns {boolean} ERP 是否為左右排列（橫排）。供路線圖標籤用。 */
 export function isErpHoriz(){ return erpHoriz; }
 
 // =========================================================================
-//  需求 4：ERP 模式下「回 3D」兩顆鈕；需求 6：unconn 模式的「連接」鈕
+//  ERP 模式下「回 3D」兩顆鈕；unconn 模式的「連接」鈕
 // =========================================================================
 /**
  * 依 ERP 開關 / 排列 / 目前模式，更新動作列上：
@@ -180,7 +180,7 @@ export function updateErpBackButtons(){
 }
 
 /**
- * 需求 4：離開 ERP 回到某面板的 3D 檢視。
+ * 離開 ERP 回到某面板的 3D 檢視。
  * 保持衍生的 nav.curPair 不變，nav.curImage 設為該面板圖並 loadImageView。
  * @param {'top'|'bot'} which
  */
@@ -225,7 +225,7 @@ export function renderERP(){
     nav.curPair = d.pair;                // 衍生結果即 curPair（找不到 pair 時 null）
 
     // 3) 主標記拖曳方位：pair -> 用 az_ij/az_ji（若已確認取確認角，人工 ROI 校正優先於語意輔助
-    //    ——這條不變）；none -> 無主標記。任務8：語意輔助開啟時，未確認的 pair 再讓語意門校正
+    //    ——這條不變）；none -> 無主標記。語意輔助開啟時，未確認的 pair 再讓語意門校正
     //    對兩側各自獨立覆寫（見 applySemanticOverride）。
     if(d.pair){
       const cc = STATE.confirmed.find(x => pairKey(x.i, x.j) === pairKey(d.pair.i, d.pair.j));
@@ -252,7 +252,7 @@ export function renderERP(){
 }
 
 /**
- * 任務8：語意輔助——對未確認的目前 pair，兩側各自獨立判斷是否用門語意圖校正通道方位。
+ * 語意輔助——對未確認的目前 pair，兩側各自獨立判斷是否用門語意圖校正通道方位。
  * 資料（house 門清單 / 該對共視區域）可能還沒抓過：getPairOverride 這時回 null，本次
  * render 先顯示原始 az_ab；資料回來後的 onReady 回呼會在「仍是同一 pair」時重新 renderERP
  * 一次，讓覆寫生效——與 updateErpRegionOverlay 的 fetch-then-rerender 手法一致。
@@ -371,7 +371,7 @@ export function setupErpPane(which, imgIdx){
     scheduleSave();
     emit('state-changed');
     toast('已在此方位放置未連接通道標記 @' + az.toFixed(0) + '°');
-    // 需求 3：放圈後開推薦面板（列同方向 pending 候選，可瀏覽/連通/否決/手動後備）
+    // 放圈後開推薦面板（列同方向 pending 候選，可瀏覽/連通/否決/手動後備）
     openRecoPanel(imgIdx, which, round1(az));
   };
   inner.oncontextmenu = function(e){ e.preventDefault(); };
@@ -399,7 +399,7 @@ export function setupErpPane(which, imgIdx){
 
 /**
  * 該圖要畫的參考門（排除本對的門，本對另用可拖曳主標記）。
- * 第三輪：去掉對 nav.curPair 的依賴 —— pairAz 由 _derived（面板衍生對）決定，
+ * 去掉對 nav.curPair 的依賴 —— pairAz 由 _derived（面板衍生對）決定，
  *   衍生為 none 時 pairAz=null，對應排除邏輯自動跳過。
  * @param {number} imgIdx
  * @returns {Array<object>}
@@ -451,7 +451,7 @@ export function erpDoorList(imgIdx){
 }
 
 // =========================================================================
-//  任務6 修正：每圖頂帶＋底帶；同圖垂直虛線（非跨面板）
+//  本對主標記：每圖頂帶＋底帶；同圖垂直虛線（非跨面板）
 //  視覺語言對齊 marker.js；DOM 版便於命中測試與水平拖曳。
 // =========================================================================
 const BAND_HALF_DEG = 15;
@@ -697,7 +697,7 @@ export function drawErpMarkers(which, imgIdx){
     ov.appendChild(dt);
   });
 
-  // ---- 需求 3：unconn 推薦「對側預覽圈」（琥珀虛線、不可點）----
+  // ---- unconn 推薦「對側預覽圈」（琥珀虛線、不可點）----
   // 使用者在此側放橘圈後，推薦面板把對側面板切到候選對面圖，並在對面「看回來的方位」畫琥珀預覽圈，
   // 讓使用者直接看圖判斷是否為同一通道。此圈僅視覺提示，pointer-events 關閉。
   const rp = getRecoPreview();
@@ -962,7 +962,7 @@ export function change3DViewerImage(dir){
 }
 
 // =========================================================================
-//  需求 3：unconn 放圈推薦面板（列同方向 pending 候選 → 瀏覽/連通/否決/手動後備）
+//  unconn 放圈推薦面板（列同方向 pending 候選 → 瀏覽/連通/否決/手動後備）
 // =========================================================================
 /**
  * 開啟推薦面板：以 srcImg 上 az 方位，recommendForCircle 取同方向 pending 候選並顯示第 0 個。

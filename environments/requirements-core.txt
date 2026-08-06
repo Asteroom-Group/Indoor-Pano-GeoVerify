@@ -14,6 +14,7 @@ numpy==1.26.4
 opencv-python==4.11.0.86     # cv2.__version__ 顯示為 4.11.0
 scikit-learn==1.8.0
 pillow==12.0.0
+tqdm==4.70.0                 # roma_match/parallel_matcher.py 頂層匯入，屬硬相依
 
 # 注意：
 # 1. romav2 由 setup_env.{ps1,sh} 從 GitHub 安裝，且必須在上述套件「之後」裝，

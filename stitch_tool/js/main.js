@@ -17,10 +17,10 @@ import { initCompass } from './compass.js';
 import { initQueue, resetStatFilter } from './queue.js';
 import { initInfo } from './info.js';
 import { initErp, initRecoPanel } from './erp.js';
-// import { initRoma } from './roma.js';  // RoMa 即時比對 — 2026-08-05 停用(會議拍板:共識區域
-// 取代 raw RoMa 顯示;按鈕/roma-conf-input 已從 index.html 移除;js/roma.js 與後端
-// /api/roma_match、離線 cache 保留不動)
-import { initViewModes } from './viewmodes/index.js';   // 檢視模式插件系統(WP2)
+// import { initRoma } from './roma.js';  // RoMa 即時比對已停用:改以共視區域取代 raw RoMa
+// 顯示。UI 的按鈕與 roma-conf-input 已移除;js/roma.js 與後端 /api/roma_match、
+// 離線 cache 仍保留,需要時可再啟用。
+import { initViewModes } from './viewmodes/index.js';   // 檢視模式插件系統
 import { clearMode } from './modes.js';
 import { rejectConfirmed } from './actions.js';
 import { initBatchPanel } from './batch-panel.js';
@@ -95,7 +95,7 @@ function selectHouse(name){
   initQueue();
   initInfo();
   initErp();
-  // 需求 2/3：綁定批量否決面板 與 unconn 推薦面板的按鈕（否則面板可開、按鈕無反應）
+  // 綁定批量否決面板 與 unconn 推薦面板的按鈕（否則面板可開、按鈕無反應）
   initBatchPanel();
   initRecoPanel();
   // initRoma();  // 2026-08-05 停用，見上方 import 註記

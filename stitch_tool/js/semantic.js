@@ -1,8 +1,8 @@
 /* =========================================================================
-   semantic.js — 語意輔助（任務8）：用子計畫一的門語意圖校正通道方位
+   semantic.js — 語意輔助：用子計畫一的門語意圖校正通道方位
    低層模組：只 import api.js（不 import state/erp，維持既有分層——低層不依賴高層）。
 
-   已驗證演算法（進度報告/8-5/semantic_door_eval.md，逐字沿用、門檻不可更動）：
+   演算法與門檻的驗證依據見 semantic_doors/semantic_door_eval.md，此處逐字沿用：
      對某一側（i 或 j），取該圖的門清單與該對的共視區域（/api/regions）多邊形，算「每個
      region 落在某道門方位區間內的比例」，取所有 region×門組合中的最大值；≥0.8 才把該側
      通道方位改成那道門的中心方位 az，否則維持原值不動。
@@ -14,7 +14,9 @@
 
 import { fetchSemanticDoors, fetchRegions } from './api.js';
 
-/** 已驗證門檻：共視區落在門內的比例 ≥ 此值才採用門中心方位（不可更動，見任務卡）。 */
+/** 共視區落在門內的比例 ≥ 此值才採用門中心方位。
+ *  此值由門先驗差分測試選定（見 semantic_doors/semantic_door_eval.md）；
+ *  更動須重跑該評估，否則校正結果與驗證結論不再對應。 */
 export const CONTAIN_THRESHOLD = 0.8;
 
 /** pipeline 方位角約定：0=圖中央，((x/W)*360-180) mod 360，與 az_ij/az_ji 同一套。 */

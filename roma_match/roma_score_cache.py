@@ -1,22 +1,19 @@
 """
-RomaScoreCache — compact, sparse, edge-keyed store of aggregated RoMa match scores.
+[模組用途]
+`RomaScoreCache` —— 以「無向配對」為鍵的稀疏聚合分數表。
 
-Purpose: run_roma_above_threshold.py runs RoMa matching only for the subset of pairs whose
-coarse-filter score is above the per-fold LOO threshold, then discards the in-memory matches
-(only the raw per-pair .npz correspondence cache in roma_match/cache/ survives). This cache
-captures a small, aggregated, immediately-usable score per matched pair so downstream tools
-(stitch_tool) can rank pairs by "how much RoMa evidence backs this connection" without re-running
-RoMa or re-loading every raw correspondence file.
+批次匹配跑完後，逐點的對應只留在 `roma_match/cache/` 的 `.npz` 內，記憶體中的匹配即丟棄。
+本模組另存一份「每對一筆」的聚合分數（匹配點數與信心度的總和／平均），讓下游工具
+（`stitch_tool`）能依「RoMa 為這條連線提供了多少證據」排序，不必重跑 RoMa，
+也不必逐檔讀取原始對應。
 
-Design mirrors coarse_filter_experiment/block_match_v2/models/history/roma_evidence_extractor.py's
-RomaEvidenceCache (same proven shape: unordered-pair key, flat parallel-array npz, zero-cost
-"not verified" lookups) but is intentionally NOT that module - this one is scoped to a single
-scalar-ish score record for ranking, not a fixed-order feature vector for the R1 refiner's MLP,
-and it has no dependency on the (deprecated, broken-import) models/history/ tree.
+[鍵]
+`(house, min(imgA, imgB), max(imgA, imgB))` —— 無向。`match_direct(A, B)` 與
+`match_direct(B, A)` 共用同一份快取檔（見 `RoMaMatcher._get_cache_info` 的 `is_swapped`
+處理），描述的是同一組實體對應。
 
-Key: (house, min(imgA_basename, imgB_basename), max(imgA_basename, imgB_basename)) - undirected,
-since RoMa match_direct(A, B) and match_direct(B, A) share the same underlying cache file (see
-RoMaMatcher._get_cache_info's is_swapped handling) and describe one physical correspondence set.
+[格式]
+`.npz` 內為數個等長的平行陣列，查不到的配對回傳 None（代表「未驗證」，不是 0）。
 """
 import os
 import numpy as np

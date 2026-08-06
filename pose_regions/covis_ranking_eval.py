@@ -2,9 +2,9 @@
 """
 共視/幾何驗證訊號當「連通性排序分數」的判別力評估(2026-07-26)。
 
-問題:coarse filter 存活下來、被 RoMa 跑過的 7,069 對 pair 裡,幾何驗證後的共視證據
+問題:粗篩存活、被 RoMa 跑過的 pair 裡,幾何驗證後的共視證據
 (inlier 數/率、共視區域)能不能把「真正連通」的 pair 排到前面?
-2026-07-18 曾用純 RoMa match_count 排序 → 分不出明顯界線。WP1 之後多了對極驗證與
+2026-07-18 曾用純 RoMa match_count 排序 → 分不出明顯界線。之後多了對極驗證與
 共視區域,本腳本重測一次,並回答「上限在哪」。
 
 族群 = Output/roma_regions/_summary.csv 全部列(= coarse filter R90 存活者)。
@@ -43,8 +43,7 @@ ROOT = os.path.dirname(SCRIPT_DIR)
 def _gt_adjacency(house_dir):
     """datasets/<house> 底下所有 *_HOTSPOT.json → 對稱鄰接(鍵去掉 .jpg 副檔名)。
 
-    等價於 block_match_v2/data/gt_provider.get_ground_truth_adjacency,在此就地實作
-    以免本腳本相依 coarse filter 套件(該模組匯入會拉進 torch 相關路徑)。
+    就地實作,以免本腳本相依粗篩套件(那條匯入路徑會拉進 torch)。
     """
     from pathlib import Path
     adj = defaultdict(set)
@@ -164,6 +163,12 @@ def _matrix_dir(variant):
     return matrices_root(variant)
 
 
+def _regions_dir():
+    sys.path.insert(0, ROOT)
+    from config import regions_root
+    return regions_root()
+
+
 def write_csv(path, rec):
     """輸出 pair-level CSV,供 prepare_house_data 的佇列排序使用。"""
     with open(path, "w", newline="", encoding="utf-8") as f:
@@ -218,10 +223,12 @@ def build_records(summary_csv):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--summary", default=os.path.join("Output", "roma_regions", "_summary.csv"))
-    # 換矩陣版本:設 config.MATRICES_VERSION 或 ROMA_GEO_MATRICES(見 matrices/README.md)。
+    # 產出位置可用 ROMA_GEO_OUTPUT 覆寫;換矩陣版本設 config.MATRICES_VERSION 或
+    # ROMA_GEO_MATRICES(見 matrices/README.md)。
+    reg = _regions_dir()
+    ap.add_argument("--summary", default=os.path.join(reg, "_summary.csv"))
     ap.add_argument("--report", default=os.path.join(SCRIPT_DIR, "covis_ranking_report.md"))
-    ap.add_argument("--csv", default=os.path.join("Output", "roma_regions", "_ranking_eval.csv"))
+    ap.add_argument("--csv", default=os.path.join(reg, "_ranking_eval.csv"))
     a = ap.parse_args()
     os.chdir(ROOT)
 

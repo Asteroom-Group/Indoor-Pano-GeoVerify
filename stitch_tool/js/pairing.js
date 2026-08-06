@@ -1,5 +1,5 @@
 /* =========================================================================
-   pairing.js — ERP 面板與「衍生配對」的單一真相邏輯（第三輪：結構解耦）
+   pairing.js — ERP 面板與「衍生配對」的單一真相邏輯（結構解耦）
    低層純邏輯模組：只 import state（讀 pairs/confirmed/pairKey/pairStatus）。
    不 import 高層（erp/scene3d/dispatch/ui），也不觸碰 DOM，維持可單元測試。
 

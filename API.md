@@ -26,7 +26,8 @@ from roma_geo import verify_pair, verify_pairs, to_public, get_matcher
 | `mode` | `str` | `"direct"` | `direct`（生產路徑）或 `core`（RoMaScan 分塊，約貴 5.6 倍） |
 | `model_type` | `str` | `"roma_v2"` | 匹配模型版本。目前只支援 `roma_v2` |
 | `device` | `str` | `None` | `None` 時自動選 cuda／cpu |
-| `use_cache` | `bool` | `True` | 是否讀寫 `roma_match/cache/` 的 npz。純加速，不影響結果 |
+| `use_cache` | `bool` | `True` | 是否讀寫匹配快取的 npz。純加速，不影響結果 |
+| `cache_dir` | `str` | `None` | 快取目錄。`None` 時依環境變數 `ROMA_GEO_CACHE` > `roma_match/cache/`。本函式除此之外不讀任何環境設定 |
 | `house` | `str` | `None` | 房子名；`None` 時從路徑推導 |
 | `keep_inliers` | `bool` | `True` | `False` 時不回傳 `inliers`（可省下 JSON 體積大宗） |
 
@@ -34,12 +35,12 @@ from roma_geo import verify_pair, verify_pairs, to_public, get_matcher
 `conf_min` `retry_conf` `max_pts` `thresh_deg` `iters` `seed` `sampler` `lat_max`。
 傳入未定義的參數會 `raise TypeError`。
 
-**輸出**：`dict`，schema `wp1-step3-v2`。欄位全文見
+**輸出**：`dict`。欄位全文見
 [`pose_regions/README.md`](pose_regions/README.md) 的「per-pair JSON schema」。主要欄位：
 
 | 欄位 | 型別 | 說明 |
 |---|---|---|
-| `schema_version` | `str` | 固定 `"wp1-step3-v2"` |
+| `schema_version` | `str` | 產出格式識別字串，供批次續跑判斷是否需重算 |
 | `house` / `img_a` / `img_b` | `str` | 房子名與兩張圖的檔名（不含副檔名） |
 | `img_size_a` / `img_size_b` | `[W, H]` | 原圖尺寸，**per-house 不同**（5376×2688 ~ 8192×4096） |
 | `params` | `dict` | 實際使用的演算法參數 |
@@ -65,7 +66,7 @@ from roma_geo import verify_pair, verify_pairs, to_public, get_matcher
 ### 1.2 `to_public(res) -> dict`
 
 把 `verify_pair()` 的結果裁成對外契約。捨去 `R` / `t` / `cam_b_in_a` / `inliers` /
-`quality` / `params` / `n` / `flags` 等內部量（體積約 27 KB → 2 KB）。
+`quality` / `params` / `n` / `flags` 等內部量。
 
 ```json
 {
@@ -109,10 +110,13 @@ for res in verify_pairs([(a1, b1), (a2, b2)], progress=True):
 建構 matcher 需載入 torch、CUDA 與模型權重（約 6.4 秒），多對處理用這個或自行傳入
 `matcher=` 以重用。逐對 `yield`。
 
-### 1.4 `get_matcher(model_type, device, use_cache) -> RoMaMatcher`
+### 1.4 `get_matcher(model_type, device, use_cache, cache_dir) -> RoMaMatcher`
 
 取得模組層共用的 matcher 單例。`conf_threshold` 固定 0.1，由 `analyze_pair`
 自行做自適應分層（0.65 → 0.3）。
+
+單例以「參數組合」為鍵（含 `cache_dir`），因此同一行程內可並存多組設定，
+包成服務時不必擔心行程層狀態互相干擾。
 
 ### 1.5 演算法參數
 
@@ -142,16 +146,11 @@ python roma_geo.py a.jpg b.jpg --public --out result.json
 
 ### 1.7 效能
 
-RTX 4060、118 對取樣、關快取、direct 模式：
+單對端到端以「RoMa 匹配」為主、「幾何驗證」佔比很小；模型建構為一次性成本，
+多對處理務必重用 matcher。驗證時間呈雙峰：有位姿的對較久，無共視證據的對提早退出。
 
-| 階段 | 中位 | 平均 |
-|---|---|---|
-| RoMa v2 匹配 | 2.544 s | 2.609 s |
-| 幾何驗證 | 0.045 s | 0.192 s |
-| **合計** | **2.589 s** | **2.802 s** |
-
-模型建構 6.4 秒為一次性成本。驗證時間呈雙峰：有位姿的對中位 0.323 s，
-無共視證據的對提早退出。全量 7,069 對單卡序列外推約 5.5 小時。
+逐項數字與外推耗時見 `environments/timing_torch210_n120.md`（由
+`environments/local_timing_bench.py` 產生，換機器請重跑）。
 
 ---
 
@@ -204,7 +203,7 @@ HTTP 介面：
 <py> stitch_tool/prepare_semantic_doors.py --refresh   # 重跑抽取，約 25 分鐘
 ```
 
-輸出 `stitch_tool/semantic/<house>.json`。目前 22/57 間房有語意圖。
+輸出 `stitch_tool/semantic/<house>.json`。只有具語意圖的房子會產出，其餘前端顯示 404。
 
 ### 2.4 `pose_regions/batch_pose_from_cache.py`
 

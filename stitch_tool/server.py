@@ -26,12 +26,13 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(SCRIPT_DIR)            # 專案根目錄
 DATA_DIR = os.path.join(SCRIPT_DIR, "data")       # prepare_house_data.py 產物
 STATE_DIR = os.path.join(SCRIPT_DIR, "state")     # 人工標註進度
-SEMANTIC_DIR = os.path.join(SCRIPT_DIR, "semantic")  # prepare_semantic_doors.py 產物（任務8）
+SEMANTIC_DIR = os.path.join(SCRIPT_DIR, "semantic")  # prepare_semantic_doors.py 產物
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
-from config import datasets_root                   # noqa: E402（要先補 sys.path）
+from config import datasets_root, regions_root     # noqa: E402（要先補 sys.path）
 
 DATASETS = datasets_root()                         # 可用 ROMA_GEO_DATASETS 覆寫，見 config.py
+REGIONS_DIR = regions_root()                     # 可用 ROMA_GEO_OUTPUT 覆寫，見 config.py
 
 os.makedirs(STATE_DIR, exist_ok=True)
 
@@ -151,7 +152,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self._serve_image(house, fname)
 
         # GET /api/regions/<house>?a=<imgA檔名>&b=<imgB檔名>
-        # 讀 WP1 Step3 的共視區域 JSON（Output/roma_regions/{house}_{a}_{b}.json，
+        # 讀 共視區域 JSON（Output/roma_regions/{house}_{a}_{b}.json，
         # schema wp1-step3-v1/v2，見 pose_regions/README.md）。檔名只存 A_B 一個方向；
         # 若命中反序檔則回 swap:true，前端把 regions 的 a/b 兩側對調使用。
         m = re.match(r"^/api/regions/([^/]+)$", path)
@@ -165,7 +166,7 @@ class Handler(SimpleHTTPRequestHandler):
             b = os.path.splitext((q.get("b") or [""])[0])[0]
             if not (a and b and _SAFE.match(a) and _SAFE.match(b)):
                 return self._err(400, "bad image name")
-            rdir = os.path.join(ROOT_DIR, "Output", "roma_regions")
+            rdir = REGIONS_DIR
             p_ab = os.path.join(rdir, f"{house}_{a}_{b}.json")
             p_ba = os.path.join(rdir, f"{house}_{b}_{a}.json")
             if os.path.exists(p_ab):
@@ -177,9 +178,9 @@ class Handler(SimpleHTTPRequestHandler):
             d.pop("inliers", None)   # 遮罩用不到內點明細，省流量（每檔可達數百 KB）
             return self._json(d)
 
-        # GET /api/semantic_doors/<house>：子計畫一門語意圖抽取結果（任務8，見
-        # prepare_semantic_doors.py / stitch_tool/semantic/<house>.json）。缺檔（該房沒有語意圖，
-        # 目前 22/57）回 404，前端顯示「此房無語意圖」而不觸發校正。
+        # GET /api/semantic_doors/<house>：子計畫一門語意圖抽取結果（見
+        # prepare_semantic_doors.py / stitch_tool/semantic/<house>.json）。
+        # 該房沒有語意圖時缺檔，回 404，前端顯示「此房無語意圖」而不觸發校正。
         m = re.match(r"^/api/semantic_doors/([^/]+)$", path)
         if m:
             house = unquote(m.group(1))

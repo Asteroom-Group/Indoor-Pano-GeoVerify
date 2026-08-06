@@ -61,7 +61,8 @@ python stitch_tool/server.py            # http://localhost:8010
   舊存檔缺此欄位時 `normalizeState` 自動補預設，向後相容；state schema 其餘不變。
 
 ## 幾何/資料原理
-- 連通機率：`oof_matrices/baseline/<house>.npy` 的 ch0（logit，對稱），`prob=sigmoid`。
+- 連通機率：`config.matrices_root('refined')` 解析到的 `<house>.npy` 的 ch0，`prob=sigmoid(ch0)`。
+  ch0 是有向的，此處取上三角 `M[i,j]`；格式契約見 `matrices/README.md`。
 - 門方位（粗篩方向頭，coarse）：同矩陣 ch1/ch2 = `(sin, cos)`，`az(i→j)=atan2(ch1,ch2)`
   （已對 localization CSV 驗證一致）。
 - **通道方位來源（2026-08-05 起）**：每 pair 的 `az_ij/az_ji` 優先採用 RoMa 幾何驗證的
@@ -71,8 +72,8 @@ python stitch_tool/server.py            # http://localhost:8010
   改吃 az_ab/az_ba 取代粗篩方向頭。沒有位姿（no_covisibility／未跑 RoMa）的 pair 保留 coarse
   方位。每 pair 新增 `az_source`（`"geo"` 或 `"coarse"`）與備份欄位
   `az_coarse_ij/az_coarse_ji`（QA 對照用，值恆等於舊版 coarse 輸出）；`gt_az_ij/gt_az_ji` 不受影響。
-  替代評估：同批 pair 逐向配對中位誤差 10.6°(geo) vs 15.4°(coarse)、p90 49.9° vs 84.4°，
-  詳見 `進度報告/8-5/az_replacement_eval.md`。前端零改動即透明生效（ERP 門圈／走一遍／裁切對／
+  取代的依據是同批 pair 的逐向配對比較，幾何方位在中位與 p90 都明顯優於粗篩方向頭。
+  前端零改動即透明生效（ERP 門圈／走一遍／裁切對／
   頂帶皆直接讀 az_ij/az_ji）；人工 ROI 校正、已確認邊的鎖定方位優先權不變。
 - ERP↔方位：`az(x)=((x/W)*360-180)%360`；反解貼圖水平比例 `u=((az+180)%360)/360`。
   已用實圖驗證圈圈會落在真正的門/通道上（非鏡像）。
@@ -81,8 +82,8 @@ python stitch_tool/server.py            # http://localhost:8010
 左側佇列排序下拉有兩個模式：
 - **機率**（預設）：伺服器已依連通機率排好序，前端不重排。
 - **幾何驗證**（2026-08-05 起，取代原「RoMa 分數」）：依 `geo_n_inlier`（幾何驗證內點數）
-  降冪排序、次鍵為機率；門檻拉條比對 `geo_inlier_rate`（0~1，天然吻合拉條刻度）。7-26 排序
-  評估：幾何驗證內點數 AP 0.650 > 未經驗證的原始 RoMa 匹配數 0.618，故取代之。
+  降冪排序、次鍵為機率；門檻拉條比對 `geo_inlier_rate`（0~1，天然吻合拉條刻度）。
+  取幾何驗證內點數而非未經驗證的 RoMa 匹配數，判別力比較見 `pose_regions/covis_ranking_report.md`。
 - **資料源**：`prepare_house_data.py` join `Output/roma_regions/_ranking_eval.csv`（已入 git），
   附加 `geo_n_inlier`／`geo_inlier_rate`／`geo_n_regions`／`geo_conf_used`／`geo_posed`。
   join key 為 (house, {img_a,img_b} 去副檔名集合)，pair 無序比對。**三層語意**：
@@ -95,7 +96,7 @@ python stitch_tool/server.py            # http://localhost:8010
 - **重生資料**：`venv/Scripts/python.exe stitch_tool/prepare_house_data.py`（全房子；
   `_ranking_eval.csv`／`_summary.csv` 不存在時對應欄位全 null／保留 coarse 方位，不會炸）。
 - **RoMa 即時比對（2026-08-05 停用）**：ERP 內原本可對目前兩張圖跑 RoMa 即時比對畫匹配線的
-  「RoMa 比對」按鈕與信心輸入已從 UI 移除（會議拍板：共識區域取代 raw RoMa 匹配顯示）。
+  「RoMa 比對」按鈕與信心輸入已從 UI 移除（共識區域取代 raw RoMa 匹配顯示）。
   `js/roma.js` 與後端 `/api/roma_match`、離線 cache 保留不動（`main.js` 的 `initRoma()` 呼叫
   已註解，零檔案刪除）。
 
@@ -124,22 +125,22 @@ python stitch_tool/server.py            # http://localhost:8010
 - `dispatch.js` — 唯一圈圈點擊分派入口 `handleCircleClick(targetInfo)`，3D 與 ERP 共用。否決模式點圈→開批量否決面板；未連接模式與導覽照舊。
 - `actions.js` — 標註動作（Y/N/A、否決、無 ROI 淘汰、全連接、重新否決、reset 房屋）。含批量否決 helper `rejectPairs(list)`（單次存檔＋單次重繪＋總數提示，含把已確認者改否決）與推薦連通 helper `confirmRecommendedCandidate(...)`。單發 `rejectMarkerPair` 保留為內部 helper。
 - `erp.js` — ERP 對比視圖全部（上下/左右並排、標門、拖曳校正、換圖）＋**未連接推薦面板**（`openRecoPanel`/`recommendForCircle` 呈現、對面預覽圈、連通/否決/手動後備、`initRecoPanel` 綁定）。
-  **本對主標記（任務6）**：每張 ERP 圖 **頂帶＋底帶**（DOM，與 marker.js 同視覺：白＋深底、
+  **本對主標記**：每張 ERP 圖 **頂帶＋底帶**（DOM，與 marker.js 同視覺：白＋深底、
   ±15°、「往 img N」）；**僅水平拖曳**改 az。hover／拖曳時該圖內 **垂直虛線**連頂↔底
   （非跨圖）。**區域遮罩**改為 ERP 內開關（`btn-erp-regions`），canvas 疊在目前對比圖上，
   不再是獨立 viewmode（`mode-regions.js` 檔保留、index 已停用註冊）。
 - `roma.js` — RoMa 即時比對（點按鈕對目前 ERP 兩張圖跑 RoMa、畫匹配線 overlay）。
-  **2026-08-05 停用**（會議拍板：共識區域取代 raw RoMa 顯示；`index.html` 的按鈕／
+  **2026-08-05 停用**（共識區域取代 raw RoMa 顯示；`index.html` 的按鈕／
   `roma-conf-input`、`main.js` 的 `initRoma()` 呼叫已移除/註解，檔案與後端 `/api/roma_match`、
   離線 cache 保留不動，見「佇列排序」段落）。
-- `batch-panel.js` — **批量否決浮動面板**（需求 2）：`collectClusterPending(imgIdx,az)` 取同聚類全部 pending、`openBatchReject`/`initBatchPanel` 呈現與綁定，勾選後走 `actions.rejectPairs`。
+- `batch-panel.js` — **批量否決浮動面板**：`collectClusterPending(imgIdx,az)` 取同聚類全部 pending、`openBatchReject`/`initBatchPanel` 呈現與綁定，勾選後走 `actions.rejectPairs`。
 - `minimap.js`／`compass.js`／`queue.js` — 路線圖（力導向＋放大彈窗，`openMapModal`）／羅盤條／候選佇列與統計（皆訂閱事件自動重繪）。
 - `info.js` — 中央資訊面板。`ui.js` — 按鈕綁定與快捷鍵，含集中式 `refreshActionAvailability()`（依模式/ERP/衍生配對統一設定 Y/N 停用與原因，訂閱 `view-changed`/`state-changed`/`erp-derived`）。`util.js` — toast/loading/小工具。
 - `main.js` — 組裝與啟動（boot）：初始化場景與訂閱者（含 `initBatchPanel`／`initRecoPanel` 綁定兩個浮動面板按鈕）、綁定 UI、載入房子。
 
 換模型：`prepare_house_data.py --oof_dir .../oof_matrices/<其他exp>` 即可指向別的實驗輸出。
 
-## 檢視模式插件系統（WP2，2026-07-22）
+## 檢視模式插件系統
 
 「檢視模式」＝主畫面呈現方式，與標註互動模式（modes.js）互相獨立。架構：
 
@@ -157,7 +158,7 @@ python stitch_tool/server.py            # http://localhost:8010
     匹配 → 投到兩張裁切圖 → IDW 網格位移場 → 三角網格 warp ＋ 交叉淡化來回播放，右下顯示即時 FPS
     （實測 draw 成本 1.85ms/幀 ≈ 540fps 裕度，vsync 鎖 60）。真連通像「走過去」，假連通扭曲穿幫；
     標籤同時顯示 GT 連通與否，方便真/假對照示範。
-- `mode-walk.js` — **走一遍**（2026-07-29 任務7）：時間軸
+- `mode-walk.js` — **走一遍**：時間軸
   `holdDoor(朝通道) → turnA(轉主區) → holdStart → fade(300ms 直跳) → holdIn`；
   固定 FOV 48；`END_WITH_LOOKBACK=false` 常數可恢復舊回看（非 UI）。
 - 共用 helper（非插件）：`gnomonic.js`（ERP⇄透視投影、ERP ImageData 快取、圓形平均）、
@@ -170,7 +171,7 @@ python stitch_tool/server.py            # http://localhost:8010
 ### 共視區域遮罩（ERP 疊層，非獨立模式）
 
 - **入口**：動作列「區域遮罩」鈕（`btn-erp-regions`）。開時若未在 ERP 會自動切入 ERP，
-  把 WP1 多邊形 **疊在目前上下/左右兩張 ERP 圖上**（同色＝同一塊實體空間＋R 編號）。
+  把 多邊形 **疊在目前上下/左右兩張 ERP 圖上**（同色＝同一塊實體空間＋R 編號）。
   再按一次關閉。不再跳到另一個全螢幕 viewmode。
 - 實作在 `erp.js`（`toggleErpRegions`／`.erp-reg-cv`）；`mode-regions.js` 檔保留備查、
   `viewmodes/index.js` 已註解停用註冊。

@@ -17,10 +17,17 @@ Roma_Geo 的**唯一對外入口**：給兩張 ERP 全景圖，回傳幾何驗�
 （conf 0.65 / retry 0.3 / max_pts 4000 / thresh 0.5° / iters 2000 / seed 0 /
 stratified / lat_max 60）—— `Output/roma_regions` 的既有產出皆以這組參數產生。
 
+[設定來源]
+本模組是**函式介面**：除了選配的 `cache_dir`（未指定時才回落到環境變數
+`ROMA_GEO_CACHE`），一切行為由傳入的參數決定，不讀 `ROMA_GEO_DATASETS` /
+`ROMA_GEO_MATRICES` / `ROMA_GEO_OUTPUT` / `PAIR_THRESHOLD`。那些環境變數屬於
+`environments/` 與 `pose_regions/` 的**批次管線**，是部署設定，不是本介面的契約。
+被包成服務時同一行程可用不同參數並存。
+
 [效能]
 建構 matcher 要載入 torch + CUDA + 模型權重，約 6.4 s。處理多對時用
 `verify_pairs()`，或自己 `m = get_matcher()` 後傳進 `matcher=m` 以重用。
-單次 `verify_pair()` 會重用模組層的單例。
+單次 `verify_pair()` 會重用模組層的單例（以參數組合為鍵）。
 
 [CLI]
     venv\\Scripts\\python.exe roma_geo.py a.jpg b.jpg [--public] [--out res.json]
@@ -76,30 +83,37 @@ def house_of(path):
     return "unknown"
 
 
-def get_matcher(model_type="roma_v2", device=None, use_cache=True):
+def get_matcher(model_type="roma_v2", device=None, use_cache=True, cache_dir=None):
     """取得（或建立）共用的 RoMaMatcher 單例。
 
     conf_threshold 固定 0.1，與快取的底床一致；分層由 analyze_pair 自行處理。
+
+    `cache_dir` 為 None 時沿用 `RoMaMatcher` 的解析順序
+    （環境變數 `ROMA_GEO_CACHE` > `roma_match/cache/`）。單例以參數組合為鍵，
+    不同 `cache_dir` 各自持有一份，同一行程內可並存。
     """
-    key = (model_type, device, bool(use_cache))
+    key = (model_type, device, bool(use_cache), cache_dir)
     m = _matchers.get(key)
     if m is None:
         _, _, RoMaMatcher = _lazy()
-        m = RoMaMatcher(device=device, conf_threshold=0.1,
-                        use_cache=use_cache, model_type=model_type)
+        m = RoMaMatcher(device=device, conf_threshold=0.1, use_cache=use_cache,
+                        model_type=model_type, cache_dir=cache_dir)
         _matchers[key] = m
     return m
 
 
 def verify_pair(img_a, img_b, matcher=None, mode="direct", model_type="roma_v2",
-                device=None, use_cache=True, house=None, keep_inliers=True, **params):
+                device=None, use_cache=True, cache_dir=None, house=None,
+                keep_inliers=True, **params):
     """對一組 ERP 全景圖做幾何驗證。
 
     Args:
         img_a, img_b: ERP 全景圖路徑。
         matcher: 重用既有的 RoMaMatcher；None 則使用模組層單例。
         mode: "direct"（預設，生產路徑）或 "core"（RoMaScan 分塊，貴約 5.6 倍）。
-        use_cache: 是否讀寫 roma_match/cache 的 npz（純加速，不影響結果）。
+        use_cache: 是否讀寫匹配快取的 npz（純加速，不影響結果）。
+        cache_dir: 快取目錄。None 則依環境變數 `ROMA_GEO_CACHE` > `roma_match/cache/`。
+            本函式除此之外不讀任何環境設定，其餘一律由參數決定。
         house: 房子名；None 則從路徑推。
         keep_inliers: False 則不回傳 inliers（2000 點，佔 JSON 體積大宗）。
         **params: 覆寫 DEFAULTS 中的任一項（一般不需要，見模組 docstring）。
@@ -117,7 +131,7 @@ def verify_pair(img_a, img_b, matcher=None, mode="direct", model_type="roma_v2",
     import numpy as np
     analyze_pair, _, _ = _lazy()
 
-    m = matcher if matcher is not None else get_matcher(model_type, device, use_cache)
+    m = matcher if matcher is not None else get_matcher(model_type, device, use_cache, cache_dir)
 
     t0 = time.perf_counter()
     if mode == "direct":
@@ -175,7 +189,8 @@ def verify_pairs(pairs, progress=False, **kw):
         dict —— 逐對 yield，方便邊跑邊寫檔而不必全部留在記憶體。
     """
     m = kw.pop("matcher", None) or get_matcher(
-        kw.get("model_type", "roma_v2"), kw.get("device"), kw.get("use_cache", True))
+        kw.get("model_type", "roma_v2"), kw.get("device"),
+        kw.get("use_cache", True), kw.get("cache_dir"))
     for i, (a, b) in enumerate(pairs, 1):
         res = verify_pair(a, b, matcher=m, **kw)
         if progress:

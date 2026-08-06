@@ -1,5 +1,5 @@
 /* =========================================================================
-   viewmodes/regions-paint.js — WP1 共視區域遮罩:透視畫布繪製 + 兩側取用
+   viewmodes/regions-paint.js — 共視區域遮罩:透視畫布繪製 + 兩側取用
    低層模組(由 mode-walk / mode-crop 共用):只 import gnomonic、不碰 DOM。
    2026-07-29 從 mode-walk.js 原樣抽出(commit 84af7ce 的「形狀不隨鏡頭變形」
    近平面裁切管線),行為不得變。

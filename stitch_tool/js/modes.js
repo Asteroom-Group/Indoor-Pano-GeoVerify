@@ -25,7 +25,7 @@ export function isErpAutoEntered(){ return erpAutoEntered; }
 /** ERP 被關閉時清除自動帶入旗標（由 erp.toggleErp 於關閉時呼叫）。 */
 export function clearErpAutoEntered(){ erpAutoEntered = false; }
 
-/** 需要在 3D 時自動帶入 ERP 對比視圖的模式（需求 6：unconn 也自動進 ERP）。 */
+/** 需要在 3D 時自動帶入 ERP 對比視圖的模式（unconn 也自動進 ERP）。 */
 function needsErp(m){ return m === 'unconn' || m === 'reject' || m === 'noRoi' || m === 'allConn'; }
 
 /**
@@ -39,9 +39,9 @@ export function setMode(next){
   // 離開一個「曾自動帶入 ERP」的模式 -> 若 ERP 仍開著且是自動帶入的，切回 3D
   const leavingAutoErpMode = needsErp(prev) && erpAutoEntered;
 
-  // 需求 2：離開 reject 模式時，關閉批量否決浮動面板
+  // 離開 reject 模式時，關閉批量否決浮動面板
   if(prev === 'reject'){ closeBatchReject(); }
-  // 需求 6：離開 unconn 模式時，清掉所有剩餘（未連接）的橘圈；並關閉推薦面板（需求 3）
+  // 離開 unconn 模式時，清掉所有剩餘（未連接）的橘圈；並關閉推薦面板
   if(prev === 'unconn'){ clearAllUnconn(); closeRecoPanel(); }
 
   mode = next;
@@ -61,7 +61,7 @@ export function setMode(next){
   }
 
   updateModeFlags();
-  // 需求 4/6：ERP「回 3D」兩顆鈕與「連接」鈕的顯示，隨模式改變
+  // ERP「回 3D」兩顆鈕與「連接」鈕的顯示，隨模式改變
   updateErpBackButtons();
 }
 
@@ -89,7 +89,7 @@ const MODE_BANNER = {
 
 /**
  * 依目前 mode 更新動作列按鈕高亮與「模式橫幅」（名稱 + 操作提示 + 退出鈕）。
- * 需求 3：mode flag 升級為固定顯示的橫幅；none 模式隱藏。
+ * mode flag 升級為固定顯示的橫幅；none 模式隱藏。
  */
 export function updateModeFlags(){
   const erp = isErpOn();

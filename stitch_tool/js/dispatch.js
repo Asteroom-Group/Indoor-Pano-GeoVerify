@@ -17,7 +17,7 @@
      allConn -> ERP 下對面板圖 performAllConnOnImage；3D 下不由點擊觸發（A 直接執行）
      none    -> 依 role 做穿門 / peek / 轉向
    ERP 沿用原限制：reject/noRoi 只對 confirmed/refdoor 生效，否則提示。
-   3D 依拍板決策：reject 模式點任何圈 -> 否決該 pair；noRoi 模式點圈 -> 淘汰該方位。
+   3D ：reject 模式點任何圈 -> 否決該 pair；noRoi 模式點圈 -> 淘汰該方位。
    ========================================================================= */
 
 import { STATE, getHouseData, pairKey } from './state.js';
@@ -68,7 +68,7 @@ export function handleCircleClick(t){
     return;
   }
   if(mode === 'reject'){
-    // 需求 2：reject 模式點任何圈 -> 以該圈方位所在聚類，彈出「同方向候選」批量否決面板（預設全勾）。
+    // reject 模式點任何圈 -> 以該圈方位所在聚類，彈出「同方向候選」批量否決面板（預設全勾）。
     //          面板固定於螢幕右側，不跟隨圈圈；確認後批量 reject、reject 模式維持。
     //          只有一筆時也走同一面板（一致性）。原單發 rejectMarkerPair 保留為 helper 供內部用。
     const src = (typeof t.srcImg === 'number') ? t.srcImg : nav.curImage;
@@ -94,7 +94,7 @@ export function handleCircleClick(t){
         toast('您點擊的是非連通/非預測標記，無法執行無 ROI。請點擊黃圈或淡黃圈！');
       }
     } else {
-      // 3D：點圈 -> 淘汰該方位附近候選（拍板決策）
+      // 3D：點圈 -> 淘汰該方位附近候選
       const tg = resolvePairTarget(t);
       if(tg){ eliminateRoiPair(tg.clickedImg, tg.targetImg, tg.az, which); }
       else { toast('此圈無對應方位，無法執行無 ROI'); }
@@ -178,7 +178,7 @@ function dispatchNavByRole(t){
     toast('doormap 先驗門 @' + t.az.toFixed(0) + '°');
 
   } else if(role === 'rejected-view'){
-    // 已否決/淘汰配對的紅圈（需求 1）：點擊只提示，不做導覽（可用 Y 重新連通）。
+    // 已否決/淘汰配對的紅圈：點擊只提示，不做導覽（可用 Y 重新連通）。
     toast('此配對已否決/淘汰（按 Y 可重新確認連通）');
   }
 }

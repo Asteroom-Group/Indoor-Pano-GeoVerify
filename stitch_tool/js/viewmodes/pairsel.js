@@ -3,7 +3,7 @@
    mode-crop / mode-morph 共用;插件之間不得互相 import(否則停用一個插件的
    import 行會被另一個插件的依賴拖回來,違反可插拔性)。
    邏輯與 erp.renderERP 同款:優先 nav.curPair,否則用 ERP 面板推導;
-   已確認配對用校正後方位;未確認且語意輔助開啟時套用門語意校正(任務8)。
+   已確認配對用校正後方位;未確認且語意輔助開啟時套用門語意校正。
 
    方位優先序(三個檢視模式與 ERP 一致):
      人工 ROI 校正(STATE.confirmed) > 語意門校正 > az_ij/az_ji(幾何 az_ab)

@@ -1,6 +1,6 @@
 /* =========================================================================
    ui.js — 按鈕綁定 + 快捷鍵 + 門顯示層開關 + 統計過濾 + UI toggle + 動作可用性刷新
-   第三輪（需求 2/3）：
+
      - 換圖箭頭移出圖面：3D 用動作列導覽組的 btn-prev-img/btn-next-img；ERP 用面板控制列
        erp-prev/next-top/bot（控制列在圖框外，不再需要 pointerdown 防冒泡）。
      - 鍵盤：3D ←/→ 換圖；ERP ←/→ 換上(左)面板、Shift+←/→ 換下(右)面板。Y/N/U/R/A/E/Esc 不變。
@@ -37,7 +37,7 @@ export function applyUiToggles(){
 }
 
 /**
- * 任務8：語意輔助側欄提示——house 級的「有沒有語意圖」訊息，獨立於目前 pair（不需要選到
+ * 語意輔助側欄提示——house 級的「有沒有語意圖」訊息，獨立於目前 pair（不需要選到
  * 對、不需要在 ERP 才看得到），讓使用者一勾選就知道這房子能不能用。資料未抓過時先顯示
  * 「載入中」，抓完後 ensureHouseDoors 的 onReady 會再呼叫一次本函式补上結果。
  */
@@ -92,14 +92,14 @@ export function wireUI(){
   bind('btn-reset-house', 'onclick', resetCurrentHouse);
   bind('btn-noroi', 'onclick', toggleNoRoiMode);
 
-  // 需求 6：unconn 模式的「連接」鈕（上下面板各 1 橘圈 -> 建立綠色確認邊）
+  // unconn 模式的「連接」鈕（上下面板各 1 橘圈 -> 建立綠色確認邊）
   bind('btn-connect', 'onclick', connectUnconnPair);
   // 任務 3: 面板焦點與單顆回 3D 鈕
   bind('focus-top', 'onclick', () => setPaneFocus('top'));
   bind('focus-bot', 'onclick', () => setPaneFocus('bot'));
   bind('btn-back-3d', 'onclick', () => exitErpToImage(getPaneFocus()));
 
-  // 需求 3：模式橫幅「退出(Esc)」鈕
+  // 模式橫幅「退出(Esc)」鈕
   bind('mode-banner-exit', 'onclick', () => { clearMode(); gotoBack(); });
 
   bind('close-erp-guide', 'onclick', function(e){
@@ -143,7 +143,7 @@ export function wireUI(){
     if(isErpOn()) renderERP();
   });
 
-  // 任務8：語意輔助開關（用子計畫一門語意圖校正通道方位；預設關，只影響未確認的 pair）。
+  // 語意輔助開關（用子計畫一門語意圖校正通道方位；預設關，只影響未確認的 pair）。
   // 方位優先序：人工 ROI 校正 > 語意門校正 > az_ab。ERP 直接重畫；其它檢視模式
   // （裁切對/走一遍/區域遮罩）走 'view-changed'，由 registry 呼叫目前模式的 refresh()
   // 重新讀 deriveViewPair，四種呈現才會是同一個角度。
@@ -189,7 +189,7 @@ export function wireUI(){
   // 快捷鍵
   document.addEventListener('keydown', e => {
     if(e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
-    // 需求 3：方向鍵換圖。3D：←/→ 換目前圖；ERP：←/→ 換上(左)面板、Shift+←/→ 換下(右)面板。
+    // 方向鍵換圖。3D：←/→ 換目前圖；ERP：←/→ 換上(左)面板、Shift+←/→ 換下(右)面板。
     if(e.key === 'ArrowLeft' || e.key === 'ArrowRight'){
       const dir = (e.key === 'ArrowRight') ? 1 : -1;
       if(isErpOn()){
@@ -220,7 +220,7 @@ export function wireUI(){
   // 事件：套用 UI toggle（房子載入 / reset 後）
   on('apply-ui-toggles', applyUiToggles);
 
-  // 需求 3：集中管理動作可用性。view-changed（3D 導覽/loadImageView）、state-changed（判定後）、
+  // 集中管理動作可用性。view-changed（3D 導覽/loadImageView）、state-changed（判定後）、
   // erp-derived（ERP 面板衍生完成）都刷新一次。
   on('view-changed', refreshActionAvailability);
   on('state-changed', refreshActionAvailability);
@@ -230,7 +230,7 @@ export function wireUI(){
 }
 
 // =========================================================================
-//  需求 3：動作可用性刷新（停用/顯示集中一處）
+//  動作可用性刷新（停用/顯示集中一處）
 // =========================================================================
 /**
  * 依目前模式 / ERP 開關 / 「衍生配對」是否存在，統一設定：
@@ -298,7 +298,7 @@ function currentPairAvailability(){
 }
 
 /**
- * 需求 4：E 快捷鍵切換 ERP。
+ * E 快捷鍵切換 ERP。
  * - 非 ERP：進 ERP（沿用 toggleErp）。
  * - ERP 中：若有作用中模式先清模式（unconn 等自動帶入者 modes 會一併退出 ERP 並清橘圈）；
  *   若清模式後仍在 ERP（手動進入且無模式），則退出到「上/左圖」的 3D（exitErpToImage('top')）。
