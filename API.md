@@ -235,7 +235,7 @@ GT（連通標註、通道方位、同房判定）讀 `datasets/` 的 `*_HOTSPOT
 | 腳本 | 用途 |
 |---|---|
 | `setup_env.ps1` | 建立 venv 並安裝全部相依，結束時自動驗收 |
-| `check_env.py` | 版本比對、GPU arch 涵蓋檢查、三項實跑驗證 |
+| `check_env.py` | 三項實跑驗證（CUDA kernel／romav2 匯入／幾何 selftest）決定通過與否；版本對照與 GPU arch 涵蓋僅供參考 |
 | `smoke_test.py` | 端到端功能測試，與參考 JSON 逐欄對照 |
 | `local_timing_bench.py` | 單對耗時基準，決定性抽樣，可跨環境比較 |
 

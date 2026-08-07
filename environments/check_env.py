@@ -1,21 +1,23 @@
 """
 [腳本用途]
-環境對齊驗收：把本機實際版本與目標配置逐項比對，並做三個
-實跑驗證（CUDA kernel、romav2 匯入、幾何核心 selftest）。
+環境驗收：確認這台機器跑不跑得動。做三個實跑驗證（CUDA kernel、romav2 匯入、
+幾何核心 selftest），並列出本機版本與參考配置的對照供除錯參考。
 
 [用法]
   ..\venv\Scripts\python.exe environments\check_env.py
 
-驗收標準：TARGET 表格全部 OK，且三個實跑驗證全部 PASS。
-同一份腳本可在其他機器執行以確認環境一致：arch 一項顯示各自 GPU 的
-compute capability，其餘欄位應完全相同。
+**判準是三個實跑驗證，不是版本相等。** 本模組會交付給環境各異的對象使用，
+版本相等既不充分（同版本仍可能因其他原因跑不動），也不必要（不同版本多半正常）。
+版本對照表在實跑失敗時是第一線線索，故照印，但不影響結論。
+
+arch 一項顯示各自 GPU 的 compute capability，各機器本來就不同。
 """
 import platform
 import subprocess
 import sys
 from pathlib import Path
 
-# 目標配置
+# 參考配置：開發與驗證時所用的版本。差異只作提示，不影響判準。
 TARGET = {
     "python": "3.11.0",
     "torch": "2.10.0+cu130",
@@ -26,7 +28,7 @@ TARGET = {
     "PIL": "12.0.0",
 }
 
-OK, BAD, WARN = "OK  ", "MISMATCH", "WARN"
+OK, DIFF = "OK  ", "DIFF"       # DIFF = 與參考配置不同，僅提示，不影響判準
 
 
 def _ver(mod_name, attr="__version__"):
@@ -38,27 +40,28 @@ def _ver(mod_name, attr="__version__"):
 
 
 def row(label, actual, target, minor_only=False):
-    """minor_only：只比 major.minor（Python patch 版差異不影響數值結果，不當成落差）。"""
+    """列出本機版本與參考配置的對照。回傳是否相同，僅供彙總顯示。
+
+    minor_only：只比 major.minor（Python patch 版差異不影響數值結果）。
+    """
     if minor_only:
         hit = actual.split(".")[:2] == target.split(".")[:2]
-        status = OK if hit else BAD
     else:
         hit = actual == target
-        status = OK if hit else BAD
-    print(f"  [{status:8}] {label:<12} {actual:<20} (目標 {target})")
+    print(f"  [{(OK if hit else DIFF):8}] {label:<12} {actual:<20} (參考 {target})")
     return hit
 
 
 def main():
     print("=" * 68)
-    print("  Roma_Geo 環境對齊驗收")
+    print("  Roma_Geo 環境驗收")
     print("=" * 68)
 
     print(f"\nOS          : {platform.system()} {platform.release()} {platform.machine()}")
 
-    print("\n--- 版本對齊 ---")
-    allok = True
-    allok &= row("python", platform.python_version(), TARGET["python"], minor_only=True)
+    print("\n--- 版本對照（僅供參考，不影響判準）---")
+    same_ver = True
+    same_ver &= row("python", platform.python_version(), TARGET["python"], minor_only=True)
 
     try:
         import torch
@@ -66,12 +69,12 @@ def main():
         print("  [FATAL   ] torch 未安裝 —— 先跑 setup_env.ps1")
         return 1
 
-    allok &= row("torch", torch.__version__, TARGET["torch"])
-    allok &= row("cuda build", str(torch.version.cuda), TARGET["cuda"])
-    allok &= row("numpy", _ver("numpy"), TARGET["numpy"])
-    allok &= row("opencv", _ver("cv2"), TARGET["cv2"])
-    allok &= row("sklearn", _ver("sklearn"), TARGET["sklearn"])
-    allok &= row("pillow", _ver("PIL"), TARGET["PIL"])
+    same_ver &= row("torch", torch.__version__, TARGET["torch"])
+    same_ver &= row("cuda build", str(torch.version.cuda), TARGET["cuda"])
+    same_ver &= row("numpy", _ver("numpy"), TARGET["numpy"])
+    same_ver &= row("opencv", _ver("cv2"), TARGET["cv2"])
+    same_ver &= row("sklearn", _ver("sklearn"), TARGET["sklearn"])
+    same_ver &= row("pillow", _ver("PIL"), TARGET["PIL"])
 
     print("\n--- GPU ---")
     if not torch.cuda.is_available():
@@ -105,8 +108,8 @@ def main():
     elif covering:
         print(f"  [{OK:8}] wheel 未直接含 {sm}，但 {covering[-1]} 的 cubin 向上相容（同 major，minor 較低）")
     else:
-        print(f"  [FATAL   ] wheel 不涵蓋 {sm} —— 這顆 wheel 在這張卡上跑不動")
-        allok = False
+        # 只作預告：真正的判準是下面那次 CUDA kernel 實跑，涵蓋不到的話它會失敗。
+        print(f"  [WARN    ] wheel 不涵蓋 {sm} —— 預期下方 CUDA kernel 實跑會失敗")
 
     try:
         drv = subprocess.run(
@@ -159,11 +162,14 @@ def main():
     else:
         print(f"  [SKIP    ] pose_regions 尚未搬入 ({selftest})")
 
+    ok = passed >= 3
     print("\n" + "=" * 68)
-    verdict = "全部通過" if (allok and passed >= 3) else "有項目未通過（見上）"
-    print(f"  結果：版本對齊 {'一致' if allok else '有落差'} · 實跑 {passed}/3 · {verdict}")
+    print(f"  結果：實跑 {passed}/3 · {'通過' if ok else '有項目未通過（見上）'}")
+    if not same_ver:
+        print("  版本與參考配置有落差（見上表）。三項實跑都過就代表這個環境可用;"
+              "落差僅供除錯時參考。")
     print("=" * 68)
-    return 0 if (allok and passed >= 3) else 1
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":

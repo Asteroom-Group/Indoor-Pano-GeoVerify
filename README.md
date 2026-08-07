@@ -83,9 +83,11 @@ cd environments
 ..\venv\Scripts\python.exe environments\check_env.py     # 單獨重驗
 ```
 
-`check_env.py` ：逐項比對版本、確認 wheel 的 `arch_list` 含本機 GPU 的 arch、
-實跑三個驗證（CUDA kernel、romav2 匯入、幾何核心 selftest）。同一份腳本可在其他機器
-執行以確認環境一致：arch 一項顯示各自 GPU 的 compute capability，其餘欄位應完全相同。
+`check_env.py` 實跑三項驗證：CUDA kernel、romav2 匯入、幾何核心 selftest。
+**三項都過即代表這個環境可用**——判準是跑不跑得動，不是版本相等。
+
+上表的版本是開發與驗證時所用的參考配置。`check_env.py` 會列出對照，
+與本機不同的欄位標為 `DIFF`，但不影響結論;它在實跑失敗時是第一線線索。
 
 ## 路徑與門檻設定
 

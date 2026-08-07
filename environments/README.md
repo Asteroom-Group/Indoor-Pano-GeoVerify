@@ -105,12 +105,14 @@ repo 已在本機時也可直接當一般腳本執行，此時沿用既有目錄
 
 前四步為快速關卡（數分鐘）：
 
-| 步驟 | 腳本 |
-|---|---|
-| 1 路徑設定 | `config.py` |
-| 2 環境驗收 | `environments/check_env.py` |
-| 3 端到端煙霧測試 | `environments/smoke_test.py` |
-| 4 跨環境一致性檢查 | `environments/cross_env_check.py` |
+| 步驟 | 腳本 | 判準 |
+|---|---|---|
+| 1 路徑設定 | `config.py` | 各項路徑解析得到、且存在 |
+| 2 環境驗收 | `environments/check_env.py` | 三項實跑（CUDA kernel／romav2／幾何 selftest）皆過。版本對照僅供參考 |
+| 3 端到端煙霧測試 | `environments/smoke_test.py` | 固定一對真實影像跑完整流程，與入庫的參考結果一致 |
+| 4 跨環境一致性檢查 | `environments/cross_env_check.py` | 位姿有無一致率 ≥85%，且強證據配對的方位角差中位 ≤5° |
+
+2 驗的是「跑不跑得動」，3 驗的是「跑出來對不對」，4 驗的是「整批的結論穩不穩」。
 
 後五步為完整鏈條（`FULL_CHAIN = True`）：
 
