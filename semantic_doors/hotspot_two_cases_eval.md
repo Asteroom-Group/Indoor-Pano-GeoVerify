@@ -1,6 +1,6 @@
 # HOTSPOT 是否分兩種情況(同房標相機 / 跨房標門)
 
-產生腳本:`hotspot_two_cases_eval.py`。使用者 2026-07-29 假設之查核。
+產生腳本:`hotspot_two_cases_eval.py`。2026-07-29 對此假設的查核。
 
 ## 判準一:雙向距離對稱性(純 GT,不涉模型)
 
