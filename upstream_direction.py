@@ -12,7 +12,7 @@
  **與本專案差 180°**。接新來源前必須先確認對方採用哪一種規約，否則方向會整批反向。
 
 [已提供的解碼]
-    from_sincos   矩陣 ch1=sin(az) / ch2=cos(az)      現行 cos_joint_l4
+    from_sincos   矩陣 ch1=sin(az) / ch2=cos(az)
     from_x        ERP 影像上的 x 座標
     from_box      影像上的框，取中心 x（含跨接縫處理）
 

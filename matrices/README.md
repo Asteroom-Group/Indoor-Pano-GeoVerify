@@ -27,11 +27,9 @@
 
 ```
 matrices/
-├── cos_joint_l4/            ← 目前使用
-│   ├── refined_matrices/    ← 正式流程讀這個
-│   └── oof_matrices/        ← out-of-fold 矩陣，僅 covis_ranking_eval.py 使用
-├── <其他版本>/
-└── <其他版本>/
+├── candidate_val/           ← 目前使用（.npy 直接置於版本目錄，無子目錄）
+├── <版本>/                  ← 亦可含 refined_matrices/（正式流程）與 oof_matrices/（covis_ranking_eval）子目錄
+└── <版本>/
 ```
 
 `config.matrices_root("refined")` / `matrices_root("oof")` 解析到對應子目錄。
@@ -113,13 +111,13 @@ ch0 的單位由矩陣自己決定，本專案不假設它是 logit 或機率，
 ⚠ 上游若給的是框，RoMa 對應不足時可用框中心當門口位置，但**必須標記來源**：
 那是模型預測，與幾何驗證過的共視區域不同，不可混用。
 
-## 目前版本：cos_joint_l4
+## 目前版本：candidate_val
 
 | 項目 | 值 |
 |---|---|
-| 每間房 | `<house>.npy`、`<house>_images.json`、`<house>_doormap.npy` |
-| ch0 單位 | logit |
-| 預設門檻 | `config.PAIR_THRESHOLD` = −3.0 |
+| 每間房 | `<house>.npy`、`<house>_images.json` |
+| ch0 單位 | logit（由上游機率轉入：logit = log(p/(1-p))） |
+| 預設門檻 | `config.PAIR_THRESHOLD` = 0.0（機率 ≥ 0.5） |
 
 房數、配對數、分數範圍與各門檻選出的對數以 `select_pairs.py --inspect` 為準。
 

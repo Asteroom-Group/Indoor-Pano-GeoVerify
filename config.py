@@ -42,14 +42,14 @@ ENV_MATRICES = "ROMA_GEO_MATRICES"
 
 #: 目前使用的版本目錄名。要換版本時改這裡，或設 ENV_MATRICES 指向任意路徑，
 #: 或直接用 prepare_house_data.py 的 --oof_dir（優先權最高）。
-MATRICES_VERSION = "cos_joint_l4"
+MATRICES_VERSION = "candidate_val"
 DEFAULT_MATRICES_ROOT = os.path.join(PROJECT_ROOT, "matrices")
 
 #: 挑配對門檻：矩陣 ch0 的分數 ≥ 此值才送進 RoMa 匹配。
 #: 單位由矩陣決定，不做 sigmoid 轉換；⚠ **換矩陣來源必須重新校準此值**。
-#: 現值對應 `cos_joint_l4` 的既有操作點；換來源後以 `select_pairs.py --inspect` 重新校準。
+#: 現值對應 `candidate_val`：ch0 存 logit，機率 ≥ 0.5 ⇔ logit ≥ 0.0。
 ENV_PAIR_THRESHOLD = "ROMA_GEO_PAIR_THRESHOLD"
-PAIR_THRESHOLD = -3.0
+PAIR_THRESHOLD = 0.0
 
 #: 產出根目錄（幾何驗證的 per-pair JSON 與各項 CSV）。
 #: 獨立成一項的理由：批次作業常在其他機器上執行（Kaggle 或協作者的機器），
