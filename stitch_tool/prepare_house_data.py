@@ -273,6 +273,7 @@ def build_house(house: str, oof_dir: str, roma_cache=None, ranking_lookup=None, 
         "pairs": pairs,
         "doors": doors,
         "az_convention": "az(x)=((x/W)*360-180)%360 ; u=((az+180)%360)/360",
+        "has_gt": bool(gt),   # 有無 HOTSPOT 真值；未知資料(無 HOTSPOT)時前端不顯示 GT 對照
         "n_gt_connected_pairs": sum(1 for p in pairs if p["gt_connected"]),
     }
 

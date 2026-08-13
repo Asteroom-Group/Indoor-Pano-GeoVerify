@@ -35,7 +35,7 @@ let draggingMarker = null, dragMoved = false;
 /** 目前場景中的 THREE.Sprite 標記。 */
 let markers = [];
 
-/** 目前 hover 的可點圈圈（cursor:pointer + 微放大）。 */
+/** 需求 3：目前 hover 的可點圈圈（cursor:pointer + 微放大）。 */
 let hoveredMarker = null;
 /** hover 放大倍率。 */
 const HOVER_SCALE = 1.18;
@@ -79,6 +79,15 @@ export function initThree(){
   raycaster = new THREE.Raycaster();
   mouse = new THREE.Vector2();
 
+  const hud = document.createElement('div');
+  hud.id = 'scene3d-hud';
+  hud.style.position = 'absolute';
+  hud.style.inset = '0';
+  hud.style.pointerEvents = 'none';
+  hud.style.overflow = 'hidden';
+  hud.style.zIndex = '5';
+  c.appendChild(hud);
+
   const el = renderer.domElement;
   el.addEventListener('pointerdown', onPointerDown);
   window.addEventListener('pointermove', onPointerMove);
@@ -107,6 +116,25 @@ function animate(){
   const tz = 500 * Math.sin(phi) * Math.sin(theta);
   camera.lookAt(tx, ty, tz);
   renderer.render(scene, camera);
+  
+  // 更新 HUD 標記位置
+  const hud = document.getElementById('scene3d-hud');
+  if(hud){
+    const W = hud.clientWidth;
+    markers.forEach(m => {
+      if(m.userData.shape === 'roi' && m.userData.hudEl){
+        const pos = m.position.clone().project(camera);
+        if(pos.z > 1.0){ // 在相機後方
+          m.userData.hudEl.style.display = 'none';
+        } else {
+          m.userData.hudEl.style.display = '';
+          const px = (pos.x * 0.5 + 0.5) * W;
+          m.userData.hudEl.style.transform = 'translateX(' + px + 'px)';
+        }
+      }
+    });
+  }
+  
   emit('frame');
 }
 
@@ -152,7 +180,7 @@ function onPointerMove(e){
     if(Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY) > 3) dragMoved = true;
     return;
   }
-  // 非拖曳時，hover 可點圈 -> cursor:pointer + 微放大。
+  // 需求 3：非拖曳時，hover 可點圈 -> cursor:pointer + 微放大。
   updateMouse(e);
   const hov = pickMarker();
   setHover((hov && isClickableMarker(hov)) ? hov : null);
@@ -168,13 +196,21 @@ function isClickableMarker(m){
 function setHover(m){
   if(hoveredMarker === m) return;
   if(hoveredMarker){
-    const b = hoveredMarker.userData.baseScale || MARKER_SIZE;
-    hoveredMarker.scale.set(b, b, 1);
+    const bx = hoveredMarker.userData.baseScaleX || hoveredMarker.userData.baseScale || MARKER_SIZE;
+    const by = hoveredMarker.userData.baseScaleY || hoveredMarker.userData.baseScale || MARKER_SIZE;
+    hoveredMarker.scale.set(bx, by, 1);
+    if(hoveredMarker.userData.hudEl){
+      hoveredMarker.userData.hudEl.style.filter = '';
+    }
   }
   hoveredMarker = m;
   if(m){
-    const b = m.userData.baseScale || MARKER_SIZE;
-    m.scale.set(b * HOVER_SCALE, b * HOVER_SCALE, 1);
+    const bx = m.userData.baseScaleX || m.userData.baseScale || MARKER_SIZE;
+    const by = m.userData.baseScaleY || m.userData.baseScale || MARKER_SIZE;
+    m.scale.set(bx * HOVER_SCALE, by * HOVER_SCALE, 1);
+    if(m.userData.hudEl){
+      m.userData.hudEl.style.filter = 'brightness(1.5) drop-shadow(0 0 6px ' + m.userData.color + ')';
+    }
   }
   if(renderer && renderer.domElement){
     renderer.domElement.style.cursor = m ? 'pointer' : '';
@@ -237,7 +273,25 @@ function updateMouse(e){
 function pickMarker(){
   raycaster.setFromCamera(mouse, camera);
   const hits = raycaster.intersectObjects(markers, false);
-  return hits.length ? hits[0].object : null;
+  if(hits.length > 0 && hits[0].object.visible) return hits[0].object;
+  
+  // HUD 標記垂直區域檢測 (X 軸相近即選中)
+  let bestHud = null;
+  let minDist = 0.08; // 畫面 X 軸寬度比例的容忍度 (8%)
+  for(let i = 0; i < markers.length; i++){
+    const m = markers[i];
+    if(m.userData.shape === 'roi' && m.userData.hudEl && m.userData.hudEl.style.display !== 'none'){
+      const pos = m.position.clone().project(camera);
+      if(pos.z < 1.0){ // 在前方
+        const dx = Math.abs(pos.x - mouse.x);
+        if(dx < minDist){
+          minDist = dx;
+          bestHud = m;
+        }
+      }
+    }
+  }
+  return bestHud;
 }
 function pickSphere(){
   raycaster.setFromCamera(mouse, camera);
@@ -265,76 +319,36 @@ function getRing(color, filled){
   if(!_ringCache[k]) _ringCache[k] = ringTexture(color, filled);
   return _ringCache[k];
 }
-/** 門示意貼圖 v2（與 ERP SVG 開門圖示同語彙：拱框+飾線+門洞穿越箭頭+外開門葉+門檻+錨點）。 */
+/** 門示意貼圖 v2：改成與 ERP 類似的垂直通道頂帶樣式 */
 function roiTexture(color, filled){
-  const s = 128, cv = document.createElement('canvas'); cv.width = cv.height = s;
-  const g = cv.getContext('2d'); g.clearRect(0, 0, s, s);
-  const sx = s / 44, sy = s / 62;
-  g.save();
-  g.scale(sx, sy);
-  g.lineJoin = 'round'; g.lineCap = 'round';
-  g.strokeStyle = color; g.fillStyle = color;
-  // 頂部光暈短劃
-  g.globalAlpha = 0.7; g.lineWidth = 1.6;
-  g.beginPath();
-  g.moveTo(22, 4.5); g.lineTo(22, 1.5);
-  g.moveTo(12, 6.5); g.lineTo(10, 4);
-  g.moveTo(32, 6.5); g.lineTo(34, 4);
-  g.stroke();
-  g.globalAlpha = 1;
-  // 拱形門框(外)
-  g.lineWidth = 2.8;
-  g.beginPath();
-  g.moveTo(7, 53); g.lineTo(7, 16);
-  g.quadraticCurveTo(7, 7, 16, 7);
-  g.lineTo(28, 7);
-  g.quadraticCurveTo(37, 7, 37, 16);
-  g.lineTo(37, 53); g.stroke();
-  // 門框飾線(內)
-  g.globalAlpha = 0.5; g.lineWidth = 1.1;
-  g.beginPath();
-  g.moveTo(11, 53); g.lineTo(11, 17.5);
-  g.quadraticCurveTo(11, 11, 17, 11);
-  g.lineTo(27, 11);
-  g.quadraticCurveTo(33, 11, 33, 17.5);
-  g.lineTo(33, 53); g.stroke();
-  g.globalAlpha = 1;
-  // 門洞(可穿越的開口)
-  g.globalAlpha = filled ? 0.34 : 0.26;
-  g.beginPath();
-  g.moveTo(11, 53); g.lineTo(11, 17.5);
-  g.quadraticCurveTo(11, 11, 17, 11);
-  g.lineTo(27, 11);
-  g.quadraticCurveTo(33, 11, 33, 17.5);
-  g.lineTo(33, 53); g.closePath(); g.fill();
-  g.globalAlpha = 1;
-  // 穿越箭頭(向上=走進去)
-  g.globalAlpha = 0.95; g.lineWidth = 2.6;
-  g.beginPath();
-  g.moveTo(22, 45); g.lineTo(22, 26);
-  g.moveTo(16.5, 31.5); g.lineTo(22, 25); g.lineTo(27.5, 31.5);
-  g.stroke();
-  g.globalAlpha = 1;
-  // 外開門葉(鉸鏈在左框)
-  g.globalAlpha = 0.9;
-  g.beginPath();
-  g.moveTo(11, 17.5); g.lineTo(2.5, 23.5); g.lineTo(2.5, 60); g.lineTo(11, 52.5);
-  g.closePath(); g.fill();
-  g.globalAlpha = 1;
-  g.lineWidth = 1;
-  g.beginPath();
-  g.moveTo(11, 17.5); g.lineTo(2.5, 23.5); g.lineTo(2.5, 60); g.lineTo(11, 52.5);
-  g.closePath(); g.stroke();
-  // 門把(深色,疊在門葉上)
-  g.fillStyle = 'rgba(0,0,0,0.55)';
-  g.beginPath(); g.arc(4.8, 42, 1.5, 0, Math.PI * 2); g.fill();
-  g.fillStyle = color;
-  // 門檻
-  g.fillRect(6, 53, 32, 3.2);
-  // 方位錨點箭頭
-  g.beginPath();
-  g.moveTo(22, 61.5); g.lineTo(16, 56.8); g.lineTo(28, 56.8); g.closePath(); g.fill();
-  g.restore();
+  const w = 64, h = 128, cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  const g = cv.getContext('2d'); g.clearRect(0, 0, w, h);
+  
+  // 畫底色 (暗色半透明)
+  g.fillStyle = 'rgba(8, 12, 18, 0.72)';
+  g.fillRect(8, 8, 48, 112);
+  
+  // 邊框
+  g.strokeStyle = color;
+  g.lineWidth = 2;
+  g.strokeRect(8, 8, 48, 112);
+  
+  if(filled){
+    g.fillStyle = color;
+    g.globalAlpha = 0.3;
+    g.fillRect(8, 8, 48, 112);
+    g.globalAlpha = 1.0;
+  }
+  
+  // 通道帶頂部白線 (模擬 .erp-passage-bar)
+  g.fillStyle = '#ffffff';
+  g.fillRect(12, 14, 40, 4);
+  
+  // 下方飾線 (模擬 .erp-passage-ticks)
+  g.fillRect(14, 22, 2, 6);
+  g.fillRect(31, 22, 2, 10);
+  g.fillRect(48, 22, 2, 6);
+  
   const t = new THREE.Texture(cv); t.needsUpdate = true; return t;
 }
 const _roiCache = {};
@@ -358,18 +372,74 @@ export function makeMarker(az, color, opts){
   const mat = new THREE.SpriteMaterial({ map:tex, depthTest:false, transparent:true });
   const spr = new THREE.Sprite(mat);
   const sz = opts.size || MARKER_SIZE;
-  spr.scale.set(sz, sz, 1);
+  const scaleX = (shape === 'roi') ? sz * 0.8 : sz;
+  const scaleY = (shape === 'roi') ? sz * 1.6 : sz;
+  spr.scale.set(scaleX, scaleY, 1);
   spr.position.copy(azToPos(az));
   spr.renderOrder = 10;
   spr.userData = { az:az, role:opts.role || '', color:color, shape:shape,
                    draggable:!!opts.draggable, i:opts.i, j:opts.j, targetImg:opts.targetImg,
-                   faint:!!opts.faint, baseScale:sz };   // baseScale 供 hover 微放大復原
+                   faint:!!opts.faint, baseScaleX:scaleX, baseScaleY:scaleY, baseScale:sz };   // baseScale 供 hover 微放大復原（需求 3）
+  
+  if(shape === 'roi'){
+    spr.visible = false; // 隱藏 3D Sprite，改用 HUD 顯示
+    const hudEl = document.createElement('div');
+    hudEl.style.position = 'absolute';
+    hudEl.style.top = '0';
+    hudEl.style.bottom = '0';
+    hudEl.style.width = '0';
+    hudEl.style.willChange = 'transform';
+    
+    // vlink (垂直虛線)
+    const vlink = document.createElement('div');
+    vlink.className = 'erp-passage-vlink show';
+    hudEl.appendChild(vlink);
+    
+    const bandW = 48;
+    const settled = (opts.role === 'confirmed' || opts.role === 'reciprocal');
+    const stText = opts.role === 'reciprocal' ? '返回通道' : (opts.role === 'confirmed' ? '已確認' : '待確認');
+    
+    // Top band
+    const topBand = document.createElement('div');
+    topBand.className = 'erp-main-dot erp-band-top';
+    topBand.style.width = bandW + 'px';
+    topBand.style.color = color;
+    topBand.innerHTML = 
+      '<div class="erp-passage-band ' + (settled ? 'settled' : 'pending') + '" style="color:' + color + '">' +
+        '<div class="erp-passage-bar"></div>' +
+        '<div class="erp-passage-ticks"><span class="t-end"></span><span class="t-mid"></span><span class="t-end"></span></div>' +
+        '<div class="erp-passage-label" style="margin-top:2px">' + stText + '</div>' +
+      '</div>';
+    hudEl.appendChild(topBand);
+    
+    // Bot band
+    const botBand = document.createElement('div');
+    botBand.className = 'erp-main-dot erp-band-bot';
+    botBand.style.width = bandW + 'px';
+    botBand.style.color = color;
+    botBand.innerHTML = 
+      '<div class="erp-passage-band bot ' + (settled ? 'settled' : 'pending') + '" style="color:' + color + '">' +
+        '<div class="erp-passage-bar"></div>' +
+        '<div class="erp-passage-ticks"><span class="t-end"></span><span class="t-mid"></span><span class="t-end"></span></div>' +
+      '</div>';
+    hudEl.appendChild(botBand);
+    
+    const hudContainer = document.getElementById('scene3d-hud');
+    if(hudContainer) hudContainer.appendChild(hudEl);
+    spr.userData.hudEl = hudEl;
+  }
+  
   scene.add(spr); markers.push(spr);
   return spr;
 }
 /** 移除所有標記。 */
 export function clearMarkers(){
-  for(let i = 0; i < markers.length; i++) scene.remove(markers[i]);
+  for(let i = 0; i < markers.length; i++) {
+    scene.remove(markers[i]);
+    if(markers[i].userData.hudEl && markers[i].userData.hudEl.parentNode){
+      markers[i].userData.hudEl.parentNode.removeChild(markers[i].userData.hudEl);
+    }
+  }
   markers = [];
   hoveredMarker = null;                                   // 清 hover 參考，避免懸空
   if(renderer && renderer.domElement){ renderer.domElement.style.cursor = ''; }
@@ -460,7 +530,7 @@ export function buildMarkersForImage(imgIdx, pair){
     }
   }
 
-  // 4) 已否決/淘汰的目前 pair：畫紅圈（不可拖曳，點擊 no-op/toast）。
+  // 4) 已否決/淘汰的目前 pair（需求 1）：畫紅圈（不可拖曳，點擊 no-op/toast）。
   //    讓從佇列點到已否決項時，3D 也看得到紅圈（與 ERP 主標記紅色一致）。
   if(pair){
     const stp = pairStatus(pair);

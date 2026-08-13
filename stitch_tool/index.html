@@ -486,7 +486,11 @@
     <h2>拼接標註工具</h2>
     <div class="sec">
       <h3>房子</h3>
-      <select id="house-select"><option>載入中…</option></select>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <select id="house-select" style="flex:1"><option>載入中…</option></select>
+        <button id="btn-add-house" title="加入一個房子產出包（選資料夾，上傳到工具）" style="flex:0 0 auto;padding:2px 8px;">＋</button>
+      </div>
+      <input type="file" id="add-house-input" webkitdirectory multiple style="display:none">
       <div id="house-meta" style="font-size:11px;color:var(--muted);margin-top:6px;"></div>
     </div>
     <div class="sec">
@@ -548,6 +552,8 @@
       </div>
     </div>
   </div>
+
+  <div id="src-hint-bar" style="position:fixed;left:50%;transform:translateX(-50%);top:12px;z-index:9999;padding:8px 16px;border-radius:8px;font-size:14px;font-weight:600;pointer-events:none;display:none;box-shadow:0 2px 12px rgba(0,0,0,.45);"></div>
 
   <div id="viewer">
     <div id="info">

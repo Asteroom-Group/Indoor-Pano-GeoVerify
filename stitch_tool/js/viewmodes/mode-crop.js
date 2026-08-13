@@ -12,6 +12,7 @@ import { getErpCached, renderGnomonic } from './gnomonic.js';
 import { paintRegionsOn, sidesFromRegions } from './regions-paint.js';
 import { drawPassageBandPersp } from './marker.js';
 import { deriveViewPair } from './pairsel.js';
+import { passageSourceHint } from '../srchint.js';
 import { getHouseData, getHouseName, pairStatus } from '../state.js';
 import { fetchRegions } from '../api.js';
 import { on } from '../events.js';
@@ -43,6 +44,7 @@ let _dirty = false;
 let _regOn = true, _bandOn = true;
 let _sides = null;              // sidesFromRegions() 結果;無資料時 null
 let _regNote = '';              // 無區域資料時的說明(顯示在 hint)
+let _srcHint = { text: '', fallback: false };   // 通道方位來源/降級提示(見 srchint.js)
 let _azPassA = 0, _azPassB = 0; // 兩側的通道方位(az_ij / az_ji;與鏡頭偏移無關)
 
 // 拖曳狀態
@@ -203,8 +205,9 @@ function azB(){ return _baseAzB + _offB; }
 function applyBaseFromPair(){
   const d = deriveViewPair();
   if(!d){ _pair = null; return false; }
-  const { pair, azI, azJ } = d;
+  const { pair, azI, azJ, semantic } = d;
   _pair = pair;
+  _srcHint = passageSourceHint(pair, semantic);
   _baseAzA = azI;
   _baseAzB = _sameDir ? azJ + 180 : azJ;
   // 通道方位本身與「對望/同向」和拖曳偏移無關 — 同向時 B 背對通道,帶子自然落在視野外
@@ -280,7 +283,8 @@ function paintNow(){
     ' · 拖曳旋轉視角(可上下) · 滾輪調 FOV(' + FOV_MIN + '–' + FOV_MAX + '°)' +
     ' · 左 FOV' + _fovA.toFixed(0) + '° / 右 FOV' + _fovB.toFixed(0) + '°' +
     (_regOn && nReg ? ' · 遮罩 ' + nReg + ' 區(同色=同一塊)' : (_regNote ? ' · ' + _regNote : '')) +
-    bandSeen
+    bandSeen +
+    (_srcHint.text ? ' · ' + (_srcHint.fallback ? '⚠ ' : '') + _srcHint.text : '')
   );
 }
 

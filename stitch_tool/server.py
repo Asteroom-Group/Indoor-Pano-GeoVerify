@@ -20,24 +20,33 @@ import mimetypes
 from urllib.parse import unquote
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
-from house_dirs import resolve_task_dir as _find_house_dir
-
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(SCRIPT_DIR)            # 專案根目錄
-DATA_DIR = os.path.join(SCRIPT_DIR, "data")       # prepare_house_data.py 產物
-STATE_DIR = os.path.join(SCRIPT_DIR, "state")     # 人工標註進度
-SEMANTIC_DIR = os.path.join(SCRIPT_DIR, "semantic")  # prepare_semantic_doors.py 產物
+STATE_DIR = os.path.join(SCRIPT_DIR, "state")     # 人工標註進度（工具本地，非包內）
 if ROOT_DIR not in sys.path:
-    sys.path.insert(0, ROOT_DIR)
-from config import datasets_root, regions_root     # noqa: E402（要先補 sys.path）
+    sys.path.insert(0, ROOT_DIR)                  # 供 /api/roma_match 延遲載入 roma_match
 
-DATASETS = datasets_root()                         # 可用 ROMA_GEO_DATASETS 覆寫，見 config.py
-REGIONS_DIR = regions_root()                     # 可用 ROMA_GEO_OUTPUT 覆寫，見 config.py
+# 面向未知資料：工具載入「房子產出包（bundle）」，不再回頭讀完整資料集樹。
+# 一個 bundle 根目錄底下每棟房一個子資料夾（見 pack_bundle.py）：
+#   <bundle_root>/<house>/{<house>.json, images/, regions/, semantic.json?, *_HOTSPOT.json?}
+# 使用時手動指定要看的包（可只放選定的一或數棟）。根目錄＝--bundle > 環境變數
+# STITCH_BUNDLE_ROOT > 預設 <ROOT_DIR>/bundles。
+BUNDLE_ROOT = os.environ.get("STITCH_BUNDLE_ROOT") or os.path.join(ROOT_DIR, "bundles")
 
 os.makedirs(STATE_DIR, exist_ok=True)
 
 _SAFE = re.compile(r"^[A-Za-z0-9_\-.]+$")         # 房子名 / 檔名白名單，擋路徑穿越
-_img_dir_cache: dict[str, str] = {}
+
+
+def _house_dir(house):
+    """bundle 內某房的資料夾（不存在回 None）。"""
+    d = os.path.join(BUNDLE_ROOT, house)
+    return d if os.path.isdir(d) else None
+
+
+def _images_dir(house):
+    """bundle 內某房的影像資料夾。"""
+    return os.path.join(BUNDLE_ROOT, house, "images")
 
 # ---- RoMa 即時比對（/api/roma_match）：延遲載入單例 ----
 # RoMaMatcher 建構會載入 torch + CUDA + 模型權重，成本不小；一般標註工作完全用不到它，
@@ -62,15 +71,6 @@ def _get_roma_matcher():
     except Exception as e:
         _roma_matcher_error = f"RoMa matcher unavailable ({e}). Check RoMa weights / CUDA setup."
         raise RuntimeError(_roma_matcher_error)
-
-
-def _resolve_task_dir(house: str):
-    if house in _img_dir_cache:
-        return _img_dir_cache[house]
-    d = _find_house_dir(DATASETS, house)
-    if d:
-        _img_dir_cache[house] = d
-    return d
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -107,16 +107,15 @@ class Handler(SimpleHTTPRequestHandler):
             return SimpleHTTPRequestHandler.do_GET(self)
 
         if path == "/api/houses":
-            idx_path = os.path.join(DATA_DIR, "_index.json")
-            if os.path.exists(idx_path):
-                return self._json(json.load(open(idx_path, encoding="utf-8")))
-            # 沒有 _index.json 就即時掃描 data/*.json
+            # 掃 bundle 根目錄底下每個 <house>/<house>.json。
             houses = []
-            for p in sorted(glob.glob(os.path.join(DATA_DIR, "*.json"))):
-                if os.path.basename(p).startswith("_"):
+            for hd in sorted(glob.glob(os.path.join(BUNDLE_ROOT, "*"))):
+                house = os.path.basename(hd)
+                hj = os.path.join(hd, f"{house}.json")
+                if not os.path.isfile(hj):
                     continue
                 try:
-                    d = json.load(open(p, encoding="utf-8"))
+                    d = json.load(open(hj, encoding="utf-8"))
                     houses.append({"house": d["house"], "n_images": d["n_images"],
                                    "n_pairs": len(d["pairs"]),
                                    "n_gt_connected_pairs": d.get("n_gt_connected_pairs", 0)})
@@ -129,9 +128,9 @@ class Handler(SimpleHTTPRequestHandler):
             house = unquote(m.group(1))
             if not _SAFE.match(house):
                 return self._err(400, "bad house name")
-            fp = os.path.join(DATA_DIR, f"{house}.json")
+            fp = os.path.join(BUNDLE_ROOT, house, f"{house}.json")
             if not os.path.exists(fp):
-                return self._err(404, "house data not found; run prepare_house_data.py")
+                return self._err(404, "house not in bundle; run pack_bundle.py")
             return self._json(json.load(open(fp, encoding="utf-8")))
 
         m = re.match(r"^/api/state/([^/]+)$", path)
@@ -152,7 +151,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self._serve_image(house, fname)
 
         # GET /api/regions/<house>?a=<imgA檔名>&b=<imgB檔名>
-        # 讀 共視區域 JSON（Output/roma_regions/{house}_{a}_{b}.json，
+        # 讀包內共視區域 JSON（<bundle>/<house>/regions/{house}_{a}_{b}.json，
         # schema wp1-step3-v1/v2，見 pose_regions/README.md）。檔名只存 A_B 一個方向；
         # 若命中反序檔則回 swap:true，前端把 regions 的 a/b 兩側對調使用。
         m = re.match(r"^/api/regions/([^/]+)$", path)
@@ -166,7 +165,7 @@ class Handler(SimpleHTTPRequestHandler):
             b = os.path.splitext((q.get("b") or [""])[0])[0]
             if not (a and b and _SAFE.match(a) and _SAFE.match(b)):
                 return self._err(400, "bad image name")
-            rdir = REGIONS_DIR
+            rdir = os.path.join(BUNDLE_ROOT, house, "regions")
             p_ab = os.path.join(rdir, f"{house}_{a}_{b}.json")
             p_ba = os.path.join(rdir, f"{house}_{b}_{a}.json")
             if os.path.exists(p_ab):
@@ -186,9 +185,9 @@ class Handler(SimpleHTTPRequestHandler):
             house = unquote(m.group(1))
             if not _SAFE.match(house):
                 return self._err(400, "bad house name")
-            fp = os.path.join(SEMANTIC_DIR, f"{house}.json")
+            fp = os.path.join(BUNDLE_ROOT, house, "semantic.json")
             if not os.path.exists(fp):
-                return self._err(404, "此房無語意圖（未跑過 prepare_semantic_doors.py 或該房沒有語意資料）")
+                return self._err(404, "此包無門語意（bundle 內無 semantic.json）")
             return self._json(json.load(open(fp, encoding="utf-8")))
 
         # 其餘交給靜態檔 (index.html 等)
@@ -224,6 +223,9 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._err(400, f"bad json: {e}")
             return self._do_roma_match(house, body)
 
+        if path == "/api/bundle_put":
+            return self._do_bundle_put()
+
         return self._err(404, "no such endpoint")
 
     def _do_roma_match(self, house, body):
@@ -238,10 +240,10 @@ class Handler(SimpleHTTPRequestHandler):
             return self._err(400, "img_a and img_b required")
         if not (_SAFE.match(img_a) and _SAFE.match(img_b)):
             return self._err(400, "bad image name")
-        task_dir = _resolve_task_dir(house)
-        if task_dir is None:
-            return self._err(404, "house image dir not found")
-        path_a, path_b = os.path.join(task_dir, img_a), os.path.join(task_dir, img_b)
+        img_dir = _images_dir(house)
+        if not os.path.isdir(img_dir):
+            return self._err(404, "house image dir not found in bundle")
+        path_a, path_b = os.path.join(img_dir, img_a), os.path.join(img_dir, img_b)
         if not (os.path.isfile(path_a) and os.path.isfile(path_b)):
             return self._err(404, "image(s) not found")
 
@@ -265,13 +267,31 @@ class Handler(SimpleHTTPRequestHandler):
             "matches": matches, "w": info.get("w"), "h": info.get("h"), "count": len(matches),
         })
 
+    def _do_bundle_put(self):
+        """POST /api/bundle_put?rel=<house>/<subpath>  body=檔案位元組。
+        面向未知資料的「＋加房」：前端資料夾選擇器把選到的每個檔逐一上傳，server 依相對
+        路徑寫進 bundle 根目錄。rel 的每一段都做白名單驗證，擋路徑穿越（.. 或非法字元）。"""
+        from urllib.parse import parse_qs
+        q = parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
+        rel = unquote((q.get("rel") or [""])[0]).replace("\\", "/")
+        parts = [p for p in rel.split("/") if p not in ("", ".")]
+        if not parts or any(p == ".." or not _SAFE.match(p) for p in parts):
+            return self._err(400, "bad rel path")
+        try:
+            n = int(self.headers.get("Content-Length", 0))
+            data = self.rfile.read(n) if n else b""
+        except Exception as e:
+            return self._err(400, f"read fail: {e}")
+        dst = os.path.join(BUNDLE_ROOT, *parts)
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        with open(dst, "wb") as f:
+            f.write(data)
+        return self._json({"ok": True, "wrote": "/".join(parts), "bytes": len(data)})
+
     def _serve_image(self, house, fname):
-        task_dir = _resolve_task_dir(house)
-        if task_dir is None:
-            return self._err(404, "house image dir not found")
-        fp = os.path.join(task_dir, fname)
+        fp = os.path.join(_images_dir(house), fname)
         if not os.path.isfile(fp):
-            return self._err(404, "image not found")
+            return self._err(404, "image not found in bundle")
         ctype = mimetypes.guess_type(fp)[0] or "application/octet-stream"
         try:
             size = os.path.getsize(fp)
@@ -307,16 +327,23 @@ def get_ip():
 
 
 def main():
+    global BUNDLE_ROOT
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=8010)
+    ap.add_argument("--bundle", default=None,
+                    help="房子產出包根目錄（預設環境變數 STITCH_BUNDLE_ROOT 或 <root>/bundles）")
     args = ap.parse_args()
+    if args.bundle:
+        BUNDLE_ROOT = args.bundle
 
-    n_data = len(glob.glob(os.path.join(DATA_DIR, "*.json")))
+    n_house = sum(1 for hd in glob.glob(os.path.join(BUNDLE_ROOT, "*"))
+                  if os.path.isfile(os.path.join(hd, os.path.basename(hd) + ".json")))
     with ThreadingHTTPServer(("", args.port), Handler) as httpd:
         ip = get_ip()
         print("=" * 60)
         print("  拼接標註工具 (Stitch Labeler) 已啟動")
-        print(f"  房子資料檔: {n_data} 個 (data/*.json)")
+        print(f"  產出包根目錄: {BUNDLE_ROOT}")
+        print(f"  房子數: {n_house}")
         print(f"  本機:   http://localhost:{args.port}")
         print(f"  區網:   http://{ip}:{args.port}")
         print("  Ctrl+C 結束")

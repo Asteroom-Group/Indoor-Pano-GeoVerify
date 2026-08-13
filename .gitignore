@@ -28,7 +28,7 @@ pose_regions/pose_out_cache_demo/
 pose_out/
 
 # --- 工具的本機狀態 ---
-# data/  = prepare_house_data.py 產物（吃協作者的連通性矩陣，需重跑）
+# data/  = prepare_house_data.py 產物（吃上游的連通性矩陣，需重跑）
 # state/ = 人工標註進度，屬於個人工作階段
 stitch_tool/data/
 stitch_tool/state/
@@ -42,3 +42,6 @@ stitch_tool/opencode.json
 Thumbs.db
 Desktop.ini
 ~$*
+
+# 房子產出包（pack_bundle.py 產物，含影像；跑一遍生成，不入庫）
+bundles/

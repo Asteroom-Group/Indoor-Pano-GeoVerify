@@ -16,6 +16,7 @@ import { initMinimap } from './minimap.js';
 import { initCompass } from './compass.js';
 import { initQueue, resetStatFilter } from './queue.js';
 import { initInfo } from './info.js';
+import { initSrcBar } from './srcbar.js';
 import { initErp, initRecoPanel } from './erp.js';
 // import { initRoma } from './roma.js';  // RoMa 即時比對已停用:改以共視區域取代 raw RoMa
 // 顯示。UI 的按鈕與 roma-conf-input 已移除;js/roma.js 與後端 /api/roma_match、
@@ -30,8 +31,8 @@ import { toast } from './util.js';
 /**
  * 載入房子清單填入下拉，並選定測試房子（或第一個）。
  */
-function loadHousesList(){
-  fetchHouses().then(list => {
+function loadHousesList(preferHouse){
+  return fetchHouses().then(list => {
     const sel = document.getElementById('house-select'); if(!sel) return;
     sel.innerHTML = '';
     list.forEach(h => {
@@ -40,12 +41,45 @@ function loadHousesList(){
       o.dataset.meta = h.n_gt_connected_pairs;
       sel.appendChild(o);
     });
-    const want = 'DollhouseTask_58472_NoOutdoor';
+    const want = preferHouse || 'DollhouseTask_58472_NoOutdoor';
     if(list.some(h => h.house === want)) sel.value = want;
     else if(list[0]) sel.value = list[0].house;
     sel.onchange = () => selectHouse(sel.value);
     if(sel.value) selectHouse(sel.value);
   }).catch(e => toast('讀取房子清單失敗: ' + e));
+}
+
+/** 「＋加房」（面向未知資料）：資料夾選擇器 → 逐檔上傳到 bundle 根 → 刷新清單並選中新房。
+    瀏覽器拿不到磁碟路徑，故上傳檔案內容；HOTSPOT 若在資料夾內會一起上傳（有才顯示 GT）。 */
+function wireAddHouse(){
+  const btn = document.getElementById('btn-add-house');
+  const inp = document.getElementById('add-house-input');
+  if(!btn || !inp) return;
+  btn.onclick = () => inp.click();
+  inp.onchange = async () => {
+    const files = [...inp.files];
+    inp.value = '';                          // 允許重選同一資料夾
+    if(!files.length) return;
+    const house = files[0].webkitRelativePath.split('/')[0];
+    const need = house + '/' + house + '.json';
+    if(!files.some(f => f.webkitRelativePath === need)){
+      toast('這不是房子產出包（缺 ' + house + '.json）');
+      return;
+    }
+    const meta = document.getElementById('house-meta');
+    let done = 0;
+    for(const f of files){
+      try{
+        const r = await fetch('/api/bundle_put?rel=' + encodeURIComponent(f.webkitRelativePath),
+                              { method:'POST', body:f });
+        if(!r.ok) throw new Error(await r.text());
+      }catch(e){ toast('上傳失敗 ' + f.webkitRelativePath + '：' + e.message); return; }
+      done++;
+      if(meta) meta.textContent = '上傳 ' + house + ' … ' + done + '/' + files.length;
+    }
+    toast('已加入 ' + house + '（' + files.length + ' 檔）');
+    loadHousesList(house);
+  };
 }
 
 /**
@@ -73,7 +107,8 @@ function selectHouse(name){
     applyUiToggles();
     syncThresholdUI();
     const meta = document.getElementById('house-meta');
-    if(meta) meta.textContent = hd.n_images + ' 圖 · ' + hd.pairs.length + ' 對 · GT連通 ' + hd.n_gt_connected_pairs;
+    if(meta) meta.textContent = hd.n_images + ' 圖 · ' + hd.pairs.length + ' 對' +
+      (hd.has_gt === false ? '（無 GT 真值）' : ' · GT連通 ' + hd.n_gt_connected_pairs);
 
     emit('house-loaded');   // minimap/queue 訂閱重繪（根治選房後空白）
     gotoCurrentPair();      // 進入第一個 pending（會 loadImageView + renderCompass）
@@ -94,6 +129,7 @@ function selectHouse(name){
   initCompass();
   initQueue();
   initInfo();
+  initSrcBar();
   initErp();
   // 綁定批量否決面板 與 unconn 推薦面板的按鈕（否則面板可開、按鈕無反應）
   initBatchPanel();
@@ -108,5 +144,6 @@ function selectHouse(name){
   on('reject-confirmed', ({ i, j }) => rejectConfirmed(i, j));
 
   // 載入房子
+  wireAddHouse();
   loadHousesList();
 })();
