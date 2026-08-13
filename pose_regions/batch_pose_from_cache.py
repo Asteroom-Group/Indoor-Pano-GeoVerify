@@ -6,7 +6,7 @@
 輸出:
   Output/roma_regions/{house}_{imgA}_{imgB}.json   per-pair 結果(schema 見 README)
   Output/roma_regions/_summary.csv                 每 pair 一列的指標總表(供驗收/出圖)
-  pose_regions/batch_pose_report.md             耗時 + 指標分佈報告(自動生成)
+  Output/roma_regions/batch_pose_report.md         耗時 + 指標分佈報告(自動生成)
 
 品質指標:
   - inlier 率(對極 RANSAC 內點 / 使用點數)
@@ -549,11 +549,16 @@ def main():
                          "2026-07-23 A/B 拍板採用,預設 60;設 0 關閉=舊行為,見 nadir_ab_report.md)")
     ap.add_argument("--out", default=DEFAULT_OUT,
                     help="產出目錄(預設 <ROMA_GEO_OUTPUT|Output>/roma_regions)")
-    ap.add_argument("--report", default=os.path.join(SCRIPT_DIR, "batch_pose_report.md"),
-                    help="報告輸出路徑(A/B 實驗請另指路徑)")
+    ap.add_argument("--report", default=None,
+                    help="報告輸出路徑(預設 <產出目錄>/batch_pose_report.md)")
     ap.add_argument("--limit", type=int, default=0, help="只跑前 N 對(冒煙用)")
     ap.add_argument("--resume", action="store_true", help="跳過已有 JSON 的 pair")
     a = ap.parse_args()
+    # 報告跟著產出目錄走,不寫死在本檔旁邊:換 --out(隔離執行、只跑部分房子、
+    # 在別台機器跑)時,報告會跟該批產出放在一起,不會覆蓋掉 repo 內那份與
+    # _summary.csv 同批的全量報告。
+    if a.report is None:
+        a.report = os.path.join(a.out, "batch_pose_report.md")
 
     os.chdir(ROOT)   # CLI 相對路徑(metadata/、Output/ 預設值)以 repo 根為準;函式庫匯入不受影響
     os.makedirs(a.out, exist_ok=True)

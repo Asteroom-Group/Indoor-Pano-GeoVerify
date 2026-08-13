@@ -12,7 +12,6 @@
 |---|---|
 | `estimate_relative_pose.py` | 單對主程式:三種輸入 → RANSAC essential → R/t、內點 overlay、top-down 圖 |
 | `batch_pose_from_cache.py` | 全量批次:快取內每一對 → per-pair JSON + `_summary.csv` + 報告 |
-| `batch_pose_report.md` | 全量批次自動報告(耗時、inlier 率分佈、GT 方位交叉誤差、旗標統計) |
 | `spike_cache_consistency.py` | 驗證 cache npz 的座標約定(可重跑) |
 | `spike_cache_consistency_report.md` | 上述驗證的執行結果 |
 | `covis_ranking_eval.py` | 共視/幾何訊號當**連通性排序分數**的判別力與上限評估;產生 `_ranking_eval.csv` |
@@ -119,7 +118,8 @@ venv/Scripts/python.exe pose_regions/batch_pose_from_cache.py --limit 20  # 冒�
 輸出三份:
 1. `Output/roma_regions/{house}_{imgA}_{imgB}.json` — per-pair 結果(下方 schema;**不入 git**,約 20 分鐘可重生)
 2. `Output/roma_regions/_summary.csv` — 每 pair 一列指標總表(入 git,供驗收與出圖)
-3. `batch_pose_report.md` — 耗時與分佈自動報告
+3. `Output/roma_regions/batch_pose_report.md` — 耗時與分佈自動報告(耗時、inlier 率
+   分佈、GT 方位交叉誤差、旗標統計;跟著 `--out` 走,故與該批的 `_summary.csv` 同批)
 
 ### 自適應 conf(`--retry_conf`,預設 0.3)
 
