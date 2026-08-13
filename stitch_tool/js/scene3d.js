@@ -85,7 +85,7 @@ export function initThree(){
   hud.style.inset = '0';
   hud.style.pointerEvents = 'none';
   hud.style.overflow = 'hidden';
-  hud.style.zIndex = '5';
+  hud.style.zIndex = '3';
   c.appendChild(hud);
 
   const el = renderer.domElement;
