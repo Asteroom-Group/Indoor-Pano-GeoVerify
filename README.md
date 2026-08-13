@@ -115,31 +115,35 @@ python config.py     # 檢查以上每一項目前解析到哪裡、存不存在
 
 ## 完整鏈條
 
-```
-<上游粗篩模型>  →  <某目錄>/<house>.npy      ← $env:ROMA_GEO_MATRICES 指到這裡
-                          │
-  environments/select_pairs.py        →  Output/roma_regions/_pairs.csv
-        │ ch0 分數 ≥ ROMA_GEO_PAIR_THRESHOLD（單位由矩陣決定，不做 sigmoid）
-        ▼
-  environments/batch_match.py         →  roma_match/cache/*.npz
-  pose_regions/batch_pose_from_cache  →  Output/roma_regions/*.json + _summary.csv
-  pose_regions/covis_ranking_eval     →  _ranking_eval.csv
-  stitch_tool/prepare_house_data      →  stitch_tool/data/*.json
-  stitch_tool/prepare_semantic_doors  →  stitch_tool/semantic/*.json
-```
+從上游連通輸出到可瀏覽／視覺化，各步驟的方法與產出：
+
+1. 上游連通模型對每間房的輸出（每對全景影像的連通機率 ＋ 對方所在的視角方位）
+   → `ingest_connections.py` → 連通矩陣 `matrices/<版本>/`
+2. 連通矩陣 → `environments/select_pairs.py` → 待幾何驗證的配對清單（連通機率 ≥ 0.5）
+3. 配對清單 → `environments/batch_match.py`（RoMa 密集匹配）→ 密集對應點 correspondence
+4. correspondence → `pose_regions/batch_pose_from_cache.py` → 共視區域的幾何 ＋ 通道方位
+   （＋ `pose_regions/covis_ranking_eval.py` → 排序用的內點統計；完整欄位見 `pose_regions/README.md`）
+5. 以上整合 → `stitch_tool/prepare_house_data.py` → 每間房的瀏覽資料
+   （＋ `stitch_tool/prepare_semantic_doors.py` → 門語意輔助）
+6. → `stitch_tool/pack_bundle.py` → 自足的房子產出包（含影像，供工具離線載入、可手動選房）
+7. → 啟動伺服器 `stitch_tool/server.py` → 視覺化 correspondence、共識區域、通道方位
+
+單獨驗一對：`roma_geo.verify_pair(img_a, img_b)` → 共視區域 ＋ 通道方位 ＋ correspondence（＝步驟 3–4 的單對版）。
+
+方向規則：存在足夠 correspondence 時以其幾何驗證結果為準；correspondence 不足時退回使用 coarse filter 的輸出。
 
 ### 挑配對門檻
 
 矩陣 ch0 的分數 ≥ 門檻的配對才送進 RoMa。三種設法，優先序由高到低：
 
 ```bash
-python environments/select_pairs.py --threshold -3.0     # 單次執行
+python environments/select_pairs.py --threshold 0.0      # 單次執行
 ```
 ```powershell
-$env:ROMA_GEO_PAIR_THRESHOLD = "-3.0"                    # 本次工作階段
+$env:ROMA_GEO_PAIR_THRESHOLD = "0.0"                     # 本次工作階段
 ```
 
-或改 `config.py` 的 `PAIR_THRESHOLD`（專案預設，現值 −3.0）。
+或改 `config.py` 的 `PAIR_THRESHOLD`（專案預設，現值 0.0；`candidate_val` 的 ch0 是 logit，連通機率 ≥ 0.5 ⇔ logit ≥ 0.0）。
 
 單位由矩陣決定，不做 sigmoid，**換上游來源必須重新校準**。不確定新來源的尺度時，
 `select_pairs.py --inspect` 會列出分數範圍與各門檻選出的配對數，不寫檔。
@@ -152,12 +156,13 @@ $env:ROMA_GEO_PAIR_THRESHOLD = "-3.0"                    # 本次工作階段
 | 模組 | 內容 |
 |---|---|
 | `roma_geo.py` | **對外入口**：`verify_pair()` / `verify_pairs()` / `to_public()` |
+| `ingest_connections.py` | 上游連通輸出（每對機率＋視角方位 JSON）→ 連通矩陣的低耦合 adapter |
 | `config.py` | 路徑與門檻的單一來源（六項，見上表） |
 | `core_roma_match/` | 匹配核心（RoMaScan pipeline） |
 | `roma_match/` | `RoMaMatcher` 封裝、多 GPU 平行匹配、RoMa 聚合分數快取 |
 | `pose_regions/` | 幾何驗證（純 numpy，可獨立匯入、匯入零副作用） |
 | `semantic_doors/` | 子計畫一門語意圖的門抽取 + 參考快取 |
-| `stitch_tool/` | 標註工具介面 |
+| `stitch_tool/` | 標註/檢視工具（面向未知資料：`pack_bundle.py` 打包自足產出包，`server.py` 讀包根目錄，可手動選房、GT 隨包內是否含 HOTSPOT） |
 | `Output/roma_regions/` | 逐 pair 共視區域 JSON + 排序/方位角 CSV |
 | `matrices/<版本>/` | 上游粗篩的連通性矩陣（`prepare_house_data.py` 的輸入，可換版本） |
 | `environments/` | 建置、驗收、煙霧測試、計時基準、**挑配對**（`select_pairs.py`）、批次匹配 |
