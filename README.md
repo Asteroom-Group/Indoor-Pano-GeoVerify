@@ -128,6 +128,9 @@ python config.py     # 檢查以上每一項目前解析到哪裡、存不存在
 6. → `stitch_tool/pack_bundle.py` → 自足的房子產出包（含影像，供工具離線載入、可手動選房）
 7. → 啟動伺服器 `stitch_tool/server.py` → 視覺化 correspondence、共識區域、通道方位
 
+交付給下游時：步驟 5 的每間房資料 → `export_public.py` → 對外子集（房間連接圖 ＋ 邊方向
+＋ 方位來源 ＋ 幾何證據強度，加 `--with_regions` 併入共視區域），評估與排序用的內部欄位不外流。
+
 單獨驗一對：`roma_geo.verify_pair(img_a, img_b)` → 共視區域 ＋ 通道方位 ＋ correspondence（＝步驟 3–4 的單對版）。
 
 方向規則：存在足夠 correspondence 時以其幾何驗證結果為準；correspondence 不足時退回使用 coarse filter 的輸出。
@@ -157,6 +160,7 @@ $env:ROMA_GEO_PAIR_THRESHOLD = "0.0"                     # 本次工作階段
 |---|---|
 | `roma_geo.py` | **對外入口**：`verify_pair()` / `verify_pairs()` / `to_public()` |
 | `ingest_connections.py` | 上游連通輸出（每對機率＋視角方位 JSON）→ 連通矩陣的低耦合 adapter |
+| `export_public.py` | 每間房的內部資料 → 對外交付子集（含輸出前的內部欄位自檢） |
 | `config.py` | 路徑與門檻的單一來源（六項，見上表） |
 | `core_roma_match/` | 匹配核心（RoMaScan pipeline） |
 | `roma_match/` | `RoMaMatcher` 封裝、多 GPU 平行匹配、RoMa 聚合分數快取 |

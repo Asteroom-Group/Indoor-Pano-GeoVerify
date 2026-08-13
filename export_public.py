@@ -1,0 +1,154 @@
+#!/usr/bin/env python3
+"""
+[模組用途]
+把每間房的內部 JSON 裁成「對外交付」的乾淨子集：只留下游要的欄位，
+擋掉評估與排序用的內部欄位。與 `roma_geo.to_public()`（單對契約）同一個原則，
+差別在這裡處理的是整間房的連接圖。
+
+    <內部 house JSON 目錄>/<house>.json  →  <out_dir>/<house>.json
+
+[對外保留]
+    房層  house / n_images / width / height / images / az_convention / doors
+    每對  i, j                連接圖的兩個端點（index 對應 images）
+          prob                上游給的連通機率
+          az_ij / az_ji       邊方向（在 i 圖看向 j 的方位角，反向同理）
+          az_source           該方位從哪來 —— 降級必須看得出來，不可與幾何驗證混為一談
+          has_geometry        有沒有幾何驗證結果（false = 共視不足或未跑，方向來自上游）
+          n_inlier / inlier_rate / conf_used   幾何證據強度，供下游自行 gate
+
+[刻意不對外]
+    gt_*         真值對照，只供內部評估
+    az_coarse_*  幾何覆寫前的上游原值，只供內部比對
+    roma_*       匹配聚合分數，內部排序用
+    R、t、inliers[]：本來就不在 house JSON 裡（見 roma_geo.to_public 的同款約定）
+
+單對的幾何細節（共視區域 polygon 等）不放在這一層：那是 per-pair 產出，
+要一起交付時加 --with_regions，會從 per-pair JSON 取共視區域併入該對。
+"""
+import argparse
+import glob
+import json
+import os
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+#: 每對保留的欄位：內部名 → 對外名（改名處的理由見模組說明）。
+PAIR_FIELDS = {
+    "i": "i",
+    "j": "j",
+    "prob": "prob",
+    "az_ij": "az_ij",
+    "az_ji": "az_ji",
+    "az_source": "az_source",
+    "geo_posed": "has_geometry",
+    "geo_n_inlier": "n_inlier",
+    "geo_inlier_rate": "inlier_rate",
+    "geo_conf_used": "conf_used",
+}
+
+HOUSE_FIELDS = ["house", "n_images", "width", "height", "images", "az_convention", "doors"]
+
+#: 出現這些前綴就是內部欄位漏出去了（輸出前自檢用）。
+FORBIDDEN_PREFIXES = ("gt_", "az_coarse_", "roma_")
+
+
+def pair_to_public(p: dict) -> dict:
+    out = {}
+    for src, dst in PAIR_FIELDS.items():
+        if src in p:
+            out[dst] = p[src]
+    if "has_geometry" in out:      # 內部存 0/1，對外給布林
+        out["has_geometry"] = bool(out["has_geometry"])
+    return out
+
+
+def house_to_public(d: dict) -> dict:
+    """內部 house JSON dict → 對外子集（純函式，不碰檔案）。"""
+    out = {k: d[k] for k in HOUSE_FIELDS if k in d}
+    out["pairs"] = [pair_to_public(p) for p in d.get("pairs", [])]
+    return out
+
+
+def leaked_fields(d: dict) -> set:
+    """回傳輸出裡仍帶內部前綴的欄位名（正常應為空集合）。"""
+    bad = set()
+    for p in d.get("pairs", []):
+        bad |= {k for k in p if k.startswith(FORBIDDEN_PREFIXES)}
+    bad |= {k for k in d if k.startswith(FORBIDDEN_PREFIXES)}
+    return bad
+
+
+def attach_regions(house: str, pub: dict, regions_dir: str) -> int:
+    """把 per-pair JSON 的共視區域併進每一對；回傳成功併入的對數。"""
+    names = pub.get("images", [])
+    n = 0
+    for p in pub["pairs"]:
+        try:
+            a, b = (os.path.splitext(names[k])[0] for k in (p["i"], p["j"]))
+        except (IndexError, KeyError):
+            continue
+        # per-pair 檔名的兩張圖順序由匹配那一輪決定，未必等於 (i,j)。兩種順序都找，
+        # 找到的是哪一種要記下來：區域帶有 a/b 兩側，順序相反時側別跟著相反。
+        for order, path in (("ij", os.path.join(regions_dir, f"{house}_{a}_{b}.json")),
+                            ("ji", os.path.join(regions_dir, f"{house}_{b}_{a}.json"))):
+            if not os.path.isfile(path):
+                continue
+            regions = json.load(open(path, encoding="utf-8")).get("regions") or []
+            if regions:
+                p["regions"] = regions
+                p["regions_order"] = order   # "ij" = 區域的 a 側就是 i 圖；"ji" = 相反
+                n += 1
+            break
+    return n
+
+
+def main():
+    ap = argparse.ArgumentParser(description="每間房的內部 JSON → 對外交付子集")
+    ap.add_argument("--in_dir", default=os.path.join(HERE, "stitch_tool", "data"),
+                    help="內部 house JSON 目錄（預設 stitch_tool/data）")
+    ap.add_argument("--out_dir", default=os.path.join(HERE, "Output", "public_houses"),
+                    help="輸出目錄（預設 Output/public_houses）")
+    ap.add_argument("--with_regions", action="store_true",
+                    help="併入每對的共視區域（來源 --regions_dir）")
+    ap.add_argument("--regions_dir", default=None,
+                    help="per-pair JSON 目錄（預設 config.regions_root()）")
+    a = ap.parse_args()
+
+    files = [f for f in sorted(glob.glob(os.path.join(a.in_dir, "*.json")))
+             if not os.path.basename(f).startswith("_")]
+    if not files:
+        raise SystemExit(f"[error] {a.in_dir} 底下沒有 house JSON")
+
+    regions_dir = a.regions_dir
+    if a.with_regions and not regions_dir:
+        import sys
+        sys.path.insert(0, HERE)
+        from config import regions_root
+        regions_dir = regions_root()
+
+    os.makedirs(a.out_dir, exist_ok=True)
+    tot_in = tot_out = tot_pairs = tot_regions = 0
+    for f in files:
+        d = json.load(open(f, encoding="utf-8"))
+        house = d.get("house") or os.path.splitext(os.path.basename(f))[0]
+        pub = house_to_public(d)
+        if a.with_regions:
+            tot_regions += attach_regions(house, pub, regions_dir)
+        bad = leaked_fields(pub)
+        if bad:   # 自檢失敗就整批停下,不要寫出半套
+            raise SystemExit(f"[error] {house} 的輸出帶有內部欄位：{sorted(bad)}")
+        out_path = os.path.join(a.out_dir, f"{house}.json")
+        json.dump(pub, open(out_path, "w", encoding="utf-8"), ensure_ascii=False)
+        tot_in += os.path.getsize(f)
+        tot_out += os.path.getsize(out_path)
+        tot_pairs += len(pub["pairs"])
+
+    print(f"{len(files)} 房 · {tot_pairs} 對 → {a.out_dir}")
+    print(f"體積 {tot_in/1e6:.2f} MB → {tot_out/1e6:.2f} MB（{tot_out/tot_in:.0%}）")
+    if a.with_regions:
+        print(f"併入共視區域：{tot_regions} 對")
+    print("自檢：輸出無 gt_* / az_coarse_* / roma_* 欄位")
+
+
+if __name__ == "__main__":
+    main()

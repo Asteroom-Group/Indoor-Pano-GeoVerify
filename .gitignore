@@ -21,6 +21,8 @@ roma_match/results/
 # 錨點覆蓋成當下環境的結果,之後 smoke test 會變成與自身比對而永遠通過。
 Output/roma_regions/*.json
 Output/roma_regions/overlays/
+# 對外交付子集：由 export_public.py 從 house 資料裁出，跑一遍即生成。
+Output/public_houses/
 # 配對來源快照：由 environments/batch_match.py 於首次執行時從 _summary.csv 產生，
 # 屬本機執行狀態（記錄這一輪要算哪些對），不是交付資產。
 Output/roma_regions/_pairs.csv
