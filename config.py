@@ -52,7 +52,7 @@ ENV_PAIR_THRESHOLD = "ROMA_GEO_PAIR_THRESHOLD"
 PAIR_THRESHOLD = 0.0
 
 #: 產出根目錄（幾何驗證的 per-pair JSON 與各項 CSV）。
-#: 獨立成一項的理由：批次作業常在其他機器上執行（Kaggle 或協作者的機器），
+#: 獨立成一項的理由：批次作業常在其他機器上執行（Kaggle 或遠端機器），
 #: 產物需能寫入掛載的共享位置而非 repo 內，否則結果只能以人工複製方式取回。
 ENV_OUTPUT = "ROMA_GEO_OUTPUT"
 DEFAULT_OUTPUT = os.path.join(PROJECT_ROOT, "Output")
