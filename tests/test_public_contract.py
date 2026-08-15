@@ -81,9 +81,22 @@ class TestToPublic(unittest.TestCase):
 
     def test_region_fields_are_trimmed(self):
         r = self.pub["regions"][0]
-        self.assertEqual(set(r), {"n", "frac_of_inliers", "a", "b"})
+        self.assertEqual(set(r), set(roma_geo.PUBLIC_REGION_FIELDS) | {"a", "b"})
         for side in ("a", "b"):
-            self.assertEqual(set(r[side]), {"polygon", "area_frac", "az_range"})
+            self.assertEqual(set(r[side]), set(roma_geo.PUBLIC_REGION_SIDE_FIELDS))
+
+    def test_region_public_constants(self):
+        """常數即契約，改動須是有意識的。"""
+        self.assertEqual(roma_geo.PUBLIC_REGION_FIELDS, ("n", "frac_of_inliers"))
+        self.assertEqual(roma_geo.PUBLIC_REGION_SIDE_FIELDS,
+                         ("polygon", "area_frac", "az_range"))
+
+    def test_region_to_public_tolerates_missing_side(self):
+        """區域缺一側時不應拋出例外，該側以空物件表示。"""
+        r = roma_geo.region_to_public({"n": 5, "frac_of_inliers": 1.0,
+                                       "a": {"polygon": [[0.0, 0.0]]}})
+        self.assertEqual(r["b"], {})
+        self.assertEqual(r["a"], {"polygon": [[0.0, 0.0]]})
 
     def test_no_covisibility_case(self):
         res = sample_result()
@@ -341,19 +354,33 @@ class TestAttachRegions(unittest.TestCase):
         pub, _ = self._run(["%s_a_b.json" % self.HOUSE])
         self.assertEqual(export_public.leaked_fields(pub), set())
 
-    def test_region_field_set_differs_from_single_pair_contract(self):
-        """⚠ 已知差異，非缺陷但需知悉。
-
-        `roma_geo.to_public()` 把區域裁到 `n / frac_of_inliers / polygon / area_frac /
-        az_range`；`attach_regions()` 則整包沿用 per-pair JSON，會一併帶出
-        `mean_conf` 與 `az_width_deg`。兩者皆不含 gt/R/t/inliers，故無內部資料外洩，
-        但同一個「共視區域」在兩條交付路徑上的欄位不同。要統一時改這裡的期望值。
-        """
+    def test_region_field_set_matches_single_pair_contract(self):
+        """兩條對外路徑的區域欄位必須完全相同（共用 `roma_geo.region_to_public()`）。"""
         pub, _ = self._run(["%s_a_b.json" % self.HOUSE])
         attached = pub["pairs"][0]["regions"][0]
         single = roma_geo.to_public(sample_result())["regions"][0]
-        self.assertEqual(set(attached) - set(single), {"mean_conf"})
-        self.assertEqual(set(attached["a"]) - set(single["a"]), {"az_width_deg"})
+        self.assertEqual(set(attached), set(single))
+        for side in ("a", "b"):
+            self.assertEqual(set(attached[side]), set(single[side]))
+
+    def test_internal_region_fields_are_trimmed(self):
+        """`mean_conf` 屬匹配內部品質、`az_width_deg` 可由 az_range 推得，皆不外流。"""
+        pub, _ = self._run(["%s_a_b.json" % self.HOUSE])
+        r = pub["pairs"][0]["regions"][0]
+        self.assertNotIn("mean_conf", r)
+        self.assertEqual(set(r), {"n", "frac_of_inliers", "a", "b"})
+        for side in ("a", "b"):
+            self.assertEqual(set(r[side]), {"polygon", "area_frac", "az_range"})
+        # 來源確實帶著這兩個欄位，否則本測試只是在驗空集合。
+        self.assertIn("mean_conf", self.REGION)
+        self.assertIn("az_width_deg", self.REGION["a"])
+
+    def test_az_width_is_recoverable_from_az_range(self):
+        """裁掉 az_width_deg 的前提：它可由 az_range 兩端相減得到（誤差限於四捨五入）。"""
+        pub, _ = self._run(["%s_a_b.json" % self.HOUSE])
+        for side, src in (("a", self.SIDE_A), ("b", self.SIDE_B)):
+            lo, hi = pub["pairs"][0]["regions"][0][side]["az_range"]
+            self.assertAlmostEqual(hi - lo, src["az_width_deg"], delta=0.11)
 
 
 if __name__ == "__main__":

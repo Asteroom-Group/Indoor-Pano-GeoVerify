@@ -16,6 +16,8 @@
           has_geometry        有沒有幾何驗證結果（false = 共視不足或未跑，方向來自上游）
           n_inlier / inlier_rate / conf_used   幾何證據強度，供下游自行 gate
           regions             共視區域（有幾何驗證結果的對才有；`--no_regions` 可關閉）
+                              欄位與單對契約相同：n / frac_of_inliers / a、b 兩側的
+                              polygon、area_frac、az_range
 
 [刻意不對外]
     gt_*         真值對照，只供內部評估
@@ -27,6 +29,10 @@
 該契約即「共視區域 + 通道方位角 + 可信度」）。只有跑出幾何驗證結果的對才有區域，
 其餘對不帶此欄位。不需要時以 `--no_regions` 關閉。
 
+區域的欄位裁切直接呼叫 `roma_geo.region_to_public()`，不在此另寫一份：兩條對外路徑
+若各自維護裁切規則，改動時漏改一邊不會有任何徵兆。內部的 `mean_conf` 與可由
+`az_range` 推得的 `az_width_deg` 均不外流。
+
 ⚠ 區域的側別已在此正規化：**a 側永遠對應 i 圖、b 側永遠對應 j 圖**。per-pair 檔名的
 兩張圖順序由匹配那一輪決定，未必等於 (i, j)，反序時本模組會把兩側對調後才寫出，
 故下游不必也不應再自行判斷側別。
@@ -35,8 +41,13 @@ import argparse
 import glob
 import json
 import os
+import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+if HERE not in sys.path:
+    sys.path.insert(0, HERE)
+
+from roma_geo import region_to_public          # noqa: E402（要先補 sys.path）
 
 #: 每對保留的欄位：內部名 → 對外名（改名處的理由見模組說明）。
 PAIR_FIELDS = {
@@ -96,6 +107,8 @@ def attach_regions(house: str, pub: dict, regions_dir: str) -> int:
     反序的就把兩側對調，使輸出中**區域的 a 側永遠是 i 圖、b 側永遠是 j 圖**。
     側別統一在此處理，下游不必判斷；若留給下游判斷，漏判的症狀是左右對調而畫面
     仍然合理，不會有任何錯誤訊息。
+
+    併入前一律經 `roma_geo.region_to_public()` 裁成對外欄位。
     """
     names = pub.get("images", [])
     n = 0
@@ -110,7 +123,8 @@ def attach_regions(house: str, pub: dict, regions_dir: str) -> int:
                 continue
             regions = json.load(open(path, encoding="utf-8")).get("regions") or []
             if regions:
-                p["regions"] = [swap_sides(r) for r in regions] if swap else regions
+                p["regions"] = [region_to_public(swap_sides(r) if swap else r)
+                                for r in regions]
                 n += 1
             break
     return n
@@ -136,8 +150,6 @@ def main():
 
     regions_dir = a.regions_dir
     if with_regions and not regions_dir:
-        import sys
-        sys.path.insert(0, HERE)
         from config import regions_root
         regions_dir = regions_root()
 

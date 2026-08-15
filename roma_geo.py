@@ -41,7 +41,8 @@ _ROOT = os.path.dirname(os.path.abspath(__file__))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-__all__ = ["verify_pair", "verify_pairs", "to_public", "get_matcher", "DEFAULTS", "SCHEMA_VERSION"]
+__all__ = ["verify_pair", "verify_pairs", "to_public", "region_to_public", "get_matcher",
+           "DEFAULTS", "SCHEMA_VERSION"]
 
 #: 與 batch_pose_from_cache.py 的 argparse 預設逐項相同。
 DEFAULTS = {
@@ -58,6 +59,13 @@ DEFAULTS = {
 #: 對外契約欄位（見 README「模組邊界」）。
 PUBLIC_FIELDS = ("schema_version", "house", "img_a", "img_b",
                  "img_size_a", "img_size_b", "conf_used", "inlier_rate")
+
+#: 共視區域的對外欄位。捨去的兩項：`mean_conf` 是匹配內部的品質數字，
+#: `az_width_deg` 可由 `az_range` 兩端相減得到。整房交付路徑
+#: （`export_public.attach_regions`）共用下方的 `region_to_public()`，
+#: 兩條對外路徑因此不會各自漂移。
+PUBLIC_REGION_FIELDS = ("n", "frac_of_inliers")
+PUBLIC_REGION_SIDE_FIELDS = ("polygon", "area_frac", "az_range")
 
 _matchers = {}
 
@@ -201,6 +209,18 @@ def verify_pairs(pairs, progress=False, **kw):
         yield res
 
 
+def region_to_public(r):
+    """把單一共視區域裁成對外欄位（見 `PUBLIC_REGION_FIELDS`）。
+
+    整房交付路徑併入區域時亦呼叫本函式，兩條對外路徑的區域欄位因此必然一致。
+    """
+    out = {k: r[k] for k in PUBLIC_REGION_FIELDS if k in r}
+    for side in ("a", "b"):
+        g = r.get(side) or {}
+        out[side] = {k: g[k] for k in PUBLIC_REGION_SIDE_FIELDS if k in g}
+    return out
+
+
 def to_public(res):
     """裁成對外契約：共視區域 + 通道方位角 + 可信度。
 
@@ -211,15 +231,7 @@ def to_public(res):
     out["az_ab_deg"] = pose.get("az_ab_deg")
     out["az_ba_deg"] = pose.get("az_ba_deg")
     out["no_covisibility"] = bool((res.get("flags") or {}).get("no_covisibility"))
-    out["regions"] = [
-        {"n": r["n"],
-         "frac_of_inliers": r["frac_of_inliers"],
-         "a": {"polygon": r["a"]["polygon"], "area_frac": r["a"]["area_frac"],
-               "az_range": r["a"]["az_range"]},
-         "b": {"polygon": r["b"]["polygon"], "area_frac": r["b"]["area_frac"],
-               "az_range": r["b"]["az_range"]}}
-        for r in (res.get("regions") or [])
-    ]
+    out["regions"] = [region_to_public(r) for r in (res.get("regions") or [])]
     return out
 
 

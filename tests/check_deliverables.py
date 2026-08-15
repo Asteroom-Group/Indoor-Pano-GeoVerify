@@ -33,6 +33,7 @@ import sys
 from _support import ROOT  # noqa: F401（匯入時補 sys.path）
 
 import export_public
+import roma_geo
 import upstream_direction
 from config import matrices_root, regions_root
 from pose_regions.batch_pose_from_cache import SCHEMA_VERSION, SUMMARY_COLS
@@ -269,6 +270,9 @@ def check_public_houses(pub_dir):
         return Result("對外交付子集", SKIP, "%s 底下沒有輸出" % pub_dir)
 
     allowed_pair = set(export_public.PAIR_FIELDS.values()) | {"regions"}
+    # 區域欄位與單對契約同一個定義，兩條路徑共用 roma_geo 的常數。
+    allowed_region = set(roma_geo.PUBLIC_REGION_FIELDS) | {"a", "b"}
+    allowed_side = set(roma_geo.PUBLIC_REGION_SIDE_FIELDS)
     problems, tot_pairs, n_regions = [], 0, 0
     for f in files:
         house = os.path.splitext(os.path.basename(f))[0]
@@ -292,9 +296,17 @@ def check_public_houses(pub_dir):
             if "regions" in p:
                 n_regions += 1
                 for r in p["regions"]:
+                    extra_r = set(r) - allowed_region
+                    if extra_r:
+                        problems.append("%s: 區域含契約外欄位 %s" % (house, sorted(extra_r)))
                     for side in ("a", "b"):
-                        if not (r.get(side) or {}).get("polygon"):
+                        g = r.get(side) or {}
+                        if not g.get("polygon"):
                             problems.append("%s: 區域缺 %s 側多邊形" % (house, side))
+                        extra_s = set(g) - allowed_side
+                        if extra_s:
+                            problems.append("%s: 區域 %s 側含契約外欄位 %s"
+                                            % (house, side, sorted(extra_s)))
     detail = "%d 房 · %d 對" % (len(files), tot_pairs)
     if n_regions:
         detail += " · 含共視區域 %d 對" % n_regions
