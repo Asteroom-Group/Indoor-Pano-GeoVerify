@@ -15,6 +15,7 @@
           az_source           該方位從哪來 —— 降級必須看得出來，不可與幾何驗證混為一談
           has_geometry        有沒有幾何驗證結果（false = 共視不足或未跑，方向來自上游）
           n_inlier / inlier_rate / conf_used   幾何證據強度，供下游自行 gate
+          regions             共視區域（有幾何驗證結果的對才有；`--no_regions` 可關閉）
 
 [刻意不對外]
     gt_*         真值對照，只供內部評估
@@ -22,8 +23,13 @@
     roma_*       匹配聚合分數，內部排序用
     R、t、inliers[]：本來就不在 house JSON 裡（見 roma_geo.to_public 的同款約定）
 
-單對的幾何細節（共視區域 polygon 等）不放在這一層：那是 per-pair 產出，
-要一起交付時加 --with_regions，會從 per-pair JSON 取共視區域併入該對。
+共視區域取自 per-pair 產出，預設併入（與 `roma_geo.to_public()` 的單對契約一致——
+該契約即「共視區域 + 通道方位角 + 可信度」）。只有跑出幾何驗證結果的對才有區域，
+其餘對不帶此欄位。不需要時以 `--no_regions` 關閉。
+
+⚠ 區域的側別已在此正規化：**a 側永遠對應 i 圖、b 側永遠對應 j 圖**。per-pair 檔名的
+兩張圖順序由匹配那一輪決定，未必等於 (i, j)，反序時本模組會把兩側對調後才寫出，
+故下游不必也不應再自行判斷側別。
 """
 import argparse
 import glob
@@ -78,8 +84,19 @@ def leaked_fields(d: dict) -> set:
     return bad
 
 
+def swap_sides(region: dict) -> dict:
+    """對調共視區域的 a/b 兩側。per-pair 檔的圖序與 (i, j) 相反時用來正規化。"""
+    return dict(region, a=region["b"], b=region["a"])
+
+
 def attach_regions(house: str, pub: dict, regions_dir: str) -> int:
-    """把 per-pair JSON 的共視區域併進每一對；回傳成功併入的對數。"""
+    """把 per-pair JSON 的共視區域併進每一對；回傳成功併入的對數。
+
+    per-pair 檔名的兩張圖順序由匹配那一輪決定，未必等於 (i, j)。兩種順序都找，找到
+    反序的就把兩側對調，使輸出中**區域的 a 側永遠是 i 圖、b 側永遠是 j 圖**。
+    側別統一在此處理，下游不必判斷；若留給下游判斷，漏判的症狀是左右對調而畫面
+    仍然合理，不會有任何錯誤訊息。
+    """
     names = pub.get("images", [])
     n = 0
     for p in pub["pairs"]:
@@ -87,16 +104,13 @@ def attach_regions(house: str, pub: dict, regions_dir: str) -> int:
             a, b = (os.path.splitext(names[k])[0] for k in (p["i"], p["j"]))
         except (IndexError, KeyError):
             continue
-        # per-pair 檔名的兩張圖順序由匹配那一輪決定，未必等於 (i,j)。兩種順序都找，
-        # 找到的是哪一種要記下來：區域帶有 a/b 兩側，順序相反時側別跟著相反。
-        for order, path in (("ij", os.path.join(regions_dir, f"{house}_{a}_{b}.json")),
-                            ("ji", os.path.join(regions_dir, f"{house}_{b}_{a}.json"))):
+        for swap, path in ((False, os.path.join(regions_dir, f"{house}_{a}_{b}.json")),
+                           (True, os.path.join(regions_dir, f"{house}_{b}_{a}.json"))):
             if not os.path.isfile(path):
                 continue
             regions = json.load(open(path, encoding="utf-8")).get("regions") or []
             if regions:
-                p["regions"] = regions
-                p["regions_order"] = order   # "ij" = 區域的 a 側就是 i 圖；"ji" = 相反
+                p["regions"] = [swap_sides(r) for r in regions] if swap else regions
                 n += 1
             break
     return n
@@ -108,11 +122,12 @@ def main():
                     help="內部 house JSON 目錄（預設 stitch_tool/data）")
     ap.add_argument("--out_dir", default=os.path.join(HERE, "Output", "public_houses"),
                     help="輸出目錄（預設 Output/public_houses）")
-    ap.add_argument("--with_regions", action="store_true",
-                    help="併入每對的共視區域（來源 --regions_dir）")
+    ap.add_argument("--no_regions", action="store_true",
+                    help="不併入共視區域（預設併入，來源 --regions_dir）")
     ap.add_argument("--regions_dir", default=None,
                     help="per-pair JSON 目錄（預設 config.regions_root()）")
     a = ap.parse_args()
+    with_regions = not a.no_regions
 
     files = [f for f in sorted(glob.glob(os.path.join(a.in_dir, "*.json")))
              if not os.path.basename(f).startswith("_")]
@@ -120,7 +135,7 @@ def main():
         raise SystemExit(f"[error] {a.in_dir} 底下沒有 house JSON")
 
     regions_dir = a.regions_dir
-    if a.with_regions and not regions_dir:
+    if with_regions and not regions_dir:
         import sys
         sys.path.insert(0, HERE)
         from config import regions_root
@@ -132,7 +147,7 @@ def main():
         d = json.load(open(f, encoding="utf-8"))
         house = d.get("house") or os.path.splitext(os.path.basename(f))[0]
         pub = house_to_public(d)
-        if a.with_regions:
+        if with_regions:
             tot_regions += attach_regions(house, pub, regions_dir)
         bad = leaked_fields(pub)
         if bad:   # 自檢失敗就整批停下,不要寫出半套
@@ -145,8 +160,10 @@ def main():
 
     print(f"{len(files)} 房 · {tot_pairs} 對 → {a.out_dir}")
     print(f"體積 {tot_in/1e6:.2f} MB → {tot_out/1e6:.2f} MB（{tot_out/tot_in:.0%}）")
-    if a.with_regions:
-        print(f"併入共視區域：{tot_regions} 對")
+    if with_regions:
+        print(f"併入共視區域：{tot_regions} 對（來源 {regions_dir}；a 側 = i 圖）")
+    else:
+        print("未併入共視區域（--no_regions）")
     print("自檢：輸出無 gt_* / az_coarse_* / roma_* 欄位")
 
 

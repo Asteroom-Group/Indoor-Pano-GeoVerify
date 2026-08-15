@@ -252,14 +252,20 @@ class TestHouseToPublic(unittest.TestCase):
 
 
 class TestAttachRegions(unittest.TestCase):
-    """共視區域併入：per-pair 檔名的兩張圖順序未必等於 (i, j)，側別會跟著相反。"""
+    """共視區域併入與側別正規化。
+
+    per-pair 檔名的兩張圖順序由匹配那一輪決定，未必等於 (i, j)。輸出中區域的 a 側
+    必須永遠對應 i 圖：漏做這件事的症狀是左右對調而畫面仍然合理，不會有錯誤訊息，
+    因此這裡用「兩側內容可區分」的測資，反序時真的去比對內容有沒有換位置。
+    """
 
     HOUSE = "DollhouseTask_00000"
+    SIDE_A = {"polygon": [[0.0, 0.0]], "area_frac": 0.1,
+              "az_range": [0.0, 10.0], "az_width_deg": 10.0}
+    SIDE_B = {"polygon": [[1.0, 1.0]], "area_frac": 0.2,
+              "az_range": [5.0, 20.0], "az_width_deg": 15.0}
     REGION = {"n": 100, "frac_of_inliers": 1.0, "mean_conf": 0.9,
-              "a": {"polygon": [[0.0, 0.0]], "area_frac": 0.1,
-                    "az_range": [0.0, 10.0], "az_width_deg": 10.0},
-              "b": {"polygon": [[1.0, 1.0]], "area_frac": 0.2,
-                    "az_range": [5.0, 20.0], "az_width_deg": 15.0}}
+              "a": SIDE_A, "b": SIDE_B}
 
     def _run(self, filenames):
         pub = export_public.house_to_public(sample_house())
@@ -269,27 +275,59 @@ class TestAttachRegions(unittest.TestCase):
             n = export_public.attach_regions(self.HOUSE, pub, d)
         return pub, n
 
-    def test_forward_order(self):
+    def test_forward_order_keeps_sides(self):
         pub, n = self._run(["%s_a_b.json" % self.HOUSE])
         self.assertEqual(n, 1)
-        self.assertEqual(pub["pairs"][0]["regions_order"], "ij")
+        r = pub["pairs"][0]["regions"][0]
+        self.assertEqual(r["a"]["area_frac"], self.SIDE_A["area_frac"])
+        self.assertEqual(r["b"]["area_frac"], self.SIDE_B["area_frac"])
 
-    def test_reverse_order_is_marked(self):
-        """只有反向檔存在時，`regions_order` 必須標為 ji——否則下游會把兩側對調。"""
+    def test_reverse_order_is_normalised(self):
+        """只有反向檔存在時，兩側必須對調，使 a 側仍對應 i 圖。"""
         pub, n = self._run(["%s_b_a.json" % self.HOUSE])
         self.assertEqual(n, 1)
-        self.assertEqual(pub["pairs"][0]["regions_order"], "ji")
+        r = pub["pairs"][0]["regions"][0]
+        self.assertEqual(r["a"]["area_frac"], self.SIDE_B["area_frac"],
+                         "反序檔的 b 側應成為輸出的 a 側")
+        self.assertEqual(r["b"]["area_frac"], self.SIDE_A["area_frac"])
+        self.assertEqual(r["a"]["polygon"], self.SIDE_B["polygon"])
+
+    def test_side_order_is_indistinguishable_downstream(self):
+        """正序與反序的來源檔，經正規化後應得到相同的輸出。"""
+        fwd, _ = self._run(["%s_a_b.json" % self.HOUSE])
+        # 反向檔的內容本身也是反的（該檔的 a 側是 b 圖），故先自行對調再寫入。
+        pub = export_public.house_to_public(sample_house())
+        with temp_dir() as d:
+            write_json(os.path.join(d, "%s_b_a.json" % self.HOUSE),
+                       {"regions": [export_public.swap_sides(self.REGION)]})
+            export_public.attach_regions(self.HOUSE, pub, d)
+        self.assertEqual(pub["pairs"][0]["regions"], fwd["pairs"][0]["regions"])
+
+    def test_swap_sides_is_involutive(self):
+        self.assertEqual(export_public.swap_sides(export_public.swap_sides(self.REGION)),
+                         self.REGION)
+
+    def test_swap_sides_keeps_other_fields(self):
+        s = export_public.swap_sides(self.REGION)
+        self.assertEqual(s["n"], self.REGION["n"])
+        self.assertEqual(s["frac_of_inliers"], self.REGION["frac_of_inliers"])
+        self.assertIsNot(s, self.REGION, "不得就地修改來源")
 
     def test_forward_wins_when_both_exist(self):
         pub, _ = self._run(["%s_a_b.json" % self.HOUSE, "%s_b_a.json" % self.HOUSE])
-        self.assertEqual(pub["pairs"][0]["regions_order"], "ij")
+        r = pub["pairs"][0]["regions"][0]
+        self.assertEqual(r["a"]["area_frac"], self.SIDE_A["area_frac"])
+
+    def test_order_marker_is_not_emitted(self):
+        """側別已正規化，不再輸出 regions_order —— 留著會誘使下游再判斷一次。"""
+        pub, _ = self._run(["%s_b_a.json" % self.HOUSE])
+        self.assertNotIn("regions_order", pub["pairs"][0])
 
     def test_absent_file_leaves_pair_untouched(self):
         pub, n = self._run([])
         self.assertEqual(n, 0)
         for p in pub["pairs"]:
             self.assertNotIn("regions", p)
-            self.assertNotIn("regions_order", p)
 
     def test_empty_regions_are_not_attached(self):
         pub = export_public.house_to_public(sample_house())

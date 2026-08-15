@@ -268,7 +268,7 @@ def check_public_houses(pub_dir):
     if not files:
         return Result("對外交付子集", SKIP, "%s 底下沒有輸出" % pub_dir)
 
-    allowed_pair = set(export_public.PAIR_FIELDS.values()) | {"regions", "regions_order"}
+    allowed_pair = set(export_public.PAIR_FIELDS.values()) | {"regions"}
     problems, tot_pairs, n_regions = [], 0, 0
     for f in files:
         house = os.path.splitext(os.path.basename(f))[0]
@@ -286,10 +286,15 @@ def check_public_houses(pub_dir):
                 problems.append("%s: has_geometry 非布林" % house)
             if not (0 <= p.get("i", -1) < n_img and 0 <= p.get("j", -1) < n_img):
                 problems.append("%s: pair 索引超出影像範圍" % house)
+            if "regions_order" in p:
+                # 舊版輸出把側別判斷留給下游；現行契約已在匯出時正規化並移除此欄位。
+                problems.append("%s: 帶有已移除的 regions_order 欄位，請重新匯出" % house)
             if "regions" in p:
                 n_regions += 1
-                if p.get("regions_order") not in ("ij", "ji"):
-                    problems.append("%s: 併入區域但未標示 regions_order" % house)
+                for r in p["regions"]:
+                    for side in ("a", "b"):
+                        if not (r.get(side) or {}).get("polygon"):
+                            problems.append("%s: 區域缺 %s 側多邊形" % (house, side))
     detail = "%d 房 · %d 對" % (len(files), tot_pairs)
     if n_regions:
         detail += " · 含共視區域 %d 對" % n_regions

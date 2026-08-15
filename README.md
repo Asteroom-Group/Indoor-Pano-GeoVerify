@@ -149,7 +149,8 @@ python config.py     # 檢查以上每一項目前解析到哪裡、存不存在
 7. → 啟動伺服器 `stitch_tool/server.py` → 視覺化 correspondence、共識區域、通道方位
 
 交付給下游時：步驟 5 的每間房資料 → `export_public.py` → 對外子集（房間連接圖 ＋ 邊方向
-＋ 方位來源 ＋ 幾何證據強度，加 `--with_regions` 併入共視區域），評估與排序用的內部欄位不外流。
+＋ 方位來源 ＋ 幾何證據強度 ＋ 共視區域），評估與排序用的內部欄位不外流。共視區域預設
+併入（`--no_regions` 可關閉），其 a 側永遠對應該對的 i 圖，側別已在匯出時正規化。
 
 單獨驗一對：`roma_geo.verify_pair(img_a, img_b)` → 共視區域 ＋ 通道方位 ＋ correspondence（＝步驟 3–4 的單對版）。
 

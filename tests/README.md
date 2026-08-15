@@ -74,7 +74,7 @@
 | `_summary.csv` | 同上 | 欄位與批次程式宣告的完全相同 |
 | 連通性矩陣 | `matrices/<版本>/` | `(N,N,3)` 與影像清單對齊、連通分數對稱、方位為單位長或未填 |
 | house JSON | `stitch_tool/data/` | 索引在範圍內、方位規約公式一致、`az_source` 僅為 `geo` 或 `coarse` |
-| 對外交付子集 | `Output/public_houses/` | 不含內部欄位、`has_geometry` 為布林、併入區域須標示側別順序 |
+| 對外交付子集 | `Output/public_houses/` | 不含內部欄位、`has_geometry` 為布林、共視區域兩側齊備 |
 
 抽樣為決定性等距抽樣，同一批檔案在任何機器上都取到同一組。來源目錄不存在時該類回報
 略過，其餘照常檢查。各路徑皆依 `config.py` 解析，可用環境變數改指他處。
