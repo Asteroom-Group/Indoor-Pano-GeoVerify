@@ -202,14 +202,14 @@ def build_house(house: str, oof_dir: str, roma_cache=None, ranking_lookup=None, 
                 "i": i, "j": j,
                 "logit": round(logit, 4),
                 "prob": round(prob, 4),
-                "az_ij": round(az_ij, 2),   # 在 i 圖中指向 j 的方位（posed 時來自 az_ab/az_ba）
-                "az_ji": round(az_ji, 2),   # 在 j 圖中指向 i 的方位
+                "az_ij": round(az_ij, 2) % 360.0,   # 在 i 圖中指向 j 的方位（posed 時來自 az_ab/az_ba）
+                "az_ji": round(az_ji, 2) % 360.0,   # 在 j 圖中指向 i 的方位
                 "az_source": az_source,     # "geo"=幾何驗證；"coarse"=上游粗篩的方向輸出
-                "az_coarse_ij": round(az_ij_coarse, 2),   # 粗篩方向頭原始值備份，QA 對照用
-                "az_coarse_ji": round(az_ji_coarse, 2),
+                "az_coarse_ij": round(az_ij_coarse, 2) % 360.0,   # 粗篩方向頭原始值備份，QA 對照用
+                "az_coarse_ji": round(az_ji_coarse, 2) % 360.0,
                 "gt_connected": bool(gt_conn),
-                "gt_az_ij": (round(gt_ij[aj], 2) if aj in gt_ij and gt_ij[aj] is not None else None),
-                "gt_az_ji": (round(gt_ji[ai], 2) if ai in gt_ji and gt_ji[ai] is not None else None),
+                "gt_az_ij": (round(gt_ij[aj], 2) % 360.0 if aj in gt_ij and gt_ij[aj] is not None else None),
+                "gt_az_ji": (round(gt_ji[ai], 2) % 360.0 if ai in gt_ji and gt_ji[ai] is not None else None),
                 # RoMa 聚合分數（可選，未經幾何驗證的原始匹配聚合）：只有跑過
                 # run_roma_above_threshold.py 且此對通過閾值才有值，其餘一律 null。佇列排序已
                 # 改用下面的 geo_* 欄位，這組留著純作向後相容／除錯對照。
@@ -272,7 +272,7 @@ def build_house(house: str, oof_dir: str, roma_cache=None, ranking_lookup=None, 
         "images": images,
         "pairs": pairs,
         "doors": doors,
-        "az_convention": "az(x)=((x/W)*360-180)%360 ; u=((az+180)%360)/360",
+        "az_convention": upstream_direction.CONVENTION,
         "has_gt": bool(gt),   # 有無 HOTSPOT 真值；未知資料(無 HOTSPOT)時前端不顯示 GT 對照
         "n_gt_connected_pairs": sum(1 for p in pairs if p["gt_connected"]),
     }

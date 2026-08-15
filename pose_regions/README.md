@@ -128,6 +128,11 @@ venv/Scripts/python.exe pose_regions/batch_pose_from_cache.py --limit 20  # 冒�
 才標 `no_covisibility`。動機:穿門窄楔形 pair 在 0.65 常只剩 <20 點(位姿覆蓋率是
 拼接可用性的關鍵)。
 
+⚠ **欄位門檻說明**:`flags.low_matches` 記錄基準層(conf 0.65)點數是否 <30;
+`n.conf` 與 `n.used` 則記錄最終採用層(`conf_used`)的點數,`n.used` 另外套了
+`max_pts` 上限(超過即抽樣,故 `n.used` ≤ `n.conf`,`inlier_rate` 的分母是 `n.used`)。
+因此降級重試時會出現「`low_matches=true` 但 `n.conf` ≥30」,此為預期現象而非矛盾。
+
 **⚠ 撈回層品質重尾**:0.3 級的方位誤差分佈,尾巴遠比 0.65 級長。下游必須用
 `conf_used` + inlier 率 + 旗標一起 gate,**0.3 級位姿不可直接當 0.65 級用**。
 各層的覆蓋率與誤差分位數見 `batch_pose_report.md`。
@@ -150,7 +155,7 @@ venv/Scripts/python.exe pose_regions/batch_pose_from_cache.py --limit 20  # 冒�
              "ransac_iters": 2000, "seed": 0, "sampler": "stratified",
              "lat_max": 60.0},                  // nadir 前濾角(v2 起;0/缺 = 未濾)
   "n": {"raw": 8146, "conf": 2134, "used": 2134, "inlier": 1474,
-        "lat_drop": 312},                       // 前濾丟點數(v2 起)
+        "lat_drop": 312},                       // ⚠ n.conf 記的是 conf_used 點數（非固定 conf_min 級）；前濾丟點數(v2 起)
   "conf_used": 0.65,                            // 自適應實際門檻:0.65 / 0.3 / null(無位姿)
   "inlier_rate": 0.6907,                        // n.inlier / n.used;無位姿時 pose=null
   "pose": {                                     // null = low_matches 或內點 <8
@@ -168,7 +173,7 @@ venv/Scripts/python.exe pose_regions/batch_pose_from_cache.py --limit 20  # 冒�
     "az_cov_a": 0.42, "az_cov_b": 0.39          // 方位覆蓋度:有內點的 10° bin 佔比
   },
   "flags": {
-    "low_matches": false,          // conf0.65 級點數 < 30(品質註記;自適應後非跳過原因)
+    "low_matches": false,          // conf_min(0.65) 級點數 < 30(品質註記；撈回級會出現 low_matches=true 但 n.conf>=30，非矛盾)
     "no_covisibility": false,      // 兩級 conf 都湊不出 ≥8 內點(=無共視證據,非「不連通」)
     "degenerate_rot_only": false,  // rot_only_med < 1.5×thresh_deg → t 方向不可靠
     "doorway_wedge": false         // 非退化 且 inlier_rate≥0.3 且 n_inlier≥30 且兩側楔形≤75°

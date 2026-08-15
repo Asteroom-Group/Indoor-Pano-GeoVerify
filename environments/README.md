@@ -49,13 +49,16 @@ bash environments/setup_env.sh
 同一份腳本可在其他機器執行以確認環境一致：arch 一項顯示各自 GPU 的
 compute capability，其餘欄位應完全相同。
 
+端到端功能測試已移入測試模組：
+
 ```powershell
-..\venv\Scripts\python.exe environments\smoke_test.py
+..\venv\Scripts\python.exe tests\smoke_test.py
 ```
 
-端到端功能測試：經 `roma_geo.verify_pair()` 跑完整核心路徑，與
-`Output/roma_regions/` 的參考 JSON 逐欄對照，並檢查演算法參數一致性與對外契約
-未洩漏內部欄位。判準為兩邊都有位姿、共視區域數相同、方位角差小於 5°。
+經 `roma_geo.verify_pair()` 跑完整核心路徑，與入庫的參考 JSON 逐欄對照，並檢查演算法
+參數一致性與對外契約未洩漏內部欄位。判準為兩邊都有位姿、共視區域數相同、方位角差
+小於 5°。`tests/run_all.py` 會在偵測到 GPU 與資料集時一併執行，用法見
+[`tests/README.md`](../tests/README.md)。
 
 ## 效能基準
 
@@ -109,7 +112,7 @@ repo 已在本機時也可直接當一般腳本執行，此時沿用既有目錄
 |---|---|---|
 | 1 路徑設定 | `config.py` | 各項路徑解析得到、且存在 |
 | 2 環境驗收 | `environments/check_env.py` | 三項實跑（CUDA kernel／romav2／幾何 selftest）皆過。版本對照僅供參考 |
-| 3 端到端煙霧測試 | `environments/smoke_test.py` | 固定一對真實影像跑完整流程，與入庫的參考結果一致 |
+| 3 端到端煙霧測試 | `tests/smoke_test.py` | 固定一對真實影像跑完整流程，與入庫的參考結果一致 |
 | 4 跨環境一致性檢查 | `environments/cross_env_check.py` | 位姿有無一致率 ≥85%，且強證據配對的方位角差中位 ≤5° |
 
 2 驗的是「跑不跑得動」，3 驗的是「跑出來對不對」，4 驗的是「整批的結論穩不穩」。

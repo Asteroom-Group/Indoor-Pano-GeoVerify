@@ -9,7 +9,7 @@ Kaggle Notebook 儲存格腳本：把本專案從零建起來並執行驗收。
 
   1. environments/setup_env.sh        建立環境（Linux 版建置腳本）
   2. environments/check_env.py        版本與 GPU 驗收
-  3. environments/smoke_test.py       端到端功能測試
+  3. tests/smoke_test.py              端到端功能測試
   4. environments/cross_env_check.py  跨環境一致性檢查（呼叫 roma_geo.verify_pairs）
 
 資料集會自動偵測：掃 /kaggle/input 底下的 DollhouseTask_* 找出根目錄，
@@ -274,7 +274,7 @@ def main():
     steps = [
         ("1 路徑設定", "%s config.py" % py),
         ("2 環境驗收", "%s environments/check_env.py" % py),
-        ("3 端到端煙霧測試", "%s environments/smoke_test.py" % py),
+        ("3 端到端煙霧測試", "%s tests/smoke_test.py" % py),
         ("4 跨環境一致性檢查",
          "%s environments/cross_env_check.py --n %d --tag %s --out_dir %s"
          % (py, N_PAIRS, TAG, out_dir)),

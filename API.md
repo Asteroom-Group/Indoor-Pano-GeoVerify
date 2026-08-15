@@ -134,7 +134,8 @@ for res in verify_pairs([(a1, b1), (a2, b2)], progress=True):
 | `sampler` | `stratified` | conf 漸進池 + 方位分桶 |
 | `lat_max` | 60.0 | 天底／天頂前濾角 |
 
-`environments/smoke_test.py` 內含這組參數與參考 JSON 的逐項比對。
+`tests/smoke_test.py` 內含這組參數與參考 JSON 的逐項比對，`tests/test_public_contract.py`
+另以語法樹比對本表與批次腳本的 CLI 預設是否仍然逐項相同。
 
 ### 1.6 CLI
 
@@ -236,7 +237,17 @@ GT（連通標註、通道方位、同房判定）讀 `datasets/` 的 `*_HOTSPOT
 |---|---|
 | `setup_env.ps1` | 建立 venv 並安裝全部相依，結束時自動驗收 |
 | `check_env.py` | 三項實跑驗證（CUDA kernel／romav2 匯入／幾何 selftest）決定通過與否；版本對照與 GPU arch 涵蓋僅供參考 |
-| `smoke_test.py` | 端到端功能測試，與參考 JSON 逐欄對照 |
+| `cross_env_check.py` | 跨環境一致性檢查，與既有 `_summary.csv` 逐對比較 |
 | `local_timing_bench.py` | 單對耗時基準，決定性抽樣，可跨環境比較 |
 
 用法見 [`environments/README.md`](environments/README.md)。
+
+### 2.8 測試（`tests/`）
+
+```bash
+venv/Scripts/python.exe tests/run_all.py
+```
+
+單一進入點，分三層：單元測試（無前提）、交付物檢查（掃描既有產出是否符合契約）、
+端到端煙霧測試（需 GPU 與資料集，缺少時自動略過）。用法與各層判準見
+[`tests/README.md`](tests/README.md)。

@@ -89,6 +89,26 @@ cd environments
 上表的版本是開發與驗證時所用的參考配置。`check_env.py` 會列出對照，
 與本機不同的欄位標為 `DIFF`，但不影響結論;它在實跑失敗時是第一線線索。
 
+## 測試
+
+```powershell
+..\venv\Scripts\python.exe tests\run_all.py
+```
+
+單一進入點，分三層：單元測試（無前提，數秒）、交付物檢查（掃描既有產出是否符合契約）、
+端到端煙霧測試（需 GPU 與資料集）。缺少前提的層級回報略過而非失敗，因此在沒有 GPU 或
+資料集的機器上仍可執行前兩層。離開碼 0 表示沒有任何一項失敗。
+
+第二層可單獨用於**檢驗別處產生的資料**：收到其他機器、其他版本或上游的檔案時，
+先確認格式相符再接。
+
+```powershell
+..\venv\Scripts\python.exe tests\check_deliverables.py --regions_dir <路徑>
+```
+
+各層涵蓋範圍與判準見 [`tests/README.md`](tests/README.md)。只用標準函式庫的 `unittest`，
+不需要額外安裝測試框架。
+
 ## 路徑與門檻設定
 
 **所有會隨部署環境改變的位置都由 `config.py` 解析，呼叫端不寫死路徑。**
@@ -169,7 +189,8 @@ $env:ROMA_GEO_PAIR_THRESHOLD = "0.0"                     # 本次工作階段
 | `stitch_tool/` | 標註/檢視工具（面向未知資料：`pack_bundle.py` 打包自足產出包，`server.py` 讀包根目錄，可手動選房、GT 隨包內是否含 HOTSPOT） |
 | `Output/roma_regions/` | 逐 pair 共視區域 JSON + 排序/方位角 CSV |
 | `matrices/<版本>/` | 上游粗篩的連通性矩陣（`prepare_house_data.py` 的輸入，可換版本） |
-| `environments/` | 建置、驗收、煙霧測試、計時基準、**挑配對**（`select_pairs.py`）、批次匹配 |
+| `environments/` | 建置、環境驗收、跨環境一致性、計時基準、**挑配對**（`select_pairs.py`）、批次匹配 |
+| `tests/` | 測試總入口（`run_all.py`）：單元測試、交付物契約檢查、端到端煙霧測試 |
 
 對外 API 的 I/O 規格與各項工具的用法見 **[API.md](API.md)**。
 GT（連通標註、通道方位、同房判定）一律讀 `datasets/` 底下的 `*_HOTSPOT.json`。

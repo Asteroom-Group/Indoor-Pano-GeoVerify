@@ -11,7 +11,9 @@ verify_pair 的預設參數與正式批次 batch_pose_from_cache.py 相同（含
 所以這裡的比對是**同參數**的，差異只來自環境與 RoMa 的隨機抽樣。
 
 [用法]
-  venv\\Scripts\\python.exe environments\\smoke_test.py
+  venv\\Scripts\\python.exe tests\\smoke_test.py
+
+`tests/run_all.py` 會在偵測到 GPU 與資料集時一併執行本腳本；兩者缺一即自動略過。
 """
 import json
 import os
@@ -30,7 +32,7 @@ IMG_DIR = os.path.join(datasets_root(), HOUSE, HOUSE)
 
 # ⚠ 參考結果**不可**放在 Output/roma_regions/ —— 那是 batch_pose_from_cache.py 的輸出
 # 目錄，不帶 --resume 跑一次全量就會把它覆蓋成當下環境的結果，此後本測試變成與自身
-# 比對而永遠通過。放在 environments/ 底下，批次寫不到。
+# 比對而永遠通過。放在 tests/ 底下，批次寫不到。
 REF = os.path.join(os.path.dirname(os.path.abspath(__file__)), "smoke_ref_58553.json")
 
 

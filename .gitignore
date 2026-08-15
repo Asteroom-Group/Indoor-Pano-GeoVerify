@@ -16,7 +16,7 @@ roma_match/cache/
 roma_match/results/
 # 共視區域 per-pair JSON：由 pose_regions/batch_pose_from_cache.py 重生。
 # 兩個 _*.csv 是排序與方位角的來源，體積小且要跟著走，故不忽略。
-# smoke_test.py 的參考結果不放在這裡,改放 environments/smoke_ref_58553.json ——
+# smoke_test.py 的參考結果不放在這裡,改放 tests/smoke_ref_58553.json ——
 # 本目錄是 batch_pose_from_cache.py 的輸出目錄,不帶 --resume 跑一次全量就會把
 # 錨點覆蓋成當下環境的結果,之後 smoke test 會變成與自身比對而永遠通過。
 Output/roma_regions/*.json
