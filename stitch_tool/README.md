@@ -5,14 +5,35 @@
 路線像 Google Map 一路成形。模型在 Recall90 下 precision 僅 ~18%，靠人直接定性把誤報刷掉。
 
 ## 快速開始
+
+工具載入「房子產出包（bundle）」，不再回頭讀完整資料集樹；使用時手動指定要看哪些房子。
+
 ```bash
-# 1) (只需一次) 產生每間房子的資料檔 data/*.json
+# 1) 產生每間房子的資料檔 data/*.json
 python stitch_tool/prepare_house_data.py
 
-# 2) 啟動伺服器
-python stitch_tool/server.py            # http://localhost:8010
+# 2) 打包成產出包（--houses 可只挑幾間）
+python stitch_tool/pack_bundle.py --out bundles/demo
+
+# 3) 啟動伺服器
+python stitch_tool/server.py --bundle bundles/demo    # http://localhost:8010
 ```
-瀏覽器開 http://localhost:8010 。左上下拉選房子（預設 DollhouseTask_58472_NoOutdoor）。
+
+瀏覽器開 http://localhost:8010 ，左上下拉選房子。
+
+### 直接載入對外交付檔
+
+包內的房子資料也可以換成 `export_public.py` 產出的**對外交付檔**——下游實際收到的那一份：
+
+```bash
+python export_public.py                                       # 產生交付檔
+python stitch_tool/pack_bundle.py --from_public --out bundles/public_demo
+python stitch_tool/server.py --bundle bundles/public_demo
+```
+
+包內只有交付檔與影像，沒有真值也沒有門語意。工具能不能把它渲染出來，即為「交付內容是否
+足夠」的直接檢驗：連接圖、通道方位、幾何證據強度、共視區域都畫得出來就代表下游拿得到的
+資訊已經夠用，缺什麼會當場看得出來。介面上會顯示「無 GT 真值」，因為交付檔本來就不含真值。
 
 ## 操作
 - 左鍵拖曳旋轉視角、滾輪縮放。

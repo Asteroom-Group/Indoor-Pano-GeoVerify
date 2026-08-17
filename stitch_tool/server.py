@@ -48,6 +48,74 @@ def _images_dir(house):
     """bundle 內某房的影像資料夾。"""
     return os.path.join(BUNDLE_ROOT, house, "images")
 
+
+# ---- 對外交付檔的相容層 ----
+# 包內的 <house>.json 有兩種來源：流程內部的房子資料，或 export_public.py 產出的
+# **對外交付檔**（下游實際收到的那一份）。後者刻意不含評估欄位，且幾何證據欄位改用
+# 對外名稱。此處在讀取時做名稱對映，讓工具能直接載入未經修改的交付檔——工具跑得起來
+# 本身就是「交付內容足夠」的檢驗，跑不起來就當場知道少了什麼。
+#
+# 對映方向為對外名 → 內部名：前端既有程式碼沿用內部名，換方向要動七處 JS，
+# 而本工具未必是最終形態，改動面越小越好。
+PUBLIC_TO_TOOL = {"has_geometry": "geo_posed",
+                  "n_inlier": "geo_n_inlier",
+                  "inlier_rate": "geo_inlier_rate",
+                  "conf_used": "geo_conf_used"}
+
+
+def is_public_house(d):
+    """判斷房子資料是否為對外交付檔。
+
+    以 `has_geometry` 為標記：該欄位只存在於交付檔（內部資料用 `geo_posed`）。
+    """
+    for p in (d.get("pairs") or []):
+        return "has_geometry" in p
+    return False
+
+
+def public_house_to_tool(d):
+    """對外交付檔 → 工具可讀的房子資料。不修改輸入。
+
+    做三件事：幾何證據欄位改回內部名；標明無 GT 真值（交付檔不含真值，工具據此
+    不顯示 GT 對照）；把每對內嵌的共視區域抽走，改由 `/api/regions` 供應，維持
+    前端既有的取用方式，也避免房子資料一次回傳全部多邊形。
+    """
+    out = dict(d)
+    pairs = []
+    for p in (d.get("pairs") or []):
+        q = {PUBLIC_TO_TOOL.get(k, k): v for k, v in p.items() if k != "regions"}
+        if "geo_posed" in q:
+            q["geo_posed"] = int(bool(q["geo_posed"]))
+        pairs.append(q)
+    out["pairs"] = pairs
+    out["has_gt"] = False
+    out.setdefault("n_gt_connected_pairs", 0)
+    return out
+
+
+def embedded_regions(d, a, b):
+    """從對外交付檔取某一對的共視區域，組成 `/api/regions` 的回應。
+
+    交付檔的區域側別已正規化為「a 側 = 該對的 i 圖」，故 swap 只取決於查詢時
+    哪張圖當上半部。回傳 None 表示這一對沒有區域。
+    """
+    stem = lambda s: os.path.splitext(s)[0]
+    names = [stem(x) for x in (d.get("images") or [])]
+    W, H = d.get("width"), d.get("height")
+    for p in (d.get("pairs") or []):
+        if not p.get("regions"):
+            continue
+        try:
+            ni, nj = names[p["i"]], names[p["j"]]
+        except (IndexError, KeyError):
+            continue
+        if {ni, nj} != {a, b}:
+            continue
+        # 同一棟房的影像尺寸相同，交付檔以房層 width/height 記錄一次。
+        return {"regions": p["regions"], "swap": (a != ni),
+                "img_size_a": [W, H], "img_size_b": [W, H]}
+    return None
+
 # ---- RoMa 即時比對（/api/roma_match）：延遲載入單例 ----
 # RoMaMatcher 建構會載入 torch + CUDA + 模型權重，成本不小；一般標註工作完全用不到它，
 # 所以只在第一次真的點了「RoMa 比對」鈕時才 import/建構，且只建構一次（快取的圖對之後秒回）。
@@ -131,7 +199,8 @@ class Handler(SimpleHTTPRequestHandler):
             fp = os.path.join(BUNDLE_ROOT, house, f"{house}.json")
             if not os.path.exists(fp):
                 return self._err(404, "house not in bundle; run pack_bundle.py")
-            return self._json(json.load(open(fp, encoding="utf-8")))
+            d = json.load(open(fp, encoding="utf-8"))
+            return self._json(public_house_to_tool(d) if is_public_house(d) else d)
 
         m = re.match(r"^/api/state/([^/]+)$", path)
         if m:
@@ -173,7 +242,12 @@ class Handler(SimpleHTTPRequestHandler):
             elif os.path.exists(p_ba):
                 d = json.load(open(p_ba, encoding="utf-8")); d["swap"] = True
             else:
-                return self._err(404, "此對沒有區域 JSON（先跑 pose_regions/batch_pose_from_cache.py）")
+                # 對外交付檔的包沒有 regions/，區域內嵌在每一對裡。
+                hp = os.path.join(BUNDLE_ROOT, house, f"{house}.json")
+                hd = json.load(open(hp, encoding="utf-8")) if os.path.exists(hp) else {}
+                d = embedded_regions(hd, a, b) if is_public_house(hd) else None
+                if d is None:
+                    return self._err(404, "此對沒有區域 JSON（先跑 pose_regions/batch_pose_from_cache.py）")
             d.pop("inliers", None)   # 遮罩用不到內點明細，省流量（每檔可達數百 KB）
             return self._json(d)
 

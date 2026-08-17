@@ -10,6 +10,7 @@
 R、t 才算通過；若只是複製實作的算式，測試將只能鎖住現況而無法發現錯誤。
 """
 import contextlib
+import io
 import math
 import os
 import shutil
@@ -169,6 +170,18 @@ def env_override(**kw):
                 os.environ.pop(k, None)
             else:
                 os.environ[k] = v
+
+
+@contextlib.contextmanager
+def quiet():
+    """收走區塊內的 stdout。
+
+    受測的腳本函式多半設計成 CLI 使用而會逐項印出進度；測試只看回傳值與副作用，
+    讓那些輸出混進測試結果只會讓真正的失敗訊息被淹沒。
+    """
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        yield buf
 
 
 @contextlib.contextmanager

@@ -152,6 +152,9 @@ python config.py     # 檢查以上每一項目前解析到哪裡、存不存在
 ＋ 方位來源 ＋ 幾何證據強度 ＋ 共視區域），評估與排序用的內部欄位不外流。共視區域預設
 併入（`--no_regions` 可關閉），其 a 側永遠對應該對的 i 圖，側別已在匯出時正規化。
 
+交付檔可直接餵回工具檢視（`pack_bundle.py --from_public` + `server.py`），包內就是下游收到
+的那一份、未經修改。渲染得出來即代表交付內容足夠，缺失也能馬上發現。
+
 單獨驗一對：`roma_geo.verify_pair(img_a, img_b)` → 共視區域 ＋ 通道方位 ＋ correspondence（＝步驟 3–4 的單對版）。
 
 方向規則：存在足夠 correspondence 時以其幾何驗證結果為準；correspondence 不足時退回使用 coarse filter 的輸出。
