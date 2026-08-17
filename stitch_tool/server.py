@@ -26,11 +26,17 @@ STATE_DIR = os.path.join(SCRIPT_DIR, "state")     # 人工標註進度（工具�
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)                  # 供 /api/roma_match 延遲載入 roma_match
 
+import gt_hotspot                                 # noqa: E402（同層模組，即時補 GT，見該檔）
+
 # 面向未知資料：工具載入「房子產出包（bundle）」，不再回頭讀完整資料集樹。
 # 一個 bundle 根目錄底下每棟房一個子資料夾（見 pack_bundle.py）：
 #   <bundle_root>/<house>/{<house>.json, images/, regions/, semantic.json?, *_HOTSPOT.json?}
 # 使用時手動指定要看的包（可只放選定的一或數棟）。根目錄＝--bundle > 環境變數
 # STITCH_BUNDLE_ROOT > 預設 <ROOT_DIR>/bundles。
+# *_HOTSPOT.json？只在 <house>.json 還沒有 GT 欄位時才有作用：/api/house/<house> 讀取時
+# 會即時算出 GT 補上（不覆寫既有欄位），對外交付檔（本來就不含 GT）正是最需要這條路徑的
+# 情境。邏輯與 prepare_house_data.py 建檔時共用同一份實作，見 gt_hotspot.py。房號對不上
+# 或只對上部分影像都會印在伺服器 log，不會安靜略過——這是實際發生過的使用者誤解來源。
 BUNDLE_ROOT = os.environ.get("STITCH_BUNDLE_ROOT") or os.path.join(ROOT_DIR, "bundles")
 
 os.makedirs(STATE_DIR, exist_ok=True)
@@ -76,9 +82,12 @@ def is_public_house(d):
 def public_house_to_tool(d):
     """對外交付檔 → 工具可讀的房子資料。不修改輸入。
 
-    做三件事：幾何證據欄位改回內部名；標明無 GT 真值（交付檔不含真值，工具據此
-    不顯示 GT 對照）；把每對內嵌的共視區域抽走，改由 `/api/regions` 供應，維持
-    前端既有的取用方式，也避免房子資料一次回傳全部多邊形。
+    做三件事：幾何證據欄位改回內部名；標明無 GT 真值（交付檔本身不含真值，故先寫死
+    `has_gt=False`；呼叫端接著會用 `gt_hotspot.augment_house_with_gt` 檢查 bundle
+    內有沒有 HOTSPOT 檔，有的話這裡的 `False` 會被即時算出的結果覆蓋，兩處因此保持
+    一致，不會出現「明明補了 GT，`has_gt` 卻還是 False」的矛盾）；把每對內嵌的
+    共視區域抽走，改由 `/api/regions` 供應，維持前端既有的取用方式，也避免房子資料
+    一次回傳全部多邊形。
     """
     out = dict(d)
     pairs = []
@@ -196,11 +205,21 @@ class Handler(SimpleHTTPRequestHandler):
             house = unquote(m.group(1))
             if not _SAFE.match(house):
                 return self._err(400, "bad house name")
-            fp = os.path.join(BUNDLE_ROOT, house, f"{house}.json")
+            hdir = os.path.join(BUNDLE_ROOT, house)
+            fp = os.path.join(hdir, f"{house}.json")
             if not os.path.exists(fp):
                 return self._err(404, "house not in bundle; run pack_bundle.py")
             d = json.load(open(fp, encoding="utf-8"))
-            return self._json(public_house_to_tool(d) if is_public_house(d) else d)
+            d = public_house_to_tool(d) if is_public_house(d) else d
+            # 即時補 GT：先做完對外交付檔的相容轉換（上面那行）才檢查，因為轉換後的
+            # has_gt 才是這次要回給前端的真實狀態（見 public_house_to_tool 的說明）。
+            # 找不到 HOTSPOT 或房子資料本來就有 GT 都不印東西，只有「動手補了」或
+            # 「補的時候發現對不上」才值得佔一行 log，安靜地不顯示 GT 正是使用者
+            # 曾經誤以為功能沒接上的原因。
+            d, gt_msg = gt_hotspot.augment_house_with_gt(d, hdir)
+            if gt_msg:
+                print(f"[gt] {house}: {gt_msg}", file=sys.stderr)
+            return self._json(d)
 
         m = re.match(r"^/api/state/([^/]+)$", path)
         if m:

@@ -66,6 +66,7 @@ except ImportError:
     RomaScoreCache = None  # optional: RoMa-score sorting is skipped, everything else still works
 
 from house_dirs import resolve_task_dir
+from gt_hotspot import find_hotspot_files, load_gt, gt_pair_fields
 
 AZ_BINS = [0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0]  # doormap 8-bin 中心
 
@@ -111,38 +112,6 @@ def load_pair_csv(path: str) -> dict:
     return lookup
 
 
-def load_gt(task_dir: str):
-    """讀 *_HOTSPOT.json，回傳 {src_img: {tgt_img: az_deg}} 有向連接 + 門方位。"""
-    gt = {}
-    W = None
-    # 先估一張圖寬 (HSLoc x 需要 W 換算方位)
-    jpgs = sorted(glob.glob(os.path.join(task_dir, "*.jpg")))
-    if jpgs:
-        W, _ = read_image_size(jpgs[0])
-    # ⚠ 必須排序：多樓層的房子每層一個 HOTSPOT 檔，樓梯配對在相鄰兩層皆有標註，
-    # 座標略有差異（實測 5~120 px）。下方為後寫覆蓋前寫，未排序時採用哪一筆取決於
-    # 檔案系統的列舉順序，Linux 與 Windows 會得到不同的 gt_az。
-    for hs_path in sorted(glob.glob(os.path.join(task_dir, "*HOTSPOT*.json"))):
-        try:
-            J = json.load(open(hs_path, encoding="utf-8"))
-        except Exception:
-            continue
-        for room in J.get("HOTSPOTOFROOM", []):
-            src = room.get("IDName")
-            if not src:
-                continue
-            tgts = (room.get("ToIDName", {}) or {}).get("IDName", []) or []
-            coords = (room.get("HSLoc", {}) or {}).get("Coordinate", []) or []
-            d = gt.setdefault(src, {})
-            for k, tgt in enumerate(tgts):
-                az = None
-                if k < len(coords) and W:
-                    x = float(coords[k].get("x", 0.0))
-                    az = ((x / W) * 360.0 - 180.0) % 360.0
-                d[tgt] = az
-    return gt
-
-
 def build_house(house: str, oof_dir: str, roma_cache=None, ranking_lookup=None, summary_lookup=None) -> dict | None:
     npy = os.path.join(oof_dir, f"{house}.npy")
     imgs_json = os.path.join(oof_dir, f"{house}_images.json")
@@ -163,7 +132,9 @@ def build_house(house: str, oof_dir: str, roma_cache=None, ranking_lookup=None, 
     else:
         W, H = read_image_size(os.path.join(task_dir, images[0]))
 
-    gt = load_gt(task_dir) if task_dir else {}
+    # HOTSPOT 尋找＋解析＋排序邏輯集中在 gt_hotspot.py（與 server.py 即時補 GT 共用同一份，
+    # 見該檔模組說明）；寬度直接沿用上面剛算出的 W，不必再開一次圖。
+    gt = load_gt(find_hotspot_files(task_dir), W) if task_dir else {}
 
     # 建立 pairs (上三角 i<j)，依連通機率(sigmoid logit)由高到低
     pairs = []
@@ -174,9 +145,6 @@ def build_house(house: str, oof_dir: str, roma_cache=None, ranking_lookup=None, 
             ai, aj = images[i], images[j]
             ai_base = os.path.splitext(ai)[0]
             aj_base = os.path.splitext(aj)[0]
-            gt_ij = gt.get(ai, {})
-            gt_ji = gt.get(aj, {})
-            gt_conn = (aj in gt_ij) or (ai in gt_ji)
 
             # 通道方位有兩個來源，優先序固定：
             #   geo    = 幾何驗證的 az_ab/az_ba（此對在 _summary.csv 有位姿時採用）
@@ -207,9 +175,7 @@ def build_house(house: str, oof_dir: str, roma_cache=None, ranking_lookup=None, 
                 "az_source": az_source,     # "geo"=幾何驗證；"coarse"=上游粗篩的方向輸出
                 "az_coarse_ij": round(az_ij_coarse, 2) % 360.0,   # 粗篩方向頭原始值備份，QA 對照用
                 "az_coarse_ji": round(az_ji_coarse, 2) % 360.0,
-                "gt_connected": bool(gt_conn),
-                "gt_az_ij": (round(gt_ij[aj], 2) % 360.0 if aj in gt_ij and gt_ij[aj] is not None else None),
-                "gt_az_ji": (round(gt_ji[ai], 2) % 360.0 if ai in gt_ji and gt_ji[ai] is not None else None),
+                **gt_pair_fields(gt, ai, aj),   # gt_connected / gt_az_ij / gt_az_ji，見 gt_hotspot.py
                 # RoMa 聚合分數（可選，未經幾何驗證的原始匹配聚合）：只有跑過
                 # run_roma_above_threshold.py 且此對通過閾值才有值，其餘一律 null。佇列排序已
                 # 改用下面的 geo_* 欄位，這組留著純作向後相容／除錯對照。

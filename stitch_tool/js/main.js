@@ -50,7 +50,9 @@ function loadHousesList(preferHouse){
 }
 
 /** 「＋加房」（面向未知資料）：資料夾選擇器 → 逐檔上傳到 bundle 根 → 刷新清單並選中新房。
-    瀏覽器拿不到磁碟路徑，故上傳檔案內容；HOTSPOT 若在資料夾內會一起上傳（有才顯示 GT）。 */
+    瀏覽器拿不到磁碟路徑，故上傳檔案內容；資料夾內若有 HOTSPOT 檔（不限層級，例如混在
+    images/ 裡也找得到）且房子資料本身還沒有 GT，伺服器讀取時會即時算出 GT 對照；
+    房號對不上（常見誤帶了別棟房子的標註）會印在伺服器 log，不會安靜地不顯示。 */
 function wireAddHouse(){
   const btn = document.getElementById('btn-add-house');
   const inp = document.getElementById('add-house-input');

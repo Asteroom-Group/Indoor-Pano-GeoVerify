@@ -8,7 +8,11 @@
         images/*.jpg          該房 ERP 全景影像（隨包攜帶，工具不再回頭讀資料集）
         regions/*.json        共視區域（每對一檔）
         semantic.json         （可選）門語意輔助資料
-        <house>_HOTSPOT.json  （可選）標註真值；帶了工具才顯示 GT 對照，沒帶就是純預測檢視
+        <house>_HOTSPOT.json  （可選）標註真值；<house>.json 若還沒有 GT 欄位（例如下面
+                               的交付檔模式），伺服器讀取時會用這個檔案即時算出 GT 對照
+                               並回報比對結果，房號對不上會在伺服器 log 明確提示，不會
+                               安靜地不顯示（見 stitch_tool/gt_hotspot.py）。若房子資料
+                               已經內建 GT，這個檔案就只是隨包留存的原始標註，不影響顯示。
 
 [交付檔模式 --from_public]
 改以 `export_public.py` 的**對外交付檔**當作包內的房子資料，且只附影像：
