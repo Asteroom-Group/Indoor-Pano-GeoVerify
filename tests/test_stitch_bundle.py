@@ -514,12 +514,36 @@ class TestMatchReport(unittest.TestCase):
         gt = {"p1.jpg": {"p2.jpg": 0.0}, "q1.jpg": {"q2.jpg": 0.0}}     # 提到 p1,p2,q1,q2 四張
         msg = gt_hotspot.match_report(gt, ["p1.jpg", "p2.jpg", "p3.jpg"])   # 只有 p1,p2 對上
         self.assertIn("4", msg)   # HOTSPOT 提到的張數
-        self.assertIn("2", msg)   # 實際對上的張數
+        self.assertIn("2", msg)   # 不屬於本房的張數
+        self.assertIn("不屬於本房", msg)
+
+    def test_house_images_not_covered_are_reported(self):
+        """兩層樓只放一層：被提到的影像確實全屬本房，但本房有影像沒被標註涵蓋。
+
+        這是實測發現會誤導的情況——舊判斷式只比「HOTSPOT 提到的有幾張落在本房」，
+        缺樓層時該式不成立而回報「全數相符」，使用者會誤以為真值完整，未涵蓋影像
+        的配對卻一律顯示 GT 不連通，看起來像模型誤報。
+        """
+        gt = {"f1a.jpg": {"f1b.jpg": 0.0}}                       # 只有一樓的兩張
+        house = ["f1a.jpg", "f1b.jpg", "f2a.jpg", "f2b.jpg"]     # 房子實際有四張
+        msg = gt_hotspot.match_report(gt, house)
+        self.assertNotIn("全數相符", msg, "缺樓層不可回報為完整")
+        self.assertIn("未被標註涵蓋", msg)
+        self.assertIn("4", msg)   # 本房張數
+        self.assertIn("2", msg)   # 未涵蓋張數
+
+    def test_both_directions_reported_together(self):
+        """兩種不齊全同時發生時，兩件事都要講，不能只報其中一個。"""
+        gt = {"p1.jpg": {"p2.jpg": 0.0}, "other.jpg": {"alien.jpg": 0.0}}
+        msg = gt_hotspot.match_report(gt, ["p1.jpg", "p2.jpg", "p3.jpg"])
+        self.assertIn("不屬於本房", msg)
+        self.assertIn("未被標註涵蓋", msg)
 
     def test_full_overlap_reports_success(self):
         gt = {"a.jpg": {"b.jpg": 0.0}}
         msg = gt_hotspot.match_report(gt, ["a.jpg", "b.jpg"])
         self.assertIn("全數相符", msg)
+        self.assertNotIn("未被標註涵蓋", msg)
 
     def test_empty_gt_is_reported_distinctly_from_mismatch(self):
         """HOTSPOT 檔案存在但內容空／格式不符：不該被誤報成「放錯房」。"""

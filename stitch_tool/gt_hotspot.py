@@ -130,6 +130,16 @@ def match_report(gt: dict, images) -> str:
     前綴完全不同、交集為零；安靜地不顯示 GT 只會讓人以為這個功能沒接上（使用者
     原本就是這樣誤解的）。所以無論完全對不上、部分對上、或全數相符，都要把實際
     比對到的張數報出來，不能只在「正常」時才輸出。
+
+    不齊全有**兩個互相獨立的方向**，兩者可能同時發生，故分開判斷後合併敘述：
+
+      - HOTSPOT 提到的影像有些不屬於本房（`n_match < n_hs`）：混入了其他房子的標註。
+      - 本房的影像有些沒被標註涵蓋（`n_match < n_house`）：少放了某一層樓的 HOTSPOT。
+
+    只看前者是不夠的：兩層樓的房子只放 floor1 時，被提到的影像確實全都屬於本房，
+    前者不成立，若因此回報「全數相符」，使用者會以為真值完整，而未涵蓋的那些影像
+    相關的配對會一律顯示 GT 不連通，看起來像模型誤報。這與本函式要防的「安靜誤導」
+    是同一類問題，只是方向相反。
     """
     hs_images = _referenced_images(gt)
     house_images = set(images)
@@ -142,9 +152,18 @@ def match_report(gt: dict, images) -> str:
     if n_match == 0:
         return ("HOTSPOT 提到的 %d 張影像與本房 %d 張無一相符，可能放錯房"
                 "（房號、資料夾接錯，或誤帶了其他房子的標註）。" % (n_hs, n_house))
+
+    notes = []
     if n_match < n_hs:
-        return ("HOTSPOT 提到的 %d 張影像中，只有 %d 張與本房 %d 張相符"
-                "（可能只帶了部分樓層的標註）。" % (n_hs, n_match, n_house))
+        notes.append("HOTSPOT 提到的 %d 張影像中有 %d 張不屬於本房（可能混入其他房子的標註）"
+                     % (n_hs, n_hs - n_match))
+    if n_match < n_house:
+        # 措辭保留另一種可能：孤立的全景圖本來就不會出現在任何連接裡，並非一定缺檔。
+        notes.append("本房 %d 張影像中有 %d 張未被標註涵蓋（可能少放了某一層樓的 HOTSPOT，"
+                     "也可能該圖本來就沒有連接），這些影像的配對會一律顯示 GT 不連通"
+                     % (n_house, n_house - n_match))
+    if notes:
+        return "；".join(notes) + "。"
     return "HOTSPOT %d 張影像與本房全數相符。" % n_hs
 
 
