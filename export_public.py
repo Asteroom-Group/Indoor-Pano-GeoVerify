@@ -130,6 +130,37 @@ def attach_regions(house: str, pub: dict, regions_dir: str) -> int:
     return n
 
 
+#: 受限來源的標記檔名。資料集裡某間房的目錄底下出現這個檔，即表示該房的來源帶有
+#: 使用範圍限制（例如授權僅及於研究評測），不得出現在對外交付內容中。
+#: 檔案內容為限制說明的文字，會被引用到錯誤訊息裡。
+RESTRICTED_MARKER = "_RESTRICTED"
+
+
+def restricted_reason(house, datasets_dir=None):
+    """房屋是否來自受限來源；是則回傳限制說明，否則回 None。
+
+    判定依據是資料集目錄底下的標記檔，不認任何特定來源的名稱。日後接上其他受限
+    來源時，只要在該來源的房屋目錄放上同名標記檔即可，這裡不必再改。
+    房屋目錄可能同名巢狀，故往下遞迴尋找。
+    """
+    if not datasets_dir:
+        from config import datasets_root
+        datasets_dir = datasets_root()
+    base = os.path.join(datasets_dir, house)
+    if not os.path.isdir(base):
+        return None
+    hits = [os.path.join(base, RESTRICTED_MARKER)]
+    hits += glob.glob(os.path.join(base, "**", RESTRICTED_MARKER), recursive=True)
+    for p in hits:
+        if os.path.isfile(p):
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    return f.read().strip() or "（標記檔未附說明）"
+            except OSError:
+                return "（標記檔無法讀取）"
+    return None
+
+
 def main():
     ap = argparse.ArgumentParser(description="每間房的內部 JSON → 對外交付子集")
     ap.add_argument("--in_dir", default=os.path.join(HERE, "stitch_tool", "data"),
@@ -158,6 +189,9 @@ def main():
     for f in files:
         d = json.load(open(f, encoding="utf-8"))
         house = d.get("house") or os.path.splitext(os.path.basename(f))[0]
+        why = restricted_reason(house)
+        if why:   # 與下方的欄位自檢同樣是整批停下:交付內容出現受限來源不可只跳過一房
+            raise SystemExit(f"[error] {house} 來自受限來源，不得對外交付：{why}")
         pub = house_to_public(d)
         if with_regions:
             tot_regions += attach_regions(house, pub, regions_dir)
@@ -176,7 +210,7 @@ def main():
         print(f"併入共視區域：{tot_regions} 對（來源 {regions_dir}；a 側 = i 圖）")
     else:
         print("未併入共視區域（--no_regions）")
-    print("自檢：輸出無 gt_* / az_coarse_* / roma_* 欄位")
+    print("自檢：輸出無 gt_* / az_coarse_* / roma_* 欄位，且無受限來源的房屋")
 
 
 if __name__ == "__main__":

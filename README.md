@@ -58,6 +58,16 @@ RoMa 匹配快取（`*.npz`）為暫存檔，可重新產生，不屬於交付�
 上游的格式契約、方向解碼與已知陷阱見 **[matrices/README.md](matrices/README.md)**
 與 **[upstream_direction.py](upstream_direction.py)**。
 
+### 受限來源的守門條件
+
+`ROMA_GEO_DATASETS` 可以指向任何位置，因此資料集裡有可能出現授權範圍不及於交付的
+房屋，例如只授權研究評測的第三方來源。這類房屋的目錄底下放一個標記檔
+（`_RESTRICTED`，內容為限制說明），`export_public.py` 見到就**整批停下**而非略過該房，
+`tests/check_deliverables.py` 亦會回報。
+
+交付內容少一房不會有人察覺，整批停下才會，故不設略過的選項。判定只看標記檔、
+不認任何特定來源的名稱，日後接上其他受限來源時放上同名標記即可，程式不必修改。
+
 ## 環境
 
 目標配置：

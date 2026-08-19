@@ -280,6 +280,9 @@ def check_public_houses(pub_dir):
         leaked = export_public.leaked_fields(d)
         if leaked:
             problems.append("%s: 含內部欄位 %s" % (house, sorted(leaked)))
+        why = export_public.restricted_reason(house)
+        if why:
+            problems.append("%s: 來自受限來源，不得對外交付（%s）" % (house, why.splitlines()[0]))
         n_img = len(d.get("images") or [])
         for p in d.get("pairs") or []:
             tot_pairs += 1
