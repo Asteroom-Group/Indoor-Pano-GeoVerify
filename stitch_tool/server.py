@@ -66,7 +66,9 @@ def _images_dir(house):
 PUBLIC_TO_TOOL = {"has_geometry": "geo_posed",
                   "n_inlier": "geo_n_inlier",
                   "inlier_rate": "geo_inlier_rate",
-                  "conf_used": "geo_conf_used"}
+                  "conf_used": "geo_conf_used",
+                  "az_wedge_i_deg": "geo_az_wedge_i_deg",
+                  "az_wedge_j_deg": "geo_az_wedge_j_deg"}
 
 
 def is_public_house(d):

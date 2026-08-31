@@ -15,6 +15,9 @@
           az_source           該方位從哪來 —— 降級必須看得出來，不可與幾何驗證混為一談
           has_geometry        有沒有幾何驗證結果（false = 共視不足或未跑，方向來自上游）
           n_inlier / inlier_rate / conf_used   幾何證據強度，供下游自行 gate
+          az_wedge_i_deg / az_wedge_j_deg      共視楔形寬：包住 80% 內點的最窄圓弧
+                              兩側各一個，側別與 az_ij/az_ji 同樣正規化。窄代表共視證據
+                              集中在單一方向，位姿條件較差；判斷可靠度時取兩者較小者
           regions             共視區域（有幾何驗證結果的對才有；`--no_regions` 可關閉）
                               欄位與單對契約相同：n / frac_of_inliers / a、b 兩側的
                               polygon、area_frac、az_range
@@ -61,6 +64,8 @@ PAIR_FIELDS = {
     "geo_n_inlier": "n_inlier",
     "geo_inlier_rate": "inlier_rate",
     "geo_conf_used": "conf_used",
+    "geo_az_wedge_i_deg": "az_wedge_i_deg",
+    "geo_az_wedge_j_deg": "az_wedge_j_deg",
 }
 
 HOUSE_FIELDS = ["house", "n_images", "width", "height", "images", "az_convention", "doors"]

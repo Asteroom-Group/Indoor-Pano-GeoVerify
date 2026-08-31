@@ -44,6 +44,7 @@ stitch_tool/opencode.json
 Thumbs.db
 Desktop.ini
 ~$*
+.agents/
 
 # 房子產出包（pack_bundle.py 產物，含影像；跑一遍生成，不入庫）
 bundles/

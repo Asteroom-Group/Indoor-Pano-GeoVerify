@@ -224,12 +224,18 @@ def region_to_public(r):
 def to_public(res):
     """裁成對外契約：共視區域 + 通道方位角 + 可信度。
 
-    不含 R / t / cam_b_in_a / inliers / quality。區域多邊形只保留幾何。
+    不含 R / t / cam_b_in_a / inliers
+    `quality` 只取兩側的共視楔形寬，
+    其餘（對極殘差、純旋轉殘差、方位覆蓋率）仍為不對外放出。
     """
     pose = res.get("pose") or {}
+    q = res.get("quality") or {}
     out = {k: res.get(k) for k in PUBLIC_FIELDS}
     out["az_ab_deg"] = pose.get("az_ab_deg")
     out["az_ba_deg"] = pose.get("az_ba_deg")
+    # 共視楔形寬：包住 80% 內點的最窄圓弧。兩側各一，判斷可靠度時取較小者。
+    out["az_wedge_a_deg"] = q.get("az_wedge_a_deg")
+    out["az_wedge_b_deg"] = q.get("az_wedge_b_deg")
     out["no_covisibility"] = bool((res.get("flags") or {}).get("no_covisibility"))
     out["regions"] = [region_to_public(r) for r in (res.get("regions") or [])]
     return out

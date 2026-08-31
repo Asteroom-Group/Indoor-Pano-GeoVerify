@@ -13,12 +13,17 @@
       regions[].area_frac / az_range
       pose.az_ab_deg / az_ba_deg           ← 通道方位角
       inlier_rate / conf_used              ← 可信度
+      quality.az_wedge_a_deg / _b_deg      ← 共視楔形寬，兩側各一
       flags.no_covisibility                ← 無共視證據
 
-內部   R、t、cam_b_in_a、inliers[]、quality{}、RoMa cache npz
+內部   R、t、cam_b_in_a、inliers[]、quality的其餘欄位、RoMa cache npz
 ```
 
 R/t 僅供內部折算方位角使用，不列入對外欄位。
+共視楔形寬是包住 80% 內點的最窄圓弧。
+窄楔形代表correspondence集中非常窄小的方向，估測出的位姿條件較差
+（注意，隔著門互看時inlier可能上千，楔形卻仍只有十幾度。不可視為同件事情）
+判斷單一結果是否可信時取兩側較小者。
 RoMa 匹配快取（`*.npz`）為暫存檔，可重新產生，不屬於交付內容。
 
 輸出格式沿用既有的 per-pair JSON，欄位全文見 `pose_regions/README.md`。

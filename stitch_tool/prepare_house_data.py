@@ -190,6 +190,12 @@ def build_house(house: str, oof_dir: str, roma_cache=None, ranking_lookup=None, 
                 "geo_n_regions": None,
                 "geo_conf_used": None,
                 "geo_posed": None,
+                # 共視楔形寬（度）：包住 80% 內點的最窄圓弧，兩側各一。窄楔型代表共視證據
+                # 集中在單一方向，估計出的位姿條件較差。只有 _summary.csv 帶這兩欄，
+                # _ranking_eval.csv 沒有，故一律由 srow 取得
+                # ⚠ 與 az_ij/az_ji 同樣分側，srow 的圖序與 (i, j) 相反時必須對調。
+                "geo_az_wedge_i_deg": None,
+                "geo_az_wedge_j_deg": None,
             }
             if roma_cache is not None:
                 rec = roma_cache.get(house, ai, aj)
@@ -215,6 +221,14 @@ def build_house(house: str, oof_dir: str, roma_cache=None, ranking_lookup=None, 
                 pair["geo_conf_used"] = _csv_num(srow.get("conf_used"), float)
                 pair["geo_posed"] = int(srow.get("flag_no_covisibility") != "1"
                                         and srow.get("conf_used", "") != "")
+            if srow is not None:
+                # 側別正規化與 az_ij/az_ji 用同一個判斷：srow 的 img_a 是不是 i 圖。
+                wa = _csv_num(srow.get("az_wedge_a_deg"), float)
+                wb = _csv_num(srow.get("az_wedge_b_deg"), float)
+                if srow["img_a"] == ai_base:
+                    pair["geo_az_wedge_i_deg"], pair["geo_az_wedge_j_deg"] = wa, wb
+                else:
+                    pair["geo_az_wedge_i_deg"], pair["geo_az_wedge_j_deg"] = wb, wa
             pairs.append(pair)
     pairs.sort(key=lambda p: p["prob"], reverse=True)
 

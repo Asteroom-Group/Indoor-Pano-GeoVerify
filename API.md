@@ -55,7 +55,7 @@ from roma_geo import verify_pair, verify_pairs, to_public, get_matcher
 | `timing` | `dict` | `match_s` / `verify_s` / `total_s` |
 
 `pose` 為 `null` 且 `flags.no_covisibility` 為 `true` 代表找不到足夠的共視證據，
-不等於「兩張圖不連通」——它們可能相連但視野不重疊。
+不等於「兩張圖不連通」，它們可能相連但視野不重疊。
 
 **方位角規約**：`az(x) = ((x / W) * 360 - 180) mod 360`，0° = 影像中央，±180° = 接縫。
 `pose.az_ab_deg` 的範圍是 `(-180, 180]`。
@@ -65,8 +65,9 @@ from roma_geo import verify_pair, verify_pairs, to_public, get_matcher
 
 ### 1.2 `to_public(res) -> dict`
 
-把 `verify_pair()` 的結果裁成對外契約。捨去 `R` / `t` / `cam_b_in_a` / `inliers` /
-`quality` / `params` / `n` / `flags` 等內部量。
+把 `verify_pair()` 的結果裁成對外契約。
+捨去 `R` / `t` / `cam_b_in_a` / `inliers` /`params` / `n` / `flags` 等內部量。
+`quality` 只取兩側的共視楔形寬，其餘（對極殘差、純旋轉殘差、方位覆蓋率）不列入。
 
 ```json
 {
@@ -80,6 +81,8 @@ from roma_geo import verify_pair, verify_pairs, to_public, get_matcher
   "inlier_rate": 0.6769,
   "az_ab_deg": 178.6,
   "az_ba_deg": -174.61,
+  "az_wedge_a_deg": 111.1,
+  "az_wedge_b_deg": 156.4,
   "no_covisibility": false,
   "regions": [
     {
@@ -93,6 +96,11 @@ from roma_geo import verify_pair, verify_pairs, to_public, get_matcher
   ]
 }
 ```
+
+`az_wedge_a_deg` / `az_wedge_b_deg` 為共視楔形寬：把該側內點的方位角排成一圈之後，包住其中 80% 所需的最窄圓弧寬度。
+窄代表共視證據集中在單一方向，位姿的條件較差。
+判斷單一結果是否可信時取兩側較小者。
+無位姿時為 `null`。
 
 `regions[].a` / `.b` 為同一塊實體空間分別在 A、B 兩張圖上的凸包多邊形，
 座標為**原圖 ERP 像素**。跨接縫的區域其 `x` 可能超出 `[0, W)` 以保持多邊形連續，
