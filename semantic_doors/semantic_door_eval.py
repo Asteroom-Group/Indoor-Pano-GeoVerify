@@ -177,8 +177,8 @@ def main():
     ap.add_argument("--quality_gate", action="store_true",
                     help="只在高品質位姿(conf_used=0.65 且 inlier_rate>=--min_ir)上套用語意校正")
     ap.add_argument("--min_ir", type=float, default=0.15)
-    ap.add_argument("--include_same_room", action="store_true",
-                    help="把同房(大環)也納入 —— 用來檢查開關會不會誤觸發")
+    ap.add_argument("--cross_room_only", action="store_true",
+                    help="只看跨房案例;預設同房與跨房皆納入")
     ap.add_argument("--refresh", action="store_true", help="忽略門快取重抽")
     args = ap.parse_args()
 
@@ -253,7 +253,7 @@ def main():
         same_room = (j.get("gt") or {}).get("same_room")
         if same_room is None:
             continue
-        if same_room and not args.include_same_room:   # 預設只看跨房(有門)案例
+        if same_room and args.cross_room_only:   # 預設同房與跨房皆納入
             continue
         n_pair += 1
         # 品質閘門:低信心撈回層(conf 0.3)與極低內點率的位姿,語意校正不套用
@@ -371,8 +371,9 @@ def main():
 
     out = []
     out.append("# 語意門校正評估:用子計畫一的門語意圖修正通道方位\n")
-    out.append("產生腳本:`semantic_door_eval.py`。族群 = **跨房(same_room=0)且 GT 連通**的方向,")
-    out.append("且該圖有語意門。GT = HOTSPOT 方位(隔門相連時標的就是門,見 hotspot_two_cases_eval.md)。\n")
+    out.append("產生腳本:`semantic_door_eval.py`。族群 = **GT 連通且該圖有語意門**的方向,")
+    out.append("同房與跨房皆納入(`--cross_room_only` 可限定為跨房)。")
+    out.append("GT = HOTSPOT 方位(隔門相連時標的就是門,見 hotspot_two_cases_eval.md)。\n")
     out.append("| 估計法 | n | 中位 | p90 | ≤22.5° | ≤45° |")
     out.append("|---|---|---|---|---|---|")
     out.append(row("coarse 方向頭", stats([r["e_coarse"] for r in rows])))
@@ -386,7 +387,7 @@ def main():
     out.append("")
     n_out = sum(1 for r in rows if r["az_outside"])
     if rows:
-        out.append("az_ab 落在**所有門之外**的比例:%.1f%%(%d/%d)——夾取只會動到這一批。\n"
+        out.append("az_ab 落在**所有門之外**的比例:%.1f%%(%d/%d);夾取只會動到這一批。\n"
                    % (n_out / len(rows) * 100, n_out, len(rows)))
         sel = [r for r in rows if r["az_outside"]]
         if sel:
@@ -445,46 +446,66 @@ def main():
     if dw:
         out.append("被選中的門角寬:中位 %.1f°、p90 %.1f°(門很寬時「門中心」本身就有數度誤差)。\n"
                    % (dw[len(dw) // 2], dw[int(len(dw) * 0.9)]))
-    out.append("## 結論(2026-07-29)\n")
-    out.append("**假設成立,且找到正確用法:語意門不是用來取代方位,而是用「共識區是否被門包住」")
-    out.append("當開關 —— 包住時改用門、沒包住時維持 az_ab。**\n")
-    out.append("- 決定性拆解:包住時門中心 **5.4°** vs az_ab 13.4°(≤22.5° 83.6% vs 77.8%);")
-    out.append("  沒包住時門中心 61.6° vs az_ab 12.7° —— 開關兩側的行為完全相反,證明判準有效而非碰巧。")
-    out.append("- 混合後全族群中位 13.0°→**9.5°**(門檻 0.8),≤22.5° 71.2%→74.2%;門檻 0.5–0.9 皆穩定。")
+    # 結論引用的數字一律由本輪計算,避免與上方表格脫節。
+    _in = [r for r in rows if r["e_cov"] is not None and r["cov_frac"] >= args.contain]
+    _out = [r for r in rows if r["e_cov"] is not None and r["cov_frac"] < args.contain]
+    s_in_az, s_in_door = stats([r["e_az"] for r in _in]), stats([r["e_cov"] for r in _in])
+    s_out_az, s_out_door = stats([r["e_az"] for r in _out]), stats([r["e_cov"] for r in _out])
+    s_base, s_gated = stats([r["e_az"] for r in rows]), stats([r["e_cov_in"] for r in rows])
+    s_near, s_cov, s_clamp = (stats([r["e_near"] for r in rows]),
+                              stats([r["e_cov"] for r in rows]),
+                              stats([r["e_clamp"] for r in rows]))
+    fire_pct = len(_in) / len(rows) * 100 if rows else 0.0
+
+    out.append("## 結論(2026-07-29,數字隨每次執行更新)\n")
+    out.append("**假設成立,且找到正確用法:語意門的作用是提供「共識區是否被門包住」這個開關,")
+    out.append("包住時改用門中心、沒包住時維持 az_ab。**\n")
+    if s_in_door and s_out_door:
+        out.append("- 決定性拆解:包住時門中心 **%.1f°** vs az_ab %.1f°(≤22.5° %.1f%% vs %.1f%%);"
+                   % (s_in_door["med"], s_in_az["med"], s_in_door["r22"], s_in_az["r22"]))
+        out.append("  沒包住時門中心 %.1f° vs az_ab %.1f°;開關兩側的行為完全相反,足以證明判準有效。"
+                   % (s_out_door["med"], s_out_az["med"]))
+    if s_base and s_gated:
+        out.append("- 混合後全族群中位 %.1f°→**%.1f°**(門檻 %.1f),≤22.5° %.1f%%→%.1f%%;門檻 0.5–0.9 皆穩定。"
+                   % (s_base["med"], s_gated["med"], args.contain, s_base["r22"], s_gated["r22"]))
     out.append("- 物理對應:共識區被門包住 ⇒ 那是**透過這道門看到對面**,門即通道;")
     out.append("  共識區遠大於門 ⇒ 那是**自己這張圖房間內**的內容(或大環),與該門無關,不可拿來校正。")
-    out.append("- 失敗的替代方案(併記,避免重試):直接換成最近門 11.5° 但尾巴爆掉(p90 107°);")
-    out.append("  直接換成共視重疊最高的門 21.1°;夾取(az_ab 落門外才拉進門)14.2°,更差 ——")
+    if s_near and s_cov and s_clamp:
+        out.append("- 失敗的替代方案(併記,避免重試):直接換成最近門 %.1f° 但尾巴爆掉(p90 %.0f°);"
+                   % (s_near["med"], s_near["p90"]))
+        out.append("  直接換成共視重疊最高的門 %.1f°;夾取(az_ab 落門外才拉進門)%.1f°,更差,"
+                   % (s_cov["med"], s_clamp["med"]))
     op = [r for r in rows if r["az_outside"]]
     if op:
-        out.append("  因為 az_ab 有 %.1f%% 的時候落在**所有門之外**,那批硬拉進門會從 16.9° 惡化到 26.1°;"
-                   % (len(op) / len(rows) * 100))
-        out.append("  「落在門外」不是可靠的失效訊號(語意圖未必涵蓋所有開口)。")
-    out.append("- 適用範圍:僅跨房(有門)案例;開關觸發率約 38%,其餘維持現行 az_ab,故**不會變差**。")
+        s_op_az, s_op_clamp = stats([r["e_az"] for r in op]), stats([r["e_clamp"] for r in op])
+        out.append("  因為 az_ab 有 %.1f%% 的時候落在**所有門之外**,那批硬拉進門會從 %.1f° 惡化到 %.1f°;"
+                   % (len(op) / len(rows) * 100, s_op_az["med"], s_op_clamp["med"]))
+        out.append("  「落在門外」無法作為可靠的失效訊號(語意圖未必涵蓋所有開口)。")
+    out.append("- 適用範圍:凡具備語意門的方向皆納入,同房與跨房不分;開關觸發率約 %.0f%%,"
+               "其餘維持現行 az_ab,故**不會變差**。" % fire_pct)
     out.append("- 語意圖涵蓋率(實測):22/57 間房;那 22 間的 583 張影像中 402 張有 mask(**69.0%**)。")
     out.append("  跨房側有門的比例 69.9%,與影像涵蓋率一致;同房側僅 1.7%(見下)。")
-    out.append("- **品質閘門(`--quality_gate`)已停用 —— 不要啟用。**")
+    out.append("- **品質閘門(`--quality_gate`)已停用,不要啟用。**")
     out.append("  停用理由:將 2 個同房觸發逕行認定為「誤觸發」缺乏依據,**未查證其誤差是否真的變差**。實查:")
     out.append("  一個方向沒有 GT(gt_label=0)無從判定;另一個(59863)GT=1.9°、az_ab=17.9°(誤差 16.0°)、")
-    out.append("  門校正後 3.1°(誤差 **1.3°**)—— **變好 14.8°**。也就是說同房觸發至今**沒有任何一例被證實有害**,")
+    out.append("  門校正後 3.1°(誤差 **1.3°**),**變好 14.8°**。也就是說同房觸發至今**沒有任何一例被證實有害**,")
     out.append("  而該閘門會把這個 14.8° 的改善一併擋掉,代價還有全體中位 9.5°→10.5°。")
     out.append("  旗標仍保留在腳本裡供日後有反例時再評估,但**預設關閉**。")
     out.append("  另記:`doorway_wedge` 無鑑別力(觸發案例中同房 50% vs 跨房 26.4%,n=2),更不可當閘門。")
     out.append("- **大環誤觸發已實測(不需 GT 方位,只需 same_room 標籤,故樣本充足)**:")
     out.append("  同房/大環 470 側中僅 2 側觸發 = **0.43%**;跨房 1430 側中 382 側觸發 = 26.7%。")
-    out.append("  **但主要保護機制不是「大環共視區比較大」**(實測同房共視區角寬中位 24.6° vs 跨房 19.8°,")
-    out.append("  同房並沒有明顯較大,光靠這點擋不住),而是**同房/大環的影像有 98.3% 根本沒偵測到門**")
+    out.append("  **保護機制是同房/大環的影像有 98.3% 根本沒偵測到門**")
     out.append("  (470 側中只有 8 側有門)。拆一層看:那 462 個「沒門」的側裡,459 個**沒有語意圖檔**、")
     out.append("  只有 3 個是「有圖但偵測不到門」。**注意本統計已限定在有語意圖的 22 間房內**。")
     out.append("  對此的兩種解讀,目前資料無法區分:")
-    out.append("  (a) 涵蓋率假象 —— 若日後補上那些圖、且它們有門,開關就可能開始誤觸;")
+    out.append("  (a) 涵蓋率假象:若日後補上那些圖、且它們有門,開關就可能開始誤觸;")
     out.append("  (b) 目視觀察:**那些缺 mask 的影像就是戶外案例,而戶外幾乎沒有門**,")
     out.append("      所以「沒 mask」與「沒有門」是同一件事的兩面,保護是內生的。")
     out.append("  沒有 mask 的影像無從觀察其門,故 (b) **無法用現有資料證實或否證**;")
     out.append("  目視觀察是目前唯一的證據來源,本文件據此不採取任何預防性收緊。")
     out.append("  (少數有圖的同房案例門角寬中位 28.1° vs 跨房 21.2°,但 n 僅 13 道門,不足以推論。)")
     out.append("  故工具端仍應把觸發事件記錄下來供目視抽查。")
-    out.append("- 已知案例:58553 `0894de77`↔`dc4c66d0` 兩側恰好各是一種情形 ——")
+    out.append("- 已知案例:58553 `0894de77`↔`dc4c66d0` 兩側恰好各是一種情形:")
     out.append("  `dc4c66d0` 單門且共識區完全落在門內 ⇒ 觸發,誤差 20.4°→12.6°;")
     out.append("  `0894de77` 三道門且共識區僅 32% 落在門內 ⇒ 不觸發,維持 az_ab(33.5°)不被改壞。")
     out.append("  正是「看不到門後內容就無法定位、除非另一張看得到」的實例。\n")
