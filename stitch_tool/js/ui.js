@@ -25,11 +25,10 @@ import { rebuildQueue, toggleStatFilter } from './queue.js';
 import { on, emit } from './events.js';
 import { getCachedHouseDoors, ensureHouseDoors } from './semantic.js';
 
-/** 依 STATE.ui 勾選門顯示層四個開關 + 語意輔助。 */
+/** 依 STATE.ui 勾選門顯示層三個開關 + 語意輔助。 */
 export function applyUiToggles(){
   const set = (id, v) => { const el = document.getElementById(id); if(el) el.checked = v; };
   set('tg-pairwise', STATE.ui.pairwise);
-  set('tg-doormap', STATE.ui.doormap);
   set('tg-compass', STATE.ui.compass);
   set('tg-rings', STATE.ui.rings);
   set('semantic-toggle', STATE.ui.semanticAssist);
@@ -166,7 +165,7 @@ export function wireUI(){
   });
 
   // 門顯示層開關
-  ['pairwise', 'doormap', 'compass', 'rings'].forEach(key => {
+  ['pairwise', 'compass', 'rings'].forEach(key => {
     const el = document.getElementById('tg-' + key);
     if(el) el.onchange = () => {
       STATE.ui[key] = el.checked;

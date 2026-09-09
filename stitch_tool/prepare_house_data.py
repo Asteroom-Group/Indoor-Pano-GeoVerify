@@ -5,7 +5,6 @@
 輸入 (每間房子):
   oof_matrices/<exp>/<house>.npy            (N, N, 3)  ch0=連通 logit(對稱), ch1=sin(az), ch2=cos(az)
   oof_matrices/<exp>/<house>_images.json    長度 N 的影像檔名 (與矩陣 row/col 對齊)
-  oof_matrices/<exp>/<house>_doormap.npy     (N, 8)     每張圖的門方位 8-bin aux logits
   datasets/<house>/.../*.jpg                 ERP 全景圖 (讀寬高)
   datasets/<house>/.../*_HOTSPOT.json        Ground Truth 連接 (可選, 供除錯對照)
   Output/roma_regions/_ranking_eval.csv       幾何驗證排序欄位 (geo_*，可選；join key = house+img 檔名集合)
@@ -68,9 +67,6 @@ except ImportError:
 from house_dirs import resolve_task_dir
 from gt_hotspot import find_hotspot_files, load_gt, gt_pair_fields
 
-AZ_BINS = [0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0]  # doormap 8-bin 中心
-
-
 def read_image_size(path: str):
     """只讀 header 拿寬高，避免載入整張大圖。"""
     try:
@@ -115,7 +111,6 @@ def load_pair_csv(path: str) -> dict:
 def build_house(house: str, oof_dir: str, roma_cache=None, ranking_lookup=None, summary_lookup=None) -> dict | None:
     npy = os.path.join(oof_dir, f"{house}.npy")
     imgs_json = os.path.join(oof_dir, f"{house}_images.json")
-    door_npy = os.path.join(oof_dir, f"{house}_doormap.npy")
     if not (os.path.exists(npy) and os.path.exists(imgs_json)):
         print(f"[skip] {house}: 缺 .npy 或 _images.json")
         return None
@@ -123,7 +118,6 @@ def build_house(house: str, oof_dir: str, roma_cache=None, ranking_lookup=None, 
     M = np.load(npy)                       # (N, N, 3)
     images = json.load(open(imgs_json, encoding="utf-8"))
     N = len(images)
-    door = np.load(door_npy) if os.path.exists(door_npy) else None
 
     task_dir = resolve_task_dir(DATA_ROOT, house)
     if task_dir is None:
@@ -232,18 +226,6 @@ def build_house(house: str, oof_dir: str, roma_cache=None, ranking_lookup=None, 
             pairs.append(pair)
     pairs.sort(key=lambda p: p["prob"], reverse=True)
 
-    # 每張圖的候選門方位 (doormap 8-bin -> softmax 機率 + 方位)
-    doors = []
-    if door is not None:
-        for i in range(N):
-            row = np.asarray(door[i], dtype=np.float64)
-            ex = np.exp(row - row.max())
-            sm = ex / ex.sum()
-            doors.append({
-                "i": i,
-                "dirs": [{"az": AZ_BINS[b], "score": round(float(sm[b]), 4)} for b in range(len(AZ_BINS))],
-            })
-
     return {
         "house": house,
         "n_images": N,
@@ -251,7 +233,6 @@ def build_house(house: str, oof_dir: str, roma_cache=None, ranking_lookup=None, 
         "height": H,
         "images": images,
         "pairs": pairs,
-        "doors": doors,
         "az_convention": upstream_direction.CONVENTION,
         "has_gt": bool(gt),   # 有無 HOTSPOT 真值；未知資料(無 HOTSPOT)時前端不顯示 GT 對照
         "n_gt_connected_pairs": sum(1 for p in pairs if p["gt_connected"]),
@@ -297,7 +278,7 @@ def main():
         houses = sorted({
             os.path.basename(p)[:-4]
             for p in glob.glob(os.path.join(args.oof_dir, "*.npy"))
-            if not p.endswith("_doormap.npy")
+            if not p.endswith("_doormap.npy")   # 舊矩陣目錄可能還有這種檔，不是房屋矩陣
         })
         # 沒有輸入就中止：繼續下去會把 data/_index.json 覆寫成空陣列，
         # 而 server.py 優先讀該檔，導致 /api/houses 回空。

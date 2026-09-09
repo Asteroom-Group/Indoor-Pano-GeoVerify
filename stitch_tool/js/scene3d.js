@@ -10,7 +10,7 @@
 /* global THREE */
 import { SPHERE_R, MARKER_SIZE, COL, CLUSTER_DELTA } from './config.js';
 import { azToPos, posToAz, azToLon, angDiff } from './geometry.js';
-import { clusterDoors, doormapSalient } from './clustering.js';
+import { clusterDoors } from './clustering.js';
 import {
   STATE, getHouseData, getHouseName, pairStatus, pairKey, scheduleSave
 } from './state.js';
@@ -550,7 +550,7 @@ export function buildMarkersForImage(imgIdx, pair){
     const gaz = (pair.i === imgIdx) ? pair.gt_az_ij : (pair.j === imgIdx ? pair.gt_az_ji : null);
     if(gaz != null) makeMarker(gaz, COL.gt, { role:'gt', size:MARKER_SIZE, faint:true });
   }
-  // 6) 門顯示層（v2）：其它預測未確認門（淡琥珀）+ doormap 先驗
+  // 6) 門顯示層（v2）：其它預測未確認門（淡琥珀）
   buildDoorLayer(imgIdx, pair);
   renderCompass(imgIdx);
   applyFaint();
@@ -561,7 +561,7 @@ function applyFaint(){
 }
 
 /**
- * 在 3D 場景畫「其它預測未確認門」（淡琥珀空心）+ doormap 先驗。
+ * 在 3D 場景畫「其它預測未確認門」（淡琥珀空心）。
  * confirmed/active 已在 buildMarkersForImage 他處畫。
  * @param {number} imgIdx
  * @param {object|null} pair
@@ -582,12 +582,6 @@ export function buildDoorLayer(imgIdx, pair){
       const m = makeMarker(cl.repAz, COL.refdoor, { role:'refdoor', filled:false, size:MARKER_SIZE,
         i:imgIdx, targetImg:cl.repTarget });
       m.material.opacity = 0.5;
-    });
-  }
-  if(STATE.ui.doormap){
-    doormapSalient(imgIdx, hd).forEach(d => {
-      const m = makeMarker(d.az, COL.doormap, { role:'doormap', filled:false, size:MARKER_SIZE - 4 });
-      m.material.opacity = 0.4;
     });
   }
 }

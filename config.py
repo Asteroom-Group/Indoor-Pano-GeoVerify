@@ -95,7 +95,8 @@ def matrices_version_root() -> str:
 
 
 def matrices_root(variant: str = "refined") -> str:
-    """某一變體的矩陣目錄（`<house>.npy` / `<house>_images.json` / `<house>_doormap.npy`）。
+    """某一變體的矩陣目錄（`<house>.npy` / `<house>_images.json`；
+    舊目錄可能還有 `<house>_doormap.npy`，現行上游已不產出、讀取端已移除）。
 
     variant：`refined`（正式流程）或 `oof`（僅 covis_ranking_eval.py 使用）。
     版本目錄底下沒有子目錄時，回退為版本目錄本身。

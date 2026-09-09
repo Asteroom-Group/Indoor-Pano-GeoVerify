@@ -1,11 +1,11 @@
 /* =========================================================================
-   clustering.js — 門聚類 / doormap 先驗（純函式，3D 與 ERP 共用）
+   clustering.js — 門聚類（純函式，3D 與 ERP 共用）
    低層模組：只 import config / geometry。不觸碰 DOM，不 import 高層模組。
    依賴的 houseData / STATE / pairStatus 一律以參數注入，維持純函式與可測試性。
-   演算法逐字沿用原 app.js（doorCandidates / circMean / clusterDoors / doormapSalient）。
+   演算法逐字沿用原 app.js（doorCandidates / circMean / clusterDoors）。
    ========================================================================= */
 
-import { CLUSTER_DELTA, DOORMAP_FLOOR } from './config.js';
+import { CLUSTER_DELTA } from './config.js';
 import { angDiff } from './geometry.js';
 
 /**
@@ -77,21 +77,4 @@ export function clusterDoors(imgIdx, houseData, STATE, pairStatus, pairKey){
     }
   });
   return clusters;
-}
-
-/**
- * doormap 8 方位先驗：取顯著 bin（score≥max(FLOOR, 平均*1.3) 或最高者）當淡色參考。
- * @param {number} imgIdx
- * @param {object} houseData 需 houseData.doors
- * @returns {Array<{az:number,score:number}>}
- */
-export function doormapSalient(imgIdx, houseData){
-  if(!houseData.doors || !houseData.doors[imgIdx]) return [];
-  const dirs = houseData.doors[imgIdx].dirs || [];
-  if(!dirs.length) return [];
-  let mean = 0; dirs.forEach(function(d){ mean += d.score; }); mean /= dirs.length;
-  const thr = Math.max(DOORMAP_FLOOR, mean * 1.3);
-  let sal = dirs.filter(function(d){ return d.score >= thr; });
-  if(!sal.length) sal = [dirs.slice().sort(function(a, b){ return b.score - a.score; })[0]];
-  return sal;
 }

@@ -69,16 +69,15 @@ python stitch_tool/server.py --bundle bundles/public_demo
 - 進度自動存到伺服器 `state/<房子>.json`，換房子/重開會自動載回。快捷鍵 Y/N/U/R/A/E、Esc 前往下一對。
 
 ## 門顯示層 (v2)：大房間/戶外不用自己數門
-先把模型已知的門方位畫出來，你只補模型漏掉的。左側「門顯示層」四個一鍵開關（狀態隨進度存讀）：
+先把模型已知的門方位畫出來，你只補模型漏掉的。左側「門顯示層」三個一鍵開關（狀態隨進度存讀）：
 - **配對預測門**：把所有含目前圖的候選依方位做緊聚類（±7°）成「門」，一個門一個淡琥珀空心圈；
   低分雜訊用機率門檻藏掉（例：某圖 22 個預測→聚成 3 個門）。點淡圈可跳去複核那一對。
-- **doormap先驗**：每張圖獨立的 8 方位門先驗，用淡紫圈當參考（估「這張圖有幾個門」）。
-- **羅盤條**：底部 360° 尺，每個門一刻度（綠=已連/琥珀=預測未連/橘=手動/淡紫=先驗），
+- **羅盤條**：底部 360° 尺，每個門一刻度（綠=已連/琥珀=預測未連/橘=手動），
   高亮目前視野、點刻度轉過去；標題顯示「偵測到 N 個門（M 已連）」。
 - **場景參考圈**：在 3D 全景裡直接畫出上述門圈。
 - **淘汰收緊**：確認某門後只淘汰「同一聚類(±7°)」的冗餘候選；不同門永不互相淘汰
   （未確認門聚類自動當保護槽，取代舊的 ±20° 規則，根治近門誤殺）。兩門距離<7° 想分開時放一個手動橘圈即可。
-- **UI 狀態**：`STATE.ui` 除四個門顯示層開關外，另有 `minimap`（路線圖顯示/隱藏，預設 true）。
+- **UI 狀態**：`STATE.ui` 除三個門顯示層開關外，另有 `minimap`（路線圖顯示/隱藏，預設 true）。
   舊存檔缺此欄位時 `normalizeState` 自動補預設，向後相容；state schema 其餘不變。
 
 ## 幾何/資料原理
@@ -124,7 +123,7 @@ python stitch_tool/server.py --bundle bundles/public_demo
 ## 檔案結構
 - `prepare_house_data.py` — 由 oof 矩陣＋HOTSPOT 產生 `data/<house>.json`（機率排序的 pairs、
   az_ij/az_ji［預設 join 幾何驗證 az_ab/az_ba，見上方「幾何/資料原理」］、`geo_*` 幾何驗證排序
-  欄位［見上方「佇列排序」］、門圖、GT對照）。
+  欄位［見上方「佇列排序」］、GT對照）。
 - `server.py` — 本機伺服器（房子清單／房子資料／ERP 影像／進度存讀）。
 - `index.html` — three.js 前端外殼（DOM 與樣式）；以 `<script type="module" src="js/main.js">` 載入模組化前端，three.js r128 仍由 CDN classic script 提供全域 `THREE`。
 - `SPEC.md` — 前端規格。
@@ -135,7 +134,7 @@ python stitch_tool/server.py --bundle bundles/public_demo
 - `config.js` — 常數（球體/標記尺寸、顏色、聚類角度 CLUSTER_DELTA、UI 預設）。
 - `events.js` — 極簡 pub/sub 事件匯流排（`on`/`emit`）。事件：`house-loaded`／`state-changed`／`view-changed`／`frame`／`resize`／`rebuild-markers`／`reject-confirmed`／`reset-filter`／`apply-ui-toggles`／`erp-reset-az`／`erp-derived`（ERP 面板衍生完成→刷新動作可用性與狀態列）／`apply-minimap-vis`（ERP 開關時切換單/雙路線圖）。動作只 emit，UI 元件訂閱重繪。
 - `geometry.js` — 方位↔球面幾何純函式（`azToPos`/`posToAz`/`azToLon`/`angDiff`，逐字照抄 SPEC）。
-- `clustering.js` — 門聚類/doormap 先驗純函式（`doorCandidates`/`circMean`/`clusterDoors`/`doormapSalient`），3D 與 ERP 共用。
+- `clustering.js` — 門聚類純函式（`doorCandidates`/`circMean`/`clusterDoors`），3D 與 ERP 共用。
 - `layout.js` — 路線圖**力導向佈局**純函式（`forceLayout(N,edges,W,H,iter,init)→positions`、`isIsolated`）。確定性、不觸碰 DOM，小圖／彈窗／ERP 雙圖共用同一份 cache（`minimap.js` 內正規化後投影到各 canvas）。可 node 測試。
 - `recommend.js` — 未連接通道**放圈推薦**純函式（`recommendForCircle(imgIdx,az,hd,STATE,statusFn,windowDeg)→依 prob 降序候選`、`RECO_WINDOW=25`）。只依角度窗＋prob，排除非 pending。可 node 測試。
 - `state.js` — 標註狀態 `STATE`、house 資料、狀態判定（`pairKey`/`pairStatus`…）、debounce 存檔。schema 與 server API 不變。

@@ -8,7 +8,7 @@
 
 import { COL } from './config.js';
 import { azToLon } from './geometry.js';
-import { clusterDoors, doormapSalient } from './clustering.js';
+import { clusterDoors } from './clustering.js';
 import { STATE, getHouseData, pairStatus, pairKey } from './state.js';
 import { nav } from './nav.js';
 import { getLon, getCamera } from './scene3d.js';
@@ -42,8 +42,6 @@ export function renderCompass(imgIdx){
   }
   const ex = (STATE.extra_channels[imgIdx] || STATE.extra_channels[String(imgIdx)] || []);
   ex.forEach(a => { compassDoors.push({ az:a, status:'extra' }); });
-  if(STATE.ui.doormap)
-    doormapSalient(imgIdx, hd).forEach(d => { compassDoors.push({ az:d.az, status:'doormap' }); });
   if(wrap) wrap.style.display = 'block';
   if(dc){
     dc.style.display = 'block';
@@ -77,13 +75,12 @@ export function drawCompass(){
   compassDoors.forEach(d => {
     const rel = ((azToLon(d.az) - lon + 540) % 360) - 180;
     const x = W / 2 + (rel / 360) * W;
-    const col = d.status === 'confirmed' ? COL.green : d.status === 'extra' ? COL.orange :
-                d.status === 'doormap' ? COL.doormap : COL.amber;
-    g.globalAlpha = d.status === 'doormap' ? 0.5 : 0.95;
+    const col = d.status === 'confirmed' ? COL.green : d.status === 'extra' ? COL.orange : COL.amber;
+    g.globalAlpha = 0.95;
     if(d.status === 'confirmed' || d.status === 'extra'){
       g.fillStyle = col; g.beginPath(); g.arc(x, H / 2, 6, 0, 7); g.fill();
     } else {
-      g.strokeStyle = col; g.lineWidth = 2; g.beginPath(); g.arc(x, H / 2, d.status === 'doormap' ? 4 : 6, 0, 7); g.stroke();
+      g.strokeStyle = col; g.lineWidth = 2; g.beginPath(); g.arc(x, H / 2, 6, 0, 7); g.stroke();
     }
     g.globalAlpha = 1;
   });

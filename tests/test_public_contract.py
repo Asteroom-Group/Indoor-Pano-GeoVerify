@@ -208,8 +208,14 @@ class TestHouseToPublic(unittest.TestCase):
         self.pub = export_public.house_to_public(sample_house())
 
     def test_house_level_fields_kept(self):
-        for k in ("house", "n_images", "width", "height", "images", "az_convention", "doors"):
+        for k in ("house", "n_images", "width", "height", "images", "az_convention"):
             self.assertIn(k, self.pub)
+
+    def test_doors_not_exported(self):
+        """doors 是上游輔助頭的單圖輸出,不屬於本模組的交付契約。"""
+        d = sample_house()
+        d["doors"] = [{"i": 0, "dirs": [{"az": 0.0, "score": 1.0}]}]
+        self.assertNotIn("doors", export_public.house_to_public(d))
 
     def test_internal_house_fields_dropped(self):
         self.assertNotIn("n_gt_connected_pairs", self.pub)
@@ -254,10 +260,10 @@ class TestHouseToPublic(unittest.TestCase):
 
     def test_missing_optional_fields_are_omitted_not_none(self):
         d = sample_house()
-        del d["doors"]
+        del d["az_convention"]
         del d["pairs"][0]["az_source"]
         pub = export_public.house_to_public(d)
-        self.assertNotIn("doors", pub)
+        self.assertNotIn("az_convention", pub)
         self.assertNotIn("az_source", pub["pairs"][0])
 
     def test_json_serialisable(self):

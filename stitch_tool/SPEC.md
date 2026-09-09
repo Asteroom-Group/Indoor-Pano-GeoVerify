@@ -12,11 +12,10 @@
 ## 伺服器 API（server.py 已完成）
 - `GET /api/houses` → `[{house,n_images,n_pairs,n_gt_connected_pairs}]`
 - `GET /api/house/<house>` →
-  `{house,n_images,width,height,images[N],pairs[],doors[],az_convention}`
+  `{house,n_images,width,height,images[N],pairs[],az_convention}`
   - `pairs[k]={i,j,logit,prob,az_ij,az_ji,gt_connected,gt_az_ij,gt_az_ji}`，已依 `prob` 由高到低排序。
     角度單位為度 [0,360)。`az_ij` = 在 **i 圖** 中看向 j 的門方位；`az_ji` = 在 j 圖看向 i。
     `gt_*` 僅供除錯對照（可用開關顯示），非必要。
-  - `doors[i]={i,dirs:[{az,score} ×8]}`：該圖的候選門方位（az=0/45/…/315 的 softmax 機率）。
 - `GET /images/<house>/<file>` → ERP 全景 jpg（等距柱狀 equirectangular）。
 - `GET /api/state/<house>` → 已存標註（或 `{}`）。
 - `POST /api/state/<house>`（JSON body）→ 存標註。
@@ -95,8 +94,7 @@ lon/lat 相機）：`lon = (az + 180) mod 360`，`lat = 0`。點擊球面回推�
   - 配對聚類：所有含 imgIdx 的 pair，取在 imgIdx 看向對方的方位（i==imgIdx→az_ij，否則 az_ji），
     帶 prob/target/status。用**環狀單鏈聚類、CLUSTER_DELTA≈7°**併成門；cluster.bestProb=成員最大prob，
     status=有已確認成員→confirmed，否則 pending。只顯示 bestProb≥門檻或 confirmed/使用者的。
-  - doormap 門先驗：`doors[i].dirs` 8 方位 softmax，取顯著 bin（score≥max(0.18, 平均*1.3) 或前2）當**淡色**參考。
-- **羅盤條**（底部 360° 尺）：每個門一刻度，顏色 綠=已確認/琥珀=預測未確認/橘=手動補；doormap 峰用淡刻度；
+- **羅盤條**（底部 360° 尺）：每個門一刻度，顏色 綠=已確認/琥珀=預測未確認/橘=手動補；
   目前相機 lon 對應的 FOV 視窗高亮；點刻度→`lon=azToLon(az)` 轉過去。標題顯示「偵測到 N 個門（M 已連）」。
 - **場景參考圈**：每個顯示中的門聚類在 repAz(v=0.5) 畫環；目前 pair 的門最醒目（琥珀實心大），
   其餘 pending 淡描邊、confirmed 綠、手動 橘。點 pending 參考圈可跳去複核該 target 的 pair；confirmed 走門。

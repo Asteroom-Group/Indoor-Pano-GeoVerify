@@ -61,7 +61,7 @@ python config.py
 |---|---|---|
 | `<house>.npy` | `(N, N, 3)` | ch0 = 連通分數 · ch1 = sin(az) · ch2 = cos(az) |
 | `<house>_images.json` | 長度 N | 影像檔名（**含副檔名**），順序與矩陣的 row/col 對齊 |
-| `<house>_doormap.npy` | `(N, 8)` | 每張圖的門方位 8-bin aux logits |
+| `<house>_doormap.npy` | `(N, 8)` | 每張圖的門方位 8-bin aux logits。**現行上游已不再產出**，消費端已移除；舉出僅為舊目錄容錯 |
 
 `<house>` 必須與 `datasets/` 底下的資料夾名逐字一致（例：`DollhouseTask_58553`、
 `DollhouseTask_58472_NoOutdoor`——`_NoOutdoor` 後綴時有時無）。

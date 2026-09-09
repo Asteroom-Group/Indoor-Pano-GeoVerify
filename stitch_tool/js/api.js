@@ -12,7 +12,7 @@ export function fetchHouses(){
 }
 
 /**
- * GET /api/house/<house> -> {house,n_images,width,height,images[],pairs[],doors[],az_convention}
+ * GET /api/house/<house> -> {house,n_images,width,height,images[],pairs[],az_convention}
  * @param {string} house
  * @returns {Promise<object>}
  */

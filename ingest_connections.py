@@ -22,7 +22,6 @@
     - ch0：prepare_house_data 以 prob=sigmoid(ch0) 顯示 ⇒ 這裡存 logit=log(p/(1-p))，
       還原後 prob 逐位等於上游的機率；prob>=0.5 對應 logit 門檻 0.0。
     - ch1/ch2：M[i,j] 存「在 i 圖看向 j」的方位（a=i 時取 yaw_a，否則 yaw_b）。
-    - doormap：上游未提供每圖門 8-bin，略過不寫（prepare_house_data 缺檔時 doors=[]）。
 """
 import argparse
 import glob

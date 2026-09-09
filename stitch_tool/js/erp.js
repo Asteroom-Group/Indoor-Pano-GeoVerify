@@ -17,7 +17,7 @@
 
 import { COL, CLUSTER_DELTA } from './config.js';
 import { angDiff } from './geometry.js';
-import { clusterDoors, doormapSalient } from './clustering.js';
+import { clusterDoors } from './clustering.js';
 import {
   STATE, getHouseData, getHouseName, pairKey, pairStatus, scheduleSave
 } from './state.js';
@@ -439,9 +439,6 @@ export function erpDoorList(imgIdx){
   (STATE.extra_channels[imgIdx] || STATE.extra_channels[String(imgIdx)] || []).forEach(a => {
     out.push({ az:a, status:'extra', i:imgIdx });
   });
-  if(STATE.ui.doormap){
-    doormapSalient(imgIdx, hd).forEach(d => { out.push({ az:d.az, status:'doormap', i:imgIdx }); });
-  }
   const gtEl = document.getElementById('gt-toggle');
   if(gtEl && gtEl.checked && dp){
     const gaz = (imgIdx === dp.i) ? dp.gt_az_ij : (imgIdx === dp.j ? dp.gt_az_ji : null);
@@ -633,7 +630,7 @@ export function drawErpMarkers(which, imgIdx){
   ov.innerHTML = '';
   const W = ov.clientWidth, H = ov.clientHeight; if(!W || !H) return;
   const xOf = (az) => ((az + 180) % 360) / 360 * W;
-  const colOf = { confirmed:COL.green, extra:COL.orange, doormap:COL.doormap, refdoor:COL.refdoor, pending:COL.amber, gt:COL.gt };
+  const colOf = { confirmed:COL.green, extra:COL.orange, refdoor:COL.refdoor, pending:COL.amber, gt:COL.gt };
 
   erpDoorList(imgIdx).forEach(d => {
     const c = colOf[d.status] || COL.amber;
@@ -651,15 +648,14 @@ export function drawErpMarkers(which, imgIdx){
       dt.style.cursor = 'pointer';
       dt.title = d.status === 'confirmed' ? '已確認門：左鍵穿門 / 右鍵重新否決'
         : d.status === 'refdoor' ? '預測門：左鍵跳去複核'
-        : d.status === 'extra' ? '未連接通道：左鍵找預測目標 / 右鍵刪除'
-        : d.status === 'doormap' ? 'doormap 先驗門：左鍵轉過去看' : '';
+        : d.status === 'extra' ? '未連接通道：左鍵找預測目標 / 右鍵刪除' : '';
 
       dt.onpointerdown = function(e){
         if(e.button !== 0) return;           // 左鍵
         e.preventDefault();
         e.stopPropagation();                 // 避免觸發面板 onpointerdown（會多放一個標記）
         handleCircleClick({
-          role: d.status,                    // 'confirmed'|'refdoor'|'extra'|'doormap'
+          role: d.status,                    // 'confirmed'|'refdoor'|'extra'
           az: d.az,
           i: imgIdx,
           j: (d.status === 'confirmed') ? d.targetImg : undefined,

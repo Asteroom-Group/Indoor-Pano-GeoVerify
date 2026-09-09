@@ -8,7 +8,7 @@
     <內部 house JSON 目錄>/<house>.json  →  <out_dir>/<house>.json
 
 [對外保留]
-    房層  house / n_images / width / height / images / az_convention / doors
+    房層  house / n_images / width / height / images / az_convention
     每對  i, j                連接圖的兩個端點（index 對應 images）
           prob                上游給的連通機率
           az_ij / az_ji       邊方向（在 i 圖看向 j 的方位角，反向同理）
@@ -68,7 +68,8 @@ PAIR_FIELDS = {
     "geo_az_wedge_j_deg": "az_wedge_j_deg",
 }
 
-HOUSE_FIELDS = ["house", "n_images", "width", "height", "images", "az_convention", "doors"]
+
+HOUSE_FIELDS = ["house", "n_images", "width", "height", "images", "az_convention"]
 
 #: 出現這些前綴就是內部欄位漏出去了（輸出前自檢用）。
 FORBIDDEN_PREFIXES = ("gt_", "az_coarse_", "roma_")

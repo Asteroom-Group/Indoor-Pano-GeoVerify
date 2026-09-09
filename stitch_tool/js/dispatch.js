@@ -3,7 +3,7 @@
    3D（scene3d.onPointerUp）與 ERP（erp dot onpointerdown）都呼叫它，收斂兩套點擊路徑。
 
    targetInfo 欄位：
-     role     : 'confirmed'|'reciprocal'|'candidate'|'refdoor'|'extra'|'doormap'|'gt'
+     role     : 'confirmed'|'reciprocal'|'candidate'|'refdoor'|'extra'|'gt'
      az       : 圈圈方位角
      i, j     : （confirmed/reciprocal）該確認邊兩端；（candidate）該對兩端
      targetImg: （candidate/refdoor/confirmed）此圈指向的對面圖
@@ -76,7 +76,7 @@ export function handleCircleClick(t){
       toast('此圈無對應方位，無法批量否決');
       return;
     }
-    // gt / doormap 等非候選視覺圈本就不可點（3D 已擋 gt/rejected-view）；此處統一以「圈方位」聚類。
+    // gt 等非候選視覺圈本就不可點（3D 已擋 gt/rejected-view）；此處統一以「圈方位」聚類。
     openBatchReject(src, t.az, which);
     return;
   }
@@ -172,10 +172,6 @@ function dispatchNavByRole(t){
     } else {
       toast('此方向沒有模型預測目標，請點擊左右箭頭自行切換對側圖片');
     }
-
-  } else if(role === 'doormap'){
-    faceAz(t.az);                       // doormap 先驗：轉過去看
-    toast('doormap 先驗門 @' + t.az.toFixed(0) + '°');
 
   } else if(role === 'rejected-view'){
     // 已否決/淘汰配對的紅圈：點擊只提示，不做導覽（可用 Y 重新連通）。
