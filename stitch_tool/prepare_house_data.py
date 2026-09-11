@@ -97,7 +97,7 @@ def load_pair_csv(path: str) -> dict:
     """讀取 pose_experiment 幾何驗證批次輸出的 pair-level CSV（_ranking_eval.csv 或
     _summary.csv，兩者前三欄都是 house,img_a,img_b），回傳
     {(house, frozenset({img_a, img_b})): row_dict}。
-    img_a/img_b 檔名不含副檔名、pair 無序——用 frozenset 當 key 一次處理這兩項，
+    img_a/img_b 檔名不含副檔名、pair 無序。用 frozenset 當 key 一次處理這兩項，
     呼叫端 join 時只需把影像檔名去副檔名即可比對。檔案不存在回傳空 dict（呼叫端等同「不 join」）。"""
     lookup = {}
     if not os.path.exists(path):
@@ -108,18 +108,31 @@ def load_pair_csv(path: str) -> dict:
     return lookup
 
 
-def build_house(house: str, oof_dir: str, roma_cache=None, ranking_lookup=None, summary_lookup=None) -> dict | None:
-    npy = os.path.join(oof_dir, f"{house}.npy")
-    imgs_json = os.path.join(oof_dir, f"{house}_images.json")
-    if not (os.path.exists(npy) and os.path.exists(imgs_json)):
-        print(f"[skip] {house}: 缺 .npy 或 _images.json")
-        return None
+def build_house(house: str, oof_dir: str, roma_cache=None, ranking_lookup=None, summary_lookup=None,
+                datasets_root=None) -> dict | None:
+    ds_root = datasets_root if datasets_root is not None else DATA_ROOT
+    npy = os.path.join(oof_dir, f"{house}.npy") if oof_dir else ""
+    imgs_json = os.path.join(oof_dir, f"{house}_images.json") if oof_dir else ""
+    M = None
+    images = None
+    if npy and os.path.exists(npy) and os.path.exists(imgs_json):
+        M = np.load(npy)                       # (N, N, 3)
+        images = json.load(open(imgs_json, encoding="utf-8"))
 
-    M = np.load(npy)                       # (N, N, 3)
-    images = json.load(open(imgs_json, encoding="utf-8"))
+    task_dir = resolve_task_dir(ds_root, house)
+    if images is None:
+        if task_dir is None:
+            print(f"[skip] {house}: 無連通矩陣，也找不到影像資料夾")
+            return None
+        images = sorted(
+            n for n in os.listdir(task_dir)
+            if n.lower().endswith((".jpg", ".jpeg")) and os.path.isfile(os.path.join(task_dir, n))
+        )
+        if not images:
+            print(f"[skip] {house}: 影像資料夾沒有 jpg")
+            return None
+
     N = len(images)
-
-    task_dir = resolve_task_dir(DATA_ROOT, house)
     if task_dir is None:
         print(f"[warn] {house}: 找不到 datasets 影像資料夾，仍輸出(無 GT/寬高預設)")
         W, H = 8192, 4096
@@ -130,67 +143,71 @@ def build_house(house: str, oof_dir: str, roma_cache=None, ranking_lookup=None, 
     # 見該檔模組說明）；寬度直接沿用上面剛算出的 W，不必再開一次圖。
     gt = load_gt(find_hotspot_files(task_dir), W) if task_dir else {}
 
-    # 建立 pairs (上三角 i<j)，依連通機率(sigmoid logit)由高到低
+    # 建立 pairs (上三角 i<j)。有連通矩陣時依連通機率由高到低。
     pairs = []
     for i in range(N):
         for j in range(i + 1, N):
-            logit = float(M[i, j, 0])
-            prob = 1.0 / (1.0 + math.exp(-logit))
             ai, aj = images[i], images[j]
             ai_base = os.path.splitext(ai)[0]
             aj_base = os.path.splitext(aj)[0]
-
-            # 通道方位有兩個來源，優先序固定：
-            #   geo    = 幾何驗證的 az_ab/az_ba（此對在 _summary.csv 有位姿時採用）
-            #   coarse = 上游粗篩的方向輸出（其餘情況的唯一來源）
-            # coarse 目前由矩陣 ch1/ch2 提供，後續由子計畫的模型整體取代；解碼集中在
-            # upstream_direction.py，換來源時只改那個模組（見該檔與 matrices/README.md）。
-            # summary 的 img_a/img_b 順序可能與 (i,j)=(ai,aj) 相反，用檔名判斷方向對映。
-            az_ij_coarse = az_from_matrix(M, i, j)
-            az_ji_coarse = az_from_matrix(M, j, i)
-            az_ij, az_ji, az_source = az_ij_coarse, az_ji_coarse, "coarse"
             srow = summary_lookup.get((house, frozenset({ai_base, aj_base}))) if summary_lookup else None
+
+            if M is not None:
+                logit = float(M[i, j, 0])
+                prob = 1.0 / (1.0 + math.exp(-logit))
+                az_ij_coarse = az_from_matrix(M, i, j)
+                az_ji_coarse = az_from_matrix(M, j, i)
+                az_ij, az_ji, az_source = az_ij_coarse, az_ji_coarse, "coarse"
+            else:
+                logit = prob = az_ij_coarse = az_ji_coarse = None
+                az_ij = az_ji = az_source = None
+
             if srow is not None:
                 az_ab = _csv_num(srow.get("az_ab_deg"))
                 az_ba = _csv_num(srow.get("az_ba_deg"))
                 if az_ab is not None and az_ba is not None:
-                    if srow["img_a"] == ai_base:   # 同序：img_a=i圖(ai)，img_b=j圖(aj)
+                    if srow["img_a"] == ai_base:
                         az_ij, az_ji = az_ab % 360.0, az_ba % 360.0
-                    else:                            # 反序：img_a=j圖(aj)，img_b=i圖(ai)
+                    else:
                         az_ij, az_ji = az_ba % 360.0, az_ab % 360.0
                     az_source = "geo"
 
-            pair = {
-                "i": i, "j": j,
-                "logit": round(logit, 4),
-                "prob": round(prob, 4),
-                "az_ij": round(az_ij, 2) % 360.0,   # 在 i 圖中指向 j 的方位（posed 時來自 az_ab/az_ba）
-                "az_ji": round(az_ji, 2) % 360.0,   # 在 j 圖中指向 i 的方位
-                "az_source": az_source,     # "geo"=幾何驗證；"coarse"=上游粗篩的方向輸出
-                "az_coarse_ij": round(az_ij_coarse, 2) % 360.0,   # 粗篩方向頭原始值備份，QA 對照用
-                "az_coarse_ji": round(az_ji_coarse, 2) % 360.0,
-                **gt_pair_fields(gt, ai, aj),   # gt_connected / gt_az_ij / gt_az_ji，見 gt_hotspot.py
-                # RoMa 聚合分數（可選，未經幾何驗證的原始匹配聚合）：只有跑過
-                # run_roma_above_threshold.py 且此對通過閾值才有值，其餘一律 null。佇列排序已
-                # 改用下面的 geo_* 欄位，這組留著純作向後相容／除錯對照。
+            geo_blank = {
                 "roma_match_count": None,
                 "roma_conf_sum": None,
                 "roma_conf_mean": None,
-                # 幾何驗證欄位（join _ranking_eval.csv）：三層語意——
-                # null=不在 CSV(未過粗篩/沒跑 RoMa，佇列沉底)；geo_posed=0(跑了但無位姿，
-                # n_inlier=0 自然墊底)；geo_posed=1=正常值。取代 roma_conf_* 做佇列「幾何驗證」排序。
                 "geo_n_inlier": None,
                 "geo_inlier_rate": None,
                 "geo_n_regions": None,
                 "geo_conf_used": None,
                 "geo_posed": None,
-                # 共視楔形寬（度）：包住 80% 內點的最窄圓弧，兩側各一。窄楔型代表共視證據
-                # 集中在單一方向，估計出的位姿條件較差。只有 _summary.csv 帶這兩欄，
-                # _ranking_eval.csv 沒有，故一律由 srow 取得
-                # ⚠ 與 az_ij/az_ji 同樣分側，srow 的圖序與 (i, j) 相反時必須對調。
                 "geo_az_wedge_i_deg": None,
                 "geo_az_wedge_j_deg": None,
             }
+            if M is not None:
+                pair = {
+                    "i": i, "j": j,
+                    "logit": round(logit, 4),
+                    "prob": round(prob, 4),
+                    "az_ij": round(az_ij, 2) % 360.0,
+                    "az_ji": round(az_ji, 2) % 360.0,
+                    "az_source": az_source,
+                    "az_coarse_ij": round(az_ij_coarse, 2) % 360.0,
+                    "az_coarse_ji": round(az_ji_coarse, 2) % 360.0,
+                    **gt_pair_fields(gt, ai, aj),
+                    **geo_blank,
+                }
+            else:
+                pair = {
+                    "i": i, "j": j,
+                    **gt_pair_fields(gt, ai, aj),
+                    **geo_blank,
+                }
+                if az_ij is not None:
+                    pair["az_ij"] = round(az_ij, 2) % 360.0
+                    pair["az_ji"] = round(az_ji, 2) % 360.0
+                if az_source is not None:
+                    pair["az_source"] = az_source
             if roma_cache is not None:
                 rec = roma_cache.get(house, ai, aj)
                 if rec is not None:
@@ -224,9 +241,12 @@ def build_house(house: str, oof_dir: str, roma_cache=None, ranking_lookup=None, 
                 else:
                     pair["geo_az_wedge_i_deg"], pair["geo_az_wedge_j_deg"] = wb, wa
             pairs.append(pair)
-    pairs.sort(key=lambda p: p["prob"], reverse=True)
+    if M is not None:
+        pairs.sort(key=lambda p: p["prob"], reverse=True)
+    else:
+        pairs.sort(key=lambda p: (p["i"], p["j"]))
 
-    return {
+    out = {
         "house": house,
         "n_images": N,
         "width": W,
@@ -234,9 +254,12 @@ def build_house(house: str, oof_dir: str, roma_cache=None, ranking_lookup=None, 
         "images": images,
         "pairs": pairs,
         "az_convention": upstream_direction.CONVENTION,
-        "has_gt": bool(gt),   # 有無 HOTSPOT 真值；未知資料(無 HOTSPOT)時前端不顯示 GT 對照
+        "has_gt": bool(gt),
         "n_gt_connected_pairs": sum(1 for p in pairs if p["gt_connected"]),
     }
+    if M is None:
+        out["has_connectivity_matrix"] = False
+    return out
 
 
 def main():

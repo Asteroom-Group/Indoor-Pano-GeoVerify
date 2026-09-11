@@ -28,3 +28,18 @@ def resolve_task_dir(data_root: str, house: str, max_depth: int = 5):
         current = nested
         depth += 1
     return None
+
+
+_IMAGE_EXT = (".jpg", ".jpeg")
+
+
+def list_house_jpgs(data_root: str, house: str, max_depth: int = 5):
+    """列出一間房的全景影像檔名（已排序）。找不到資料夾時回 (None, [])。"""
+    task_dir = resolve_task_dir(data_root, house, max_depth=max_depth)
+    if task_dir is None:
+        return None, []
+    names = sorted(
+        n for n in os.listdir(task_dir)
+        if n.lower().endswith(_IMAGE_EXT) and os.path.isfile(os.path.join(task_dir, n))
+    )
+    return task_dir, names

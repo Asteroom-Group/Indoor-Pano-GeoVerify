@@ -131,8 +131,11 @@ class TestHouseOf(unittest.TestCase):
     def test_accepts_windows_separators(self):
         self.assertEqual(roma_geo.house_of(r"D:\data\DollhouseTask_1\x.jpg"), "DollhouseTask_1")
 
-    def test_unknown_when_no_marker(self):
-        self.assertEqual(roma_geo.house_of("/tmp/a.jpg"), "unknown")
+    def test_parent_directory_when_no_dataset_marker(self):
+        self.assertEqual(roma_geo.house_of("/tmp/a.jpg"), "tmp")
+
+    def test_bare_filename_is_unknown(self):
+        self.assertEqual(roma_geo.house_of("a.jpg"), "unknown")
 
 
 class TestDefaultsConsistency(unittest.TestCase):

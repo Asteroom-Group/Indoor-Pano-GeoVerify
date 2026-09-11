@@ -1,6 +1,6 @@
 r"""
 [模組用途]
-專案層級的路徑與門檻設定 —— 所有「會隨部署環境改變」的位置統一由本模組解析，
+專案層級的路徑與門檻設定。所有「會隨部署環境改變」的位置統一由本模組解析，
 呼叫端不寫死路徑。
 
 外部交界處有三類：上游（連通性粗篩的矩陣）、資料集、以及本專案的產出位置。
@@ -145,6 +145,74 @@ def regions_root() -> str:
 def cache_root() -> str:
     """RoMa 匹配快取目錄（`*.npz`）。暫存檔、可重生，不屬於交付內容。"""
     return _from_env(ENV_CACHE, DEFAULT_CACHE)
+
+
+class Settings:
+    """呼叫端直接指定的路徑與門檻。未傳入的項目才讀環境變數與專案預設。"""
+
+    def __init__(self, datasets=None, matrices=None, output=None, cache=None,
+                 pair_threshold=None, connections=None, house_data=None,
+                 semantic=None, public_houses=None):
+        self._datasets = datasets
+        self._matrices = matrices
+        self._output = output
+        self._cache = cache
+        self._pair_threshold = pair_threshold
+        self._connections = connections
+        self._house_data = house_data
+        self._semantic = semantic
+        self._public_houses = public_houses
+
+    def _abs(self, value):
+        return os.path.abspath(os.path.expanduser(value))
+
+    def datasets_root(self):
+        return self._abs(self._datasets) if self._datasets else datasets_root()
+
+    def matrices_root(self, variant="refined"):
+        if not self._matrices:
+            return matrices_root(variant)
+        base = self._abs(self._matrices)
+        sub = os.path.join(base, "%s_matrices" % variant)
+        if os.path.isdir(sub):
+            return sub
+        return base
+
+    def output_root(self):
+        return self._abs(self._output) if self._output else output_root()
+
+    def regions_root(self):
+        return os.path.join(self.output_root(), "roma_regions")
+
+    def cache_root(self):
+        return self._abs(self._cache) if self._cache else cache_root()
+
+    def pair_threshold(self):
+        if self._pair_threshold is not None:
+            return float(self._pair_threshold)
+        return pair_threshold()
+
+    def semantic_root(self):
+        if self._semantic:
+            return self._abs(self._semantic)
+        if self._datasets:
+            return os.path.join(self.datasets_root(), "semantic")
+        return semantic_root()
+
+    def house_data_dir(self):
+        if self._house_data:
+            return self._abs(self._house_data)
+        return os.path.join(PROJECT_ROOT, "stitch_tool", "data")
+
+    def public_dir(self):
+        if self._public_houses:
+            return self._abs(self._public_houses)
+        return os.path.join(self.output_root(), "public_houses")
+
+    def connections_dir(self):
+        if self._connections:
+            return self._abs(self._connections)
+        return None
 
 
 def _src(env_name: str, default_desc: str) -> str:

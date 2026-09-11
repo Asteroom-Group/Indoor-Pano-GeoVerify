@@ -15,7 +15,7 @@ Roma_Geo 的**唯一對外入口**：給兩張 ERP 全景圖，回傳幾何驗�
 
 預設參數與正式批次 `pose_regions/batch_pose_from_cache.py` 一致
 （conf 0.65 / retry 0.3 / max_pts 4000 / thresh 0.5° / iters 2000 / seed 0 /
-stratified / lat_max 60）—— `Output/roma_regions` 的既有產出皆以這組參數產生。
+stratified / lat_max 60）。`Output/roma_regions` 的既有產出皆以這組參數產生。
 
 [設定來源]
 本模組是**函式介面**：除了選配的 `cache_dir`（未指定時才回落到環境變數
@@ -84,11 +84,9 @@ except Exception:                                     # pragma: no cover
 
 
 def house_of(path):
-    """從影像路徑推房子名（與 roma_match.matcher._get_cache_info 同規則）。"""
-    for part in str(path).replace("\\", "/").split("/"):
-        if "DollhouseTask" in part or "direct_match" in part:
-            return part
-    return "unknown"
+    """從影像路徑推房子名（與匹配快取檔名使用同一規則，見 names.house_of）。"""
+    from names import house_of as _house_of
+    return _house_of(path)
 
 
 def get_matcher(model_type="roma_v2", device=None, use_cache=True, cache_dir=None):
@@ -194,7 +192,7 @@ def verify_pairs(pairs, progress=False, **kw):
         pairs: [(img_a, img_b), ...]
         progress: True 則每對印一行進度。
     Yields:
-        dict —— 逐對 yield，方便邊跑邊寫檔而不必全部留在記憶體。
+        dict。逐對 yield，方便邊跑邊寫檔而不必全部留在記憶體。
     """
     m = kw.pop("matcher", None) or get_matcher(
         kw.get("model_type", "roma_v2"), kw.get("device"),

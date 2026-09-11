@@ -244,8 +244,9 @@ def check_house_json(data_dir):
             tot_pairs += 1
             if not (0 <= p.get("i", -1) < n_img and 0 <= p.get("j", -1) < n_img):
                 problems.append("%s: pair 索引超出影像範圍" % house)
-            if p.get("az_source") not in ("geo", "coarse"):
-                problems.append("%s: az_source 非 geo/coarse（%s）" % (house, p.get("az_source")))
+            src = p.get("az_source")
+            if src is not None and src not in ("geo", "coarse"):
+                problems.append("%s: az_source 非 geo/coarse（%s）" % (house, src))
             if p.get("az_source") == "geo":
                 n_geo += 1
                 if not p.get("geo_posed"):

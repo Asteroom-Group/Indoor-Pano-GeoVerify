@@ -4,7 +4,7 @@ HOTSPOT 標註真值（Ground Truth）的載入、對映、比對回報，供兩
 
   - `prepare_house_data.py`：建 `data/<house>.json` 時把 GT 烘進每一對（`build_house`）。
   - `server.py`：讀取既有房子資料時，若該資料還沒有 GT 欄位，就在 `/api/house/<house>`
-    當場算出來補上（`augment_house_with_gt`）——讓「bundle 內帶 HOTSPOT 檔」這件事
+    當場算出來補上（`augment_house_with_gt`）。讓「bundle 內帶 HOTSPOT 檔」這件事
     真的有效果，而不只是把檔案原樣存進包裡卻沒有任何程式碼讀它。
 
 規則只寫一份的理由：這個 repo 已經因為「同一條規則兩處各自實作、改一邊忘了改另一邊」
@@ -33,7 +33,7 @@ def find_hotspot_files(dir_: str, recursive: bool = False):
     """在 `dir_` 底下找所有 `*HOTSPOT*.json`，已排序。
 
     `recursive=True` 時連子資料夾一併找：面向未知資料，使用者手動組裝或透過「＋加房」
-    上傳的 bundle 不保證 HOTSPOT 檔乖乖放在房子資料夾最上層——這不是假設性的邊界情況，
+    上傳的 bundle 不保證 HOTSPOT 檔乖乖放在房子資料夾最上層。這不是假設性的邊界情況，
     是實際發生過的真實檔案佈局（誤放進 `images/` 底下）。伺服器即時補 GT 的路徑
     （`augment_house_with_gt`）要靠這個才找得到，不然會安靜漏掉，使用者只會覺得
     「功能沒接上」。
@@ -53,7 +53,7 @@ def load_gt(hotspot_paths, width) -> dict:
     `hotspot_paths` 內部一律先排序才處理，呼叫端不必自行排序、傳入順序也不影響結果：
     多樓層的房子每層一個 HOTSPOT 檔，樓梯配對在相鄰兩層皆有標註、座標略有差異
     （實測 5~120 px）。下方為後寫覆蓋前寫，未排序時採用哪一筆取決於呼叫端蒐集檔案的
-    順序（例如檔案系統列舉順序，Linux 與 Windows 不一致）——排序收斂在這裡處理一次，
+    順序（例如檔案系統列舉順序，Linux 與 Windows 不一致）。排序收斂在這裡處理一次，
     上層呼叫端（含測試）都不必記得自己排。這是從 `prepare_house_data.py` 抽出來時
     特別保留的既有防呆，原始版本已有相同註解與行為。
 
@@ -88,7 +88,11 @@ def gt_pair_fields(gt: dict, img_i: str, img_j: str) -> dict:
     `img_i`／`img_j` 須含副檔名，與 HOTSPOT 的 `IDName`／`ToIDName` 同格式（即 `images`
     清單的原始項）。抽自 `prepare_house_data.build_house` 組 pair dict 那段，
     `server.py` 即時補 GT 時共用同一份對映規則。
+
+    沒有任何標註時 `gt_connected` 為 None：缺席與「已確認不連通」分開表示。
     """
+    if not gt:
+        return {"gt_connected": None, "gt_az_ij": None, "gt_az_ji": None}
     gt_ij = gt.get(img_i, {})
     gt_ji = gt.get(img_j, {})
     return {
@@ -103,7 +107,7 @@ def gt_pair_fields(gt: dict, img_i: str, img_j: str) -> dict:
 def has_gt_fields(house_data: dict) -> bool:
     """判斷房子資料是否已經算過 GT（無論算出來的結論是有沒有）。
 
-    `has_gt` 為真，或任一對已帶 `gt_connected` 鍵——即使值是 `False`：`has_gt=False`
+    `has_gt` 為真，或任一對已帶 `gt_connected` 鍵，即使值是 `False`：`has_gt=False`
     且每對都有 `gt_connected` 鍵，代表建檔當時真的找過 HOTSPOT 但沒找到，是「已有答案」
     而非「還沒算過」，`augment_house_with_gt` 不應該覆寫它去猜 bundle 資料夾裡湊巧出現的
     檔案。只有 schema 上完全沒有這些欄位（例如 `export_public.py` 的對外交付檔，
@@ -182,11 +186,11 @@ def augment_house_with_gt(house_data: dict, house_dir: str):
         （行為與本功能實作之前相同）。
       - 找到 HOTSPOT → 回傳補好 `gt_connected`／`gt_az_ij`／`gt_az_ji`（每對）與
         `has_gt`／`n_gt_connected_pairs`（房層）的新 dict；`message` 一律非 `None`，
-        是 HOTSPOT 影像與本房影像的比對摘要。呼叫端應該把它印出來——安靜地不顯示
+        是 HOTSPOT 影像與本房影像的比對摘要。呼叫端應該把它印出來。安靜地不顯示
         GT 正是本函式存在的理由（使用者曾因此誤以為功能沒接上，見 `match_report`）。
         注意 `has_gt` 不是「HOTSPOT 檔案存在」就設真：若其中提到的影像與本房完全
         對不上（例如房號放錯），代表這份 HOTSPOT 根本不適用於這棟房子，`has_gt`
-        仍是 `False`——不然前端會顯示「GT連通 0」，看起來像已驗證的結論而非資料
+        仍是 `False`。不然前端會顯示「GT連通 0」，看起來像已驗證的結論而非資料
         不適用，等同產生一份假 GT。
     """
     if has_gt_fields(house_data):
@@ -218,7 +222,7 @@ def augment_house_with_gt(house_data: dict, house_dir: str):
         pairs.append(q)
     out["pairs"] = pairs
     # has_gt 只在 HOTSPOT 至少有一張影像真的屬於這棟房子（n_match>0）時才算「有」。
-    # 完全對不上時 gt 字典非空（裡面全是別棟房子的資料），但 n_conn 必然是 0——若讓
+    # 完全對不上時 gt 字典非空（裡面全是別棟房子的資料），但 n_conn 必然是 0。若讓
     # has_gt 只看 bool(gt)，前端會顯示「GT連通 0」，看起來像「已驗證這棟房子零連接」
     # 的結論，實際上是「這份 HOTSPOT 根本不適用於這棟房子」，兩者意義天差地遠，
     # 不能混為一談（也是本函式不能產生假 GT 的關鍵）。

@@ -118,19 +118,14 @@ class RoMaMatcher:
 
     def _get_cache_info(self, path_a, path_b, mode):        
         """獲取快取路徑與對稱性資訊 (統一 0.1 門檻)"""
-        def get_clean_name(p):
-            p = p.replace("\\", "/")
-            parts = p.split("/")
-            img_name = os.path.splitext(parts[-1])[0]
-            house_name = "unknown"
-            for part in parts:
-                if "DollhouseTask" in part or "direct_match" in part:
-                    house_name = part
-                    break
-            return house_name, img_name
+        import sys
+        _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if _root not in sys.path:
+            sys.path.insert(0, _root)
+        from names import house_of, image_stem
 
-        ha, na = get_clean_name(path_a)
-        hb, nb = get_clean_name(path_b)
+        ha, na = house_of(path_a), image_stem(path_a)
+        hb, nb = house_of(path_b), image_stem(path_b)
         h_prefix = ha if ha == hb else f"{ha}_{hb}"
         v_key = f"{mode}_{self.model_type}_std0.1_face{self.face_size}"
         

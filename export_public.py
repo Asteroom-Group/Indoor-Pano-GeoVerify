@@ -12,7 +12,7 @@
     每對  i, j                連接圖的兩個端點（index 對應 images）
           prob                上游給的連通機率
           az_ij / az_ji       邊方向（在 i 圖看向 j 的方位角，反向同理）
-          az_source           該方位從哪來 —— 降級必須看得出來，不可與幾何驗證混為一談
+          az_source           該方位從哪來。降級必須看得出來，不可與幾何驗證混為一談
           has_geometry        有沒有幾何驗證結果（false = 共視不足或未跑，方向來自上游）
           n_inlier / inlier_rate / conf_used   幾何證據強度，供下游自行 gate
           az_wedge_i_deg / az_wedge_j_deg      共視楔形寬：包住 80% 內點的最窄圓弧
@@ -28,8 +28,8 @@
     roma_*       匹配聚合分數，內部排序用
     R、t、inliers[]：本來就不在 house JSON 裡（見 roma_geo.to_public 的同款約定）
 
-共視區域取自 per-pair 產出，預設併入（與 `roma_geo.to_public()` 的單對契約一致——
-該契約即「共視區域 + 通道方位角 + 可信度」）。只有跑出幾何驗證結果的對才有區域，
+共視區域取自 per-pair 產出，預設併入，與 `roma_geo.to_public()` 的單對契約一致
+（共視區域、通道方位角、可信度）。只有跑出幾何驗證結果的對才有區域，
 其餘對不帶此欄位。不需要時以 `--no_regions` 關閉。
 
 區域的欄位裁切直接呼叫 `roma_geo.region_to_public()`，不在此另寫一份：兩條對外路徑
@@ -167,6 +167,75 @@ def restricted_reason(house, datasets_dir=None):
     return None
 
 
+def export_houses(in_dir, out_dir, regions_dir=None, with_regions=True,
+                  datasets_dir=None, houses=None):
+    """把內部房子 JSON 裁成對外交付子集。失敗時丟 RomaGeoError。"""
+    from errors import RomaGeoError
+
+    files = [f for f in sorted(glob.glob(os.path.join(in_dir, "*.json")))
+             if not os.path.basename(f).startswith("_")]
+    if houses is not None:
+        want = set(houses)
+        files = [f for f in files if os.path.splitext(os.path.basename(f))[0] in want]
+        missing = want - {os.path.splitext(os.path.basename(f))[0] for f in files}
+        if missing:
+            raise RomaGeoError(
+                "找不到 %s.json" % sorted(missing)[0],
+                input_name="房子資料",
+                condition="目錄 %s 沒有該檔" % in_dir,
+            )
+    if not files:
+        raise RomaGeoError(
+            "底下沒有 house JSON",
+            input_name="房子資料",
+            condition="目錄 %s 沒有可匯出的 JSON" % in_dir,
+        )
+
+    if with_regions and not regions_dir:
+        from config import regions_root
+        regions_dir = regions_root()
+
+    os.makedirs(out_dir, exist_ok=True)
+    tot_in = tot_out = tot_pairs = tot_regions = 0
+    written = []
+    for f in files:
+        d = json.load(open(f, encoding="utf-8"))
+        house = d.get("house") or os.path.splitext(os.path.basename(f))[0]
+        why = restricted_reason(house, datasets_dir=datasets_dir)
+        if why:
+            raise RomaGeoError(
+                why,
+                input_name="房子 %s" % house,
+                condition="來自受限來源，不得對外交付",
+            )
+        pub = house_to_public(d)
+        if with_regions:
+            tot_regions += attach_regions(house, pub, regions_dir)
+        bad = leaked_fields(pub)
+        if bad:
+            raise RomaGeoError(
+                "輸出帶有內部欄位：%s" % sorted(bad),
+                input_name="房子 %s" % house,
+                condition="對外子集混入了內部欄位",
+            )
+        out_path = os.path.join(out_dir, f"{house}.json")
+        json.dump(pub, open(out_path, "w", encoding="utf-8"), ensure_ascii=False)
+        tot_in += os.path.getsize(f)
+        tot_out += os.path.getsize(out_path)
+        tot_pairs += len(pub["pairs"])
+        written.append(out_path)
+
+    print(f"{len(files)} 房 · {tot_pairs} 對 → {out_dir}")
+    if tot_in:
+        print(f"體積 {tot_in/1e6:.2f} MB → {tot_out/1e6:.2f} MB（{tot_out/tot_in:.0%}）")
+    if with_regions:
+        print(f"併入共視區域：{tot_regions} 對（來源 {regions_dir}；a 側 = i 圖）")
+    else:
+        print("未併入共視區域（--no_regions）")
+    print("自檢：輸出無 gt_* / az_coarse_* / roma_* 欄位，且無受限來源的房屋")
+    return written
+
+
 def main():
     ap = argparse.ArgumentParser(description="每間房的內部 JSON → 對外交付子集")
     ap.add_argument("--in_dir", default=os.path.join(HERE, "stitch_tool", "data"),
@@ -178,45 +247,12 @@ def main():
     ap.add_argument("--regions_dir", default=None,
                     help="per-pair JSON 目錄（預設 config.regions_root()）")
     a = ap.parse_args()
-    with_regions = not a.no_regions
-
-    files = [f for f in sorted(glob.glob(os.path.join(a.in_dir, "*.json")))
-             if not os.path.basename(f).startswith("_")]
-    if not files:
-        raise SystemExit(f"[error] {a.in_dir} 底下沒有 house JSON")
-
-    regions_dir = a.regions_dir
-    if with_regions and not regions_dir:
-        from config import regions_root
-        regions_dir = regions_root()
-
-    os.makedirs(a.out_dir, exist_ok=True)
-    tot_in = tot_out = tot_pairs = tot_regions = 0
-    for f in files:
-        d = json.load(open(f, encoding="utf-8"))
-        house = d.get("house") or os.path.splitext(os.path.basename(f))[0]
-        why = restricted_reason(house)
-        if why:   # 與下方的欄位自檢同樣是整批停下:交付內容出現受限來源不可只跳過一房
-            raise SystemExit(f"[error] {house} 來自受限來源，不得對外交付：{why}")
-        pub = house_to_public(d)
-        if with_regions:
-            tot_regions += attach_regions(house, pub, regions_dir)
-        bad = leaked_fields(pub)
-        if bad:   # 自檢失敗就整批停下,不要寫出半套
-            raise SystemExit(f"[error] {house} 的輸出帶有內部欄位：{sorted(bad)}")
-        out_path = os.path.join(a.out_dir, f"{house}.json")
-        json.dump(pub, open(out_path, "w", encoding="utf-8"), ensure_ascii=False)
-        tot_in += os.path.getsize(f)
-        tot_out += os.path.getsize(out_path)
-        tot_pairs += len(pub["pairs"])
-
-    print(f"{len(files)} 房 · {tot_pairs} 對 → {a.out_dir}")
-    print(f"體積 {tot_in/1e6:.2f} MB → {tot_out/1e6:.2f} MB（{tot_out/tot_in:.0%}）")
-    if with_regions:
-        print(f"併入共視區域：{tot_regions} 對（來源 {regions_dir}；a 側 = i 圖）")
-    else:
-        print("未併入共視區域（--no_regions）")
-    print("自檢：輸出無 gt_* / az_coarse_* / roma_* 欄位，且無受限來源的房屋")
+    from errors import RomaGeoError
+    try:
+        export_houses(a.in_dir, a.out_dir, regions_dir=a.regions_dir,
+                      with_regions=not a.no_regions)
+    except RomaGeoError as e:
+        raise SystemExit("[error] %s" % e)
 
 
 if __name__ == "__main__":

@@ -42,9 +42,9 @@ class TestParseCacheName(unittest.TestCase):
         with self.assertRaises(SystemExit):
             parse_cache_name("%s_%s_%s_other_mode.npz" % (HOUSE, UUID_A, UUID_B))
 
-    def test_rejects_non_uuid_identifiers(self):
-        with self.assertRaises(SystemExit):
-            parse_cache_name("%s_imgA_imgB%s" % (HOUSE, CACHE_SUFFIX))
+    def test_parses_plain_image_stems(self):
+        name = "%s_imgA_imgB%s" % (HOUSE, CACHE_SUFFIX)
+        self.assertEqual(parse_cache_name(name), (HOUSE, "imgA", "imgB"))
 
     def test_suffix_encodes_the_matching_parameters(self):
         """檔名後綴帶著模式與參數；換參數即換後綴，舊快取不會被誤讀為新結果。"""

@@ -90,21 +90,20 @@ def selfcheck(cl: dict, M: np.ndarray, names) -> dict:
     return {"max_prob_err": max_dp, "max_az_err_deg": max_daz}
 
 
-def main():
-    ap = argparse.ArgumentParser(description="candidate-connections JSON → matrices/<版本>/")
-    ap.add_argument("--input_dir", default=DEFAULT_INPUT,
-                    help="上游輸出的 JSON 目錄（預設 env ROMA_GEO_CONNECTIONS 或 ../candidate_connections_validation）")
-    ap.add_argument("--out_dir", default=DEFAULT_OUT,
-                    help="矩陣輸出目錄（一個版本一個目錄；預設 matrices/candidate_val）")
-    args = ap.parse_args()
-
-    files = sorted(glob.glob(os.path.join(args.input_dir, "*.json")))
+def convert_connections(input_dir, out_dir):
+    """上游連通 JSON 目錄 → 連通矩陣目錄。回傳寫出的房子名清單。"""
+    from errors import RomaGeoError
+    files = sorted(glob.glob(os.path.join(input_dir, "*.json")))
     if not files:
-        raise SystemExit(f"[error] {args.input_dir} 底下沒有 *.json")
-    os.makedirs(args.out_dir, exist_ok=True)
+        raise RomaGeoError(
+            "底下沒有 *.json",
+            input_name="上游連通輸出",
+            condition="目錄 %s 沒有 JSON" % input_dir,
+        )
+    os.makedirs(out_dir, exist_ok=True)
 
     worst = {"max_prob_err": 0.0, "max_az_err_deg": 0.0}
-    n_ok = 0
+    houses = []
     for f in files:
         cl = json.load(open(f, encoding="utf-8"))
         house = cl.get("house_id") or os.path.splitext(os.path.basename(f))[0]
@@ -114,18 +113,33 @@ def main():
         chk = selfcheck(cl, M, names)
         worst = {k: max(worst[k], chk[k]) for k in worst}
 
-        np.save(os.path.join(args.out_dir, f"{house}.npy"), M)
-        json.dump(names, open(os.path.join(args.out_dir, f"{house}_images.json"), "w",
+        np.save(os.path.join(out_dir, f"{house}.npy"), M)
+        json.dump(names, open(os.path.join(out_dir, f"{house}_images.json"), "w",
                               encoding="utf-8"), ensure_ascii=False)
-        flag = "" if complete else f"  ⚠ 非完整圖(N*(N-1)/2={N*(N-1)//2}≠{n_pairs})"
+        flag = "" if complete else f"  非完整圖(N*(N-1)/2={N*(N-1)//2}≠{n_pairs})"
         print(f"[ok] {house}: N={N} pairs={n_pairs} "
               f"maxΔprob={chk['max_prob_err']:.2e} maxΔaz={chk['max_az_err_deg']:.2e}°{flag}")
-        n_ok += 1
+        houses.append(house)
 
-    print(f"\n寫出 {n_ok} 房 → {args.out_dir}")
+    print(f"\n寫出 {len(houses)} 房 → {out_dir}")
     print(f"自檢最大誤差：Δprob={worst['max_prob_err']:.2e}  Δaz={worst['max_az_err_deg']:.2e}°")
-    print("下游用法：prepare_house_data.py --oof_dir <out_dir>  或  $env:ROMA_GEO_MATRICES=<out_dir>")
-    print("⚠ 連通門檻：ch0 是 logit，prob>=0.5 ⇔ logit>=0.0（select_pairs 的門檻設 0.0）")
+    return houses
+
+
+def main():
+    ap = argparse.ArgumentParser(description="candidate-connections JSON → matrices/<版本>/")
+    ap.add_argument("--input_dir", default=DEFAULT_INPUT,
+                    help="上游輸出的 JSON 目錄（預設 env ROMA_GEO_CONNECTIONS 或 ../candidate_connections_validation）")
+    ap.add_argument("--out_dir", default=DEFAULT_OUT,
+                    help="矩陣輸出目錄（一個版本一個目錄；預設 matrices/candidate_val）")
+    args = ap.parse_args()
+    from errors import RomaGeoError
+    try:
+        convert_connections(args.input_dir, args.out_dir)
+    except RomaGeoError as e:
+        raise SystemExit("[error] %s" % e)
+    print("下游用法：prepare_house_data.py --oof_dir <out_dir>  或  設定 ROMA_GEO_MATRICES=<out_dir>")
+    print("連通門檻：ch0 是 logit，prob>=0.5 ⇔ logit>=0.0（select_pairs 的門檻設 0.0）")
 
 
 if __name__ == "__main__":

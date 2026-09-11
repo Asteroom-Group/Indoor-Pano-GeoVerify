@@ -534,6 +534,111 @@ def write_report(rows, total_s, args, out_path):
 
 
 # ---------- 主流程 ----------
+def run_pose_batch(cache_dir, out_dir, datasets_root=None, pairs=None, limit=0, resume=False,
+                   conf=0.65, retry_conf=0.3, max_pts=4000, thresh_deg=0.5, iters=2000,
+                   sampler="stratified", lat_filter=60.0, report=None, on_missing="skip"):
+    """對匹配快取做幾何驗證，寫出逐對 JSON 與 _summary.csv。不切換工作目錄。
+
+    pairs 為 [(house, img_a, img_b), ...] 時只處理這些配對；為 None 時掃描 cache_dir。
+    on_missing: skip 略過缺圖；error 則丟出 RomaGeoError。
+    回傳寫入 summary 的列數。
+    """
+    if ROOT not in sys.path:
+        sys.path.insert(0, ROOT)
+    from types import SimpleNamespace
+    os.makedirs(out_dir, exist_ok=True)
+    if pairs is not None:
+        files = []
+        for house, na, nb in pairs:
+            p = os.path.join(cache_dir, "%s_%s_%s%s" % (house, na, nb, CACHE_SUFFIX))
+            pr = os.path.join(cache_dir, "%s_%s_%s%s" % (house, nb, na, CACHE_SUFFIX))
+            if os.path.isfile(p):
+                files.append(p)
+            elif os.path.isfile(pr):
+                files.append(pr)
+            else:
+                from errors import RomaGeoError
+                raise RomaGeoError(
+                    "檔案不存在：%s" % p,
+                    input_name="匹配快取",
+                    condition="尚未執行匹配，或快取目錄不是 %s（配對 %s / %s / %s）"
+                    % (cache_dir, house, na, nb),
+                )
+    else:
+        all_npz = sorted(glob.glob(os.path.join(cache_dir, "*.npz")))
+        files = [f for f in all_npz if f.endswith(CACHE_SUFFIX)]
+        n_other = len(all_npz) - len(files)
+        if n_other:
+            print(f"[info] 快取目錄有 {n_other} 個非 {CACHE_SUFFIX} 的檔案,已略過。")
+    if limit:
+        files = files[:limit]
+    gt = HouseGT()
+    rows, t_start = [], time.time()
+    try:
+        from tqdm import tqdm
+        seq = tqdm(files, desc="batch pose") if sys.stderr.isatty() else files
+    except Exception:
+        seq = files
+    for f in seq:
+        house, na, nb = parse_cache_name(f)
+        jpath = os.path.join(out_dir, f"{house}_{na}_{nb}.json")
+        if resume and os.path.exists(jpath):
+            old = json.load(open(jpath, encoding="utf-8"))
+            if (old.get("schema_version") == SCHEMA_VERSION
+                    and (old.get("pose") is not None or old.get("flags", {}).get("no_covisibility"))):
+                og = old.get("gt", {})
+                rows.append(to_summary_row(house, na, nb, old, og.get("label"),
+                                           og.get("az_ab_deg"), og.get("az_ba_deg"),
+                                           og.get("same_room"), old.get("time_ms", 0)))
+                continue
+        t0 = time.time()
+        img_a = find_house_image(house, na, datasets_root=datasets_root)
+        img_b = find_house_image(house, nb, datasets_root=datasets_root)
+        if not (img_a and img_b):
+            if on_missing == "error":
+                from errors import RomaGeoError
+                raise RomaGeoError(
+                    "找不到 %s.jpg / %s.jpg" % (na, nb),
+                    input_name="全景影像",
+                    condition="房子 %s 在 %s 底下沒有這兩張圖" % (house, datasets_root or "datasets"),
+                )
+            print(f"[skip] 找不到圖 {house} {na}/{nb}")
+            continue
+        Wa, Ha = gt.img_size(img_a)
+        Wb, Hb = gt.img_size(img_b)
+        m = np.load(f)["matches"]
+        m = m.astype(float) if m.size else np.zeros((0, 5))
+        res = analyze_pair(m, Wa, Ha, Wb, Hb, conf, max_pts, thresh_deg, iters,
+                           sampler=sampler, retry_conf=retry_conf,
+                           lat_max=(lat_filter if lat_filter and lat_filter > 0 else None))
+        lab, gt_ab, gt_ba, same_room = gt.get(house, na, nb, img_a)
+        dt_ms = (time.time() - t0) * 1000
+        res.update({"house": house, "img_a": na, "img_b": nb,
+                    "gt": {"label": lab,
+                           "same_room": None if same_room is None else bool(same_room),
+                           "az_ab_deg": None if gt_ab is None else round(gt_ab, 2),
+                           "az_ba_deg": None if gt_ba is None else round(gt_ba, 2)},
+                    "time_ms": round(dt_ms, 1)})
+        with open(jpath, "w", encoding="utf-8") as fh:
+            json.dump(res, fh, ensure_ascii=False, separators=(",", ":"))
+        rows.append(to_summary_row(house, na, nb, res, lab, gt_ab, gt_ba, same_room, dt_ms))
+
+    total_s = time.time() - t_start
+    with open(os.path.join(out_dir, "_summary.csv"), "w", newline="", encoding="utf-8") as fh:
+        w = csv.DictWriter(fh, fieldnames=SUMMARY_COLS)
+        w.writeheader()
+        w.writerows(rows)
+    args_ns = SimpleNamespace(conf=conf, max_pts=max_pts, thresh_deg=thresh_deg, iters=iters,
+                              sampler=sampler, lat_filter=lat_filter, retry_conf=retry_conf,
+                              out=out_dir)
+    if report is None:
+        report = os.path.join(out_dir, "batch_pose_report.md")
+    write_report(rows, total_s, args_ns, report)
+    print(f"\n{len(rows)} pairs | {total_s/60:.1f} min | summary -> {out_dir}/_summary.csv | "
+          f"report -> {report}")
+    return len(rows)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--conf", type=float, default=0.65)
@@ -560,66 +665,10 @@ def main():
     if a.report is None:
         a.report = os.path.join(a.out, "batch_pose_report.md")
 
-    os.chdir(ROOT)   # CLI 相對路徑(metadata/、Output/ 預設值)以 repo 根為準;函式庫匯入不受影響
-    os.makedirs(a.out, exist_ok=True)
-    # 只取符合本批次約定的檔名;快取目錄可能同時有其他模式的產物。
-    all_npz = sorted(glob.glob(os.path.join(CACHE_DIR, "*.npz")))
-    files = [f for f in all_npz if f.endswith(CACHE_SUFFIX)]
-    n_other = len(all_npz) - len(files)
-    if n_other:
-        print(f"[info] 快取目錄有 {n_other} 個非 {CACHE_SUFFIX} 的檔案,已略過。")
-    if a.limit:
-        files = files[:a.limit]
-    gt = HouseGT()
-    rows, t_start = [], time.time()
-
-    from tqdm import tqdm
-    for f in tqdm(files, desc="batch pose"):
-        house, na, nb = parse_cache_name(f)
-        jpath = os.path.join(a.out, f"{house}_{na}_{nb}.json")
-        if a.resume and os.path.exists(jpath):
-            old = json.load(open(jpath, encoding="utf-8"))
-            # 只信任「同 schema 版本」且已有結論(位姿或 no_covisibility)的 JSON;
-            # 舊版 schema 一律重算(中斷續跑/升版補跑都靠這條)
-            if (old.get("schema_version") == SCHEMA_VERSION
-                    and (old.get("pose") is not None or old.get("flags", {}).get("no_covisibility"))):
-                og = old.get("gt", {})
-                rows.append(to_summary_row(house, na, nb, old, og.get("label"),
-                                           og.get("az_ab_deg"), og.get("az_ba_deg"),
-                                           og.get("same_room"), old.get("time_ms", 0)))
-                continue
-        t0 = time.time()
-        img_a, img_b = find_house_image(house, na), find_house_image(house, nb)
-        if not (img_a and img_b):
-            print(f"[skip] 找不到圖 {house} {na}/{nb}")
-            continue
-        Wa, Ha = gt.img_size(img_a)
-        Wb, Hb = gt.img_size(img_b)
-        m = np.load(f)["matches"]
-        m = m.astype(float) if m.size else np.zeros((0, 5))
-        res = analyze_pair(m, Wa, Ha, Wb, Hb, a.conf, a.max_pts, a.thresh_deg, a.iters,
-                           sampler=a.sampler, retry_conf=a.retry_conf,
-                           lat_max=(a.lat_filter if a.lat_filter and a.lat_filter > 0 else None))
-        lab, gt_ab, gt_ba, same_room = gt.get(house, na, nb, img_a)
-        dt_ms = (time.time() - t0) * 1000
-        res.update({"house": house, "img_a": na, "img_b": nb,
-                    "gt": {"label": lab,
-                           "same_room": None if same_room is None else bool(same_room),
-                           "az_ab_deg": None if gt_ab is None else round(gt_ab, 2),
-                           "az_ba_deg": None if gt_ba is None else round(gt_ba, 2)},
-                    "time_ms": round(dt_ms, 1)})
-        with open(jpath, "w", encoding="utf-8") as fh:
-            json.dump(res, fh, ensure_ascii=False, separators=(",", ":"))
-        rows.append(to_summary_row(house, na, nb, res, lab, gt_ab, gt_ba, same_room, dt_ms))
-
-    total_s = time.time() - t_start
-    with open(os.path.join(a.out, "_summary.csv"), "w", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=SUMMARY_COLS)
-        w.writeheader()
-        w.writerows(rows)
-    write_report(rows, total_s, a, a.report)
-    print(f"\n{len(rows)} pairs | {total_s/60:.1f} min | summary -> {a.out}/_summary.csv | "
-          f"report -> {a.report}")
+    run_pose_batch(CACHE_DIR, a.out, datasets_root=None, pairs=None, limit=a.limit,
+                   resume=a.resume, conf=a.conf, retry_conf=a.retry_conf, max_pts=a.max_pts,
+                   thresh_deg=a.thresh_deg, iters=a.iters, sampler=a.sampler,
+                   lat_filter=a.lat_filter, report=a.report, on_missing="skip")
 
 
 if __name__ == "__main__":

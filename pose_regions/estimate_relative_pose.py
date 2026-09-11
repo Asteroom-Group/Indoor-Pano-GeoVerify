@@ -210,29 +210,44 @@ _CACHE_RE = re.compile(r"^(?P<house>.+?)_(?P<na>" + _UUID + r")_(?P<nb>" + _UUID
                        + re.escape(CACHE_SUFFIX) + r"$")
 
 def parse_cache_name(npz_path):
-    """從 cache 檔名解析 (house, imgA名, imgB名);不符約定就報錯。"""
-    m = _CACHE_RE.match(os.path.basename(npz_path))
-    if not m:
-        raise SystemExit(f"cache 檔名不符約定 {{house}}_{{uuidA}}_{{uuidB}}{CACHE_SUFFIX}: {npz_path}")
-    return m.group("house"), m.group("na"), m.group("nb")
+    """從 cache 檔名解析 (house, imgA名, imgB名);不符約定就報錯。
 
-def find_house_image(house, img_name, max_depth=5):
+    既有資料的影像識別碼為 UUID，優先用 UUID 規則解析，與既有快取檔名一致。
+    UUID 對不上時，從右側拆兩段影像識別碼，其餘為房子名。
+    """
+    base = os.path.basename(npz_path)
+    m = _CACHE_RE.match(base)
+    if m:
+        return m.group("house"), m.group("na"), m.group("nb")
+    if not base.endswith(CACHE_SUFFIX):
+        raise SystemExit(f"cache 檔名不符約定 {{house}}_{{imgA}}_{{imgB}}{CACHE_SUFFIX}: {npz_path}")
+    rest = base[:-len(CACHE_SUFFIX)]
+    parts = rest.rsplit("_", 2)
+    if len(parts) != 3 or not all(parts):
+        raise SystemExit(f"cache 檔名不符約定 {{house}}_{{imgA}}_{{imgB}}{CACHE_SUFFIX}: {npz_path}")
+    return parts[0], parts[1], parts[2]
+
+def find_house_image(house, img_name, max_depth=5, datasets_root=None):
     """在資料集根目錄找圖。房子資料夾可能同名巢狀任意層(同 stitch_tool/house_dirs.py 的約定)。
 
-    資料集位置可用環境變數 ROMA_GEO_DATASETS 覆寫(同 config.datasets_root)。
-    此處直接讀環境變數而不 import config,以維持 pose_regions 可獨立匯入。
+    datasets_root 由呼叫端傳入時優先使用。未傳入才讀環境變數 ROMA_GEO_DATASETS
+    或專案內 datasets/。此處直接讀環境變數而不 import config,以維持 pose_regions 可獨立匯入。
     """
-    root = os.environ.get("ROMA_GEO_DATASETS")
-    root = os.path.abspath(os.path.expanduser(root)) if root else \
-        os.path.join(os.path.dirname(SCRIPT_DIR), "datasets")
+    if datasets_root:
+        root = os.path.abspath(os.path.expanduser(datasets_root))
+    else:
+        root = os.environ.get("ROMA_GEO_DATASETS")
+        root = os.path.abspath(os.path.expanduser(root)) if root else \
+            os.path.join(os.path.dirname(SCRIPT_DIR), "datasets")
     cur = os.path.join(root, house)
     for _ in range(max_depth + 1):
         if not os.path.isdir(cur):
             return None
-        p = os.path.join(cur, img_name + ".jpg")
-        if os.path.exists(p):
-            return p
-        if glob.glob(os.path.join(cur, "*.jpg")):
+        for ext in (".jpg", ".JPG", ".jpeg"):
+            p = os.path.join(cur, img_name + ext)
+            if os.path.exists(p):
+                return p
+        if glob.glob(os.path.join(cur, "*.jpg")) or glob.glob(os.path.join(cur, "*.JPG")):
             return None            # 這層有圖但沒有這張,不再往下找
         cur = os.path.join(cur, house)
     return None

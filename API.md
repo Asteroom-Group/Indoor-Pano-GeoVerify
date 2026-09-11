@@ -1,13 +1,35 @@
 # API 與工具規格
 
-本文件描述 Roma_Geo 對外提供的程式介面（I/O 規格）與隨附工具的用法。
-模組總覽與環境需求見 [README.md](README.md)。
+本文件描述 Roma_Geo 的程式介面與隨附工具。模組總覽與環境需求見 [README.md](README.md)。
+
+## 開始使用
+
+單對：
+
+```python
+from roma_geo import verify_pair, to_public
+
+res = verify_pair("a.jpg", "b.jpg")
+pub = to_public(res)
+```
+
+整間房：
+
+```python
+from config import Settings
+from pipeline import run_house
+
+s = Settings(datasets="資料集根目錄", output="產出根目錄", cache="快取目錄")
+result = run_house("Office_A", settings=s)
+```
+
+`Settings` 的每一項都可由呼叫端傳入。未傳入的項目才讀環境變數或專案預設。逐步呼叫見第 2 節。
 
 ---
 
-## 1. 對外 API
+## 1. 單對幾何驗證
 
-唯一入口為根目錄的 `roma_geo` 模組。
+入口為根目錄的 `roma_geo` 模組。
 
 ```python
 from roma_geo import verify_pair, verify_pairs, to_public, get_matcher
@@ -27,7 +49,7 @@ from roma_geo import verify_pair, verify_pairs, to_public, get_matcher
 | `model_type` | `str` | `"roma_v2"` | 匹配模型版本。目前只支援 `roma_v2` |
 | `device` | `str` | `None` | `None` 時自動選 cuda／cpu |
 | `use_cache` | `bool` | `True` | 是否讀寫匹配快取的 npz。純加速，不影響結果 |
-| `cache_dir` | `str` | `None` | 快取目錄。`None` 時依環境變數 `ROMA_GEO_CACHE` > `roma_match/cache/`。本函式除此之外不讀任何環境設定 |
+| `cache_dir` | `str` | `None` | 快取目錄。`None` 時依環境變數 `ROMA_GEO_CACHE` 再回落到 `roma_match/cache/`。本函式除此之外不讀任何環境設定 |
 | `house` | `str` | `None` | 房子名；`None` 時從路徑推導 |
 | `keep_inliers` | `bool` | `True` | `False` 時不回傳 `inliers`（可省下 JSON 體積大宗） |
 
@@ -42,7 +64,7 @@ from roma_geo import verify_pair, verify_pairs, to_public, get_matcher
 |---|---|---|
 | `schema_version` | `str` | 產出格式識別字串，供批次續跑判斷是否需重算 |
 | `house` / `img_a` / `img_b` | `str` | 房子名與兩張圖的檔名（不含副檔名） |
-| `img_size_a` / `img_size_b` | `[W, H]` | 原圖尺寸，**per-house 不同**（5376×2688 ~ 8192×4096） |
+| `img_size_a` / `img_size_b` | `[W, H]` | 原圖尺寸，每間房可以不同（5376×2688 ~ 8192×4096） |
 | `params` | `dict` | 實際使用的演算法參數 |
 | `n` | `dict` | `raw` / `conf` / `used` / `inlier` / `lat_drop` 各階段點數 |
 | `conf_used` | `float\|null` | 自適應後實際採用的 conf 門檻（0.65／0.3／null） |
@@ -54,20 +76,20 @@ from roma_geo import verify_pair, verify_pairs, to_public, get_matcher
 | `inliers` | `list` | 內點明細 `[x_a, y_a, x_b, y_b, conf]`，最多 2000 點 |
 | `timing` | `dict` | `match_s` / `verify_s` / `total_s` |
 
-`pose` 為 `null` 且 `flags.no_covisibility` 為 `true` 代表找不到足夠的共視證據，
-不等於「兩張圖不連通」，它們可能相連但視野不重疊。
+`pose` 為 `null` 且 `flags.no_covisibility` 為 `true` 代表找不到足夠的共視證據。
+兩張圖仍可能相連，只是視野不重疊或對應點不足。
 
 **方位角規約**：`az(x) = ((x / W) * 360 - 180) mod 360`，0° = 影像中央，±180° = 接縫。
 `pose.az_ab_deg` 的範圍是 `(-180, 180]`。
 
-**位姿規約**：`x_b = R · x_a + t`，`t` 為單位向量（**尺度未知**），
+**位姿規約**：`x_b = R · x_a + t`，`t` 為單位向量（尺度未知），
 `cam_b_in_a = -Rᵀt` = B 相機在 A 座標系中的方向。
 
 ### 1.2 `to_public(res) -> dict`
 
 把 `verify_pair()` 的結果裁成對外契約。
-捨去 `R` / `t` / `cam_b_in_a` / `inliers` /`params` / `n` / `flags` 等內部量。
-`quality` 只取兩側的共視楔形寬，其餘（對極殘差、純旋轉殘差、方位覆蓋率）不列入。
+捨去 `R` / `t` / `cam_b_in_a` / `inliers` / `params` / `n` / `flags` 等內部量。
+`quality` 只取兩側的共視楔形寬。
 
 ```json
 {
@@ -103,7 +125,7 @@ from roma_geo import verify_pair, verify_pairs, to_public, get_matcher
 無位姿時為 `null`。
 
 `regions[].a` / `.b` 為同一塊實體空間分別在 A、B 兩張圖上的凸包多邊形，
-座標為**原圖 ERP 像素**。跨接縫的區域其 `x` 可能超出 `[0, W)` 以保持多邊形連續，
+座標為原圖 ERP 像素。跨接縫的區域其 `x` 可能超出 `[0, W)` 以保持多邊形連續，
 繪製時自行取模。`area_frac` 為多邊形面積佔全圖比例（ERP 像素面積，極區有失真）。
 
 ### 1.3 `verify_pairs(pairs, progress=False, **kwargs)`
@@ -120,16 +142,15 @@ for res in verify_pairs([(a1, b1), (a2, b2)], progress=True):
 
 ### 1.4 `get_matcher(model_type, device, use_cache, cache_dir) -> RoMaMatcher`
 
-取得模組層共用的 matcher 單例。`conf_threshold` 固定 0.1，由 `analyze_pair`
+取得模組層共用的 matcher 單例。`conf_threshold` 固定 0.1，由幾何驗證層
 自行做自適應分層（0.65 → 0.3）。
 
-單例以「參數組合」為鍵（含 `cache_dir`），因此同一行程內可並存多組設定，
-包成服務時不必擔心行程層狀態互相干擾。
+單例以參數組合為鍵（含 `cache_dir`），同一行程內可並存多組設定。
 
 ### 1.5 演算法參數
 
-`roma_geo.DEFAULTS` 必須與 `pose_regions/batch_pose_from_cache.py` 的 argparse
-預設逐項相同 —— `Output/roma_regions/` 的既有產出皆以這組參數產生。
+`roma_geo.DEFAULTS` 必須與批次幾何驗證腳本的 argparse 預設逐項相同。
+`Output/roma_regions/` 的既有產出皆以這組參數產生。
 
 | 參數 | 值 | 說明 |
 |---|---|---|
@@ -155,7 +176,7 @@ python roma_geo.py a.jpg b.jpg --public --out result.json
 
 ### 1.7 效能
 
-單對端到端以「RoMa 匹配」為主、「幾何驗證」佔比很小；模型建構為一次性成本，
+單對端到端以 RoMa 匹配為主，幾何驗證佔比很小；模型建構為一次性成本，
 多對處理務必重用 matcher。驗證時間呈雙峰：有位姿的對較久，無共視證據的對提早退出。
 
 逐項數字與外推耗時見 `environments/timing_torch210_n120.md`（由
@@ -163,21 +184,85 @@ python roma_geo.py a.jpg b.jpg --public --out result.json
 
 ---
 
-## 2. 工具
+## 2. 逐步呼叫
 
-所有指令以專案根目錄為工作目錄，`<py>` 代表 `venv\Scripts\python.exe`。
+每一個處理步驟都是函式，輸入與輸出由參數給定。不依賴前一步在全域狀態或固定位置留下的隱含資料。
 
-### 2.1 標註工具（`stitch_tool/`）
+```python
+from config import Settings
+from pipeline import (
+    ingest_connections, select_pairs, match_pairs, estimate_poses,
+    evaluate_ranking, prepare_house, prepare_semantic, export_public_houses,
+    run_house,
+)
+
+s = Settings(datasets="...", output="...", cache="...", matrices="...")
+```
+
+失敗時丟出 `errors.RomaGeoError`，訊息含「輸入」與「條件不成立」。
+
+每個步驟回傳 `StepResult`：`outputs` 為產出路徑或計數，`degradations` 為缺席的可選輸入。
+`run_house(house, settings, matcher=None)` 依序呼叫下列步驟，並把降級紀錄去重後放在 `PipelineResult.degradations`。
+
+| 步驟 | 函式 | 主要輸入 | 主要輸出 |
+|---|---|---|---|
+| 連通輸出轉矩陣 | `ingest_connections` | 上游 JSON 目錄 | 連通矩陣目錄 |
+| 挑配對 | `select_pairs` | 連通矩陣或影像目錄 | `_pairs.csv` |
+| 匹配 | `match_pairs` | 配對清單、影像、matcher | 匹配快取 npz |
+| 幾何驗證 | `estimate_poses` | 匹配快取、影像 | 逐對 JSON、`_summary.csv` |
+| 排序評估 | `evaluate_ranking` | `_summary.csv`、標註真值 | `_ranking_eval.csv`（無真值則略過） |
+| 組房 | `prepare_house` | 影像，可加矩陣與 `_summary.csv` | 內部房子 JSON |
+| 語意門 | `prepare_semantic` | 語意圖 | 語意門 JSON（無語意圖則略過） |
+| 對外匯出 | `export_public_houses` | 內部房子 JSON | 對外交付子集 |
+
+任取兩個相鄰步驟，只要把上一步的產出路徑傳給下一步即可單獨呼叫。匹配步驟可傳入 `matcher=`，測試或無 GPU 時注入替身。
+
+`match_pairs` 需要 GPU（或呼叫端提供的 matcher）。其餘步驟為 CPU。
+
+### 2.1 `config.Settings`
+
+| 參數 | 對應 | 未傳入時 |
+|---|---|---|
+| `datasets` | 全景資料集根目錄 | `ROMA_GEO_DATASETS` 或專案內 `datasets/` |
+| `matrices` | 連通矩陣目錄 | `ROMA_GEO_MATRICES` 或 `matrices/<版本>/` |
+| `output` | 產出根目錄 | `ROMA_GEO_OUTPUT` 或專案內 `Output/` |
+| `cache` | 匹配快取 | `ROMA_GEO_CACHE` 或 `roma_match/cache/` |
+| `pair_threshold` | 挑配對門檻 | `ROMA_GEO_PAIR_THRESHOLD` 或 `PAIR_THRESHOLD` |
+| `house_data` | 內部房子 JSON 目錄 | `stitch_tool/data/` |
+| `semantic` | 語意圖根目錄 | `<datasets>/semantic/` |
+| `public_houses` | 對外交付目錄 | `<output>/public_houses` |
+| `connections` | 上游連通 JSON 目錄 | 無預設，缺席則略過轉矩陣 |
+
+相對路徑會轉成絕對路徑。呼叫端不必設定環境變數，也不必把工作目錄切到專案根。
+
+### 2.2 可選輸入缺席時的回傳
+
+`Degradation.input_name` 取值：
+
+| 值 | 含義 |
+|---|---|
+| `upstream_connectivity` | 沒有上游連通矩陣（或連通 JSON） |
+| `ground_truth` | 沒有 HOTSPOT 標註 |
+| `semantic_maps` | 沒有門語意圖 |
+
+對應的降級行為見 README「可選輸入」。
+
+---
+
+## 3. 工具
+
+下列指令以專案根目錄為工作目錄時可用預設相對路徑；以 `Settings` 或 CLI 參數指定路徑時，工作目錄不限。`<py>` 代表 `venv\Scripts\python.exe`。
+
+### 3.1 標註工具
 
 瀏覽器介面，用於檢視配對、共視區域遮罩、裁切對與通道方位標示。
 
 ```bash
-<py> stitch_tool/prepare_house_data.py      # 產生 data/*.json（先跑）
+<py> stitch_tool/prepare_house_data.py
+<py> stitch_tool/server.py --port 8010
 ```
 
-```bash
-<py> stitch_tool/server.py --port 8010      # 啟動，開 http://localhost:8010
-```
+開 http://localhost:8010。
 
 HTTP 介面：
 
@@ -186,71 +271,72 @@ HTTP 介面：
 | `GET /api/houses` | 房子清單 |
 | `GET /api/house/<house>` | 單一房子的配對與方位資料 |
 | `GET /api/regions/<house>?a=<圖A>&b=<圖B>` | 共視區域 JSON（命中反序檔時回 `swap: true`） |
-| `GET /api/semantic_doors/<house>` | 子計畫一語意門抽取結果（無語意圖回 404） |
+| `GET /api/semantic_doors/<house>` | 語意門抽取結果（無語意圖回 404） |
 | `GET /api/state/<house>` · `POST /api/state/<house>` | 人工標註進度存讀 |
 | `POST /api/roma_match/<house>` | 即時 RoMa 比對（延遲載入模型） |
 | `GET /images/<house>/<檔名>` | ERP 影像 |
 
-詳細操作見 [`stitch_tool/使用說明.md`](stitch_tool/使用說明.md)。
+操作見 [`stitch_tool/使用說明.md`](stitch_tool/使用說明.md)。
 
-### 2.2 `stitch_tool/prepare_house_data.py`
+### 3.2 組房資料
 
-把上游的連通性矩陣整理成前端可讀的 house JSON。
+把連通性矩陣（若有）與幾何驗證結果整理成前端可讀的房子 JSON。沒有矩陣時改由影像清單與幾何驗證結果組房。
 
-- 輸入：`matrices/<版本>/`（見 [`matrices/README.md`](matrices/README.md)）、
-  `datasets/` 的 ERP 圖與 HOTSPOT、`Output/roma_regions/` 的兩份 CSV
+- 輸入：連通矩陣目錄、ERP 圖、可選的 HOTSPOT 標註、可選的幾何驗證 CSV
 - 輸出：`stitch_tool/data/<house>.json` 與 `_index.json`
-- 換矩陣版本：`--oof_dir` > 環境變數 `ROMA_GEO_MATRICES` > `config.MATRICES_VERSION`
-- 有位姿的 pair 會以幾何驗證的 `az_ab/az_ba` 覆寫粗篩方位，並記於 `az_source` 欄位
+- 矩陣路徑優先序：`--oof_dir` > 環境變數 `ROMA_GEO_MATRICES` > `config.MATRICES_VERSION`
+- 有位姿的 pair 會以幾何驗證的 `az_ab` / `az_ba` 覆寫粗篩方位，並記於 `az_source`
 
-### 2.3 `stitch_tool/prepare_semantic_doors.py`
+### 3.3 語意門轉檔
 
-把子計畫一的門語意圖抽取結果轉存成工具可讀的格式。
+把門語意圖抽取結果轉存成工具可讀的格式。
 
 ```bash
-<py> stitch_tool/prepare_semantic_doors.py             # 讀現成快取轉檔，秒級
-<py> stitch_tool/prepare_semantic_doors.py --refresh   # 重跑抽取，約 25 分鐘
+<py> stitch_tool/prepare_semantic_doors.py
+<py> stitch_tool/prepare_semantic_doors.py --refresh
 ```
 
 輸出 `stitch_tool/semantic/<house>.json`。只有具語意圖的房子會產出，其餘前端顯示 404。
 
-### 2.4 `pose_regions/batch_pose_from_cache.py`
+### 3.4 批次幾何驗證
 
-全量批次：讀 RoMa 匹配快取，產生 per-pair JSON 與彙總 CSV。
+讀 RoMa 匹配快取，產生逐對 JSON 與彙總 CSV。
 
 ```bash
 <py> pose_regions/batch_pose_from_cache.py --out Output/roma_regions
 ```
 
-輸入為 `roma_match/cache/` 底下符合
-`{house}_{imgA}_{imgB}_direct_roma_v2_std0.1_face512.npz` 命名的檔案，其餘略過。
-GT（連通標註、通道方位、同房判定）讀 `datasets/` 的 `*_HOTSPOT.json`。
+輸入為快取目錄裡符合
+`{house}_{imgA}_{imgB}_direct_roma_v2_std0.1_face512.npz` 命名的檔案。
+標註真值讀資料集裡的 `*_HOTSPOT.json`；沒有該檔時 GT 欄位為空值。
 
-### 2.5 `pose_regions/estimate_relative_pose.py`
+程式介面為 `pose_regions.batch_pose_from_cache.run_pose_batch(...)`，路徑全部由參數傳入。
 
-單對診斷工具，輸出內點疊圖與俯視圖。
+### 3.5 單對診斷
+
+輸出內點疊圖與俯視圖。
 
 ```bash
 <py> pose_regions/estimate_relative_pose.py --cache_npz <npz> --out pose_out
-<py> pose_regions/estimate_relative_pose.py --selftest     # 幾何核心自我驗證
+<py> pose_regions/estimate_relative_pose.py --selftest
 ```
 
-### 2.6 `pose_regions/render_region_overlay.py`
+### 3.6 共視區域疊圖
 
-把共視區域 JSON 畫成疊圖。
+把共視區域 JSON 畫成疊圖。見 `pose_regions/render_region_overlay.py`。
 
-### 2.7 環境工具（`environments/`）
+### 3.7 環境工具
 
 | 腳本 | 用途 |
 |---|---|
 | `setup_env.ps1` | 建立 venv 並安裝全部相依，結束時自動驗收 |
-| `check_env.py` | 三項實跑驗證（CUDA kernel／romav2 匯入／幾何 selftest）決定通過與否；版本對照與 GPU arch 涵蓋僅供參考 |
+| `check_env.py` | 三項實跑驗證（CUDA kernel／romav2 匯入／幾何 selftest）決定通過與否 |
 | `cross_env_check.py` | 跨環境一致性檢查，與既有 `_summary.csv` 逐對比較 |
 | `local_timing_bench.py` | 單對耗時基準，決定性抽樣，可跨環境比較 |
 
 用法見 [`environments/README.md`](environments/README.md)。
 
-### 2.8 測試（`tests/`）
+### 3.8 測試
 
 ```bash
 venv/Scripts/python.exe tests/run_all.py

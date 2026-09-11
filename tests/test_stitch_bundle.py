@@ -365,8 +365,9 @@ class TestGtPairFields(unittest.TestCase):
         self.assertIsNone(out["gt_az_ji"])
 
     def test_unrelated_house_has_no_entries_at_all(self):
+        """沒有任何標註時 gt_connected 為 None，與「已確認不連通」的 False 分開。"""
         self.assertEqual(gt_hotspot.gt_pair_fields({}, "a.jpg", "b.jpg"),
-                         {"gt_connected": False, "gt_az_ij": None, "gt_az_ji": None})
+                         {"gt_connected": None, "gt_az_ij": None, "gt_az_ji": None})
 
 
 class TestFindHotspotFiles(unittest.TestCase):

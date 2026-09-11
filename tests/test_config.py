@@ -150,6 +150,22 @@ class TestEnvNameConsistency(unittest.TestCase):
                                  os.path.normcase(target))
 
 
+class TestSettings(unittest.TestCase):
+    def test_explicit_overrides_env(self):
+        with temp_dir() as d:
+            s = config.Settings(datasets=d, output=d, cache=d, matrices=d)
+            with env_override(ROMA_GEO_DATASETS="/env/ds", ROMA_GEO_OUTPUT="/env/out",
+                              ROMA_GEO_CACHE="/env/cache", ROMA_GEO_MATRICES="/env/mat"):
+                self.assertEqual(os.path.normcase(s.datasets_root()), os.path.normcase(d))
+                self.assertEqual(os.path.normcase(s.output_root()), os.path.normcase(d))
+                self.assertEqual(s.regions_root(), os.path.join(d, "roma_regions"))
+
+    def test_pair_threshold_explicit(self):
+        s = config.Settings(pair_threshold=1.5)
+        with env_override(ROMA_GEO_PAIR_THRESHOLD="0.1"):
+            self.assertEqual(s.pair_threshold(), 1.5)
+
+
 class TestDescribe(unittest.TestCase):
     def test_describe_runs_and_mentions_every_item(self):
         text = config.describe()
