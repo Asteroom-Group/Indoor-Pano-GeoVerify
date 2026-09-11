@@ -31,13 +31,11 @@ import argparse
 import csv
 import json
 import os
-import sys
 from collections import defaultdict, deque
 
 import numpy as np
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(SCRIPT_DIR)
 
 
 def _gt_adjacency(house_dir):
@@ -150,22 +148,19 @@ def logistic_oof(X, y, groups, folds=5, iters=400, lr=0.5, l2=1e-3, seed=0):
     return oof
 
 
-# ---------- 路徑（統一走 config，見 config.py）----------
+# ---------- 路徑（統一走套件內 config）----------
 def _datasets_root():
-    sys.path.insert(0, ROOT)
-    from config import datasets_root
+    from roma_geo.config import datasets_root
     return datasets_root()
 
 
 def _matrix_dir(variant):
-    sys.path.insert(0, ROOT)
-    from config import matrices_root
+    from roma_geo.config import matrices_root
     return matrices_root(variant)
 
 
 def _regions_dir():
-    sys.path.insert(0, ROOT)
-    from config import regions_root
+    from roma_geo.config import regions_root
     return regions_root()
 
 
@@ -183,15 +178,21 @@ def write_csv(path, rec):
 
 
 # ---------- 主流程 ----------
-def build_records(summary_csv):
-    # 矩陣來源由 config 解析;換版本設 config.MATRICES_VERSION 或 ROMA_GEO_MATRICES。
+def build_records(summary_csv, datasets=None, refined_dir=None, oof_dir=None):
+    # 矩陣來源由呼叫端傳入，未傳入才讀套件設定。
+    datasets = datasets or _datasets_root()
+    refined_dir = refined_dir or _matrix_dir("refined")
+    oof_dir = oof_dir or _matrix_dir("oof")
     rows = list(csv.DictReader(open(summary_csv, encoding="utf-8")))
     houses = sorted({r["house"] for r in rows})
-    graphs = {h: _gt_adjacency(os.path.join(_datasets_root(), h)) for h in houses}
+    graphs = {h: _gt_adjacency(os.path.join(datasets, h)) for h in houses}
     dists = {h: {u: _bfs(g, u) for u in g} for h, g in graphs.items()}
     mats = {}
     for h in houses:
-        mats[h] = {k: _load_matrix(_matrix_dir(k), h) for k in ("refined", "oof")}
+        mats[h] = {
+            "refined": _load_matrix(refined_dir, h),
+            "oof": _load_matrix(oof_dir, h),
+        }
 
     rec, skipped = [], defaultdict(int)
     for r in rows:
@@ -221,6 +222,15 @@ def build_records(summary_csv):
     return rec, skipped, len(houses)
 
 
+def run_ranking_eval(summary_csv, out_csv, datasets=None, refined_dir=None, oof_dir=None):
+    """寫出 _ranking_eval.csv。回傳列數與略過原因。"""
+    rec, skipped, n_houses = build_records(
+        summary_csv, datasets=datasets, refined_dir=refined_dir, oof_dir=oof_dir)
+    os.makedirs(os.path.dirname(os.path.abspath(out_csv)) or ".", exist_ok=True)
+    write_csv(out_csv, rec)
+    return {"n_rows": len(rec), "n_houses": n_houses, "skipped": dict(skipped), "csv": out_csv}
+
+
 def main():
     ap = argparse.ArgumentParser()
     # 產出位置可用 ROMA_GEO_OUTPUT 覆寫;換矩陣版本設 config.MATRICES_VERSION 或
@@ -230,7 +240,6 @@ def main():
     ap.add_argument("--report", default=os.path.join(SCRIPT_DIR, "covis_ranking_report.md"))
     ap.add_argument("--csv", default=os.path.join(reg, "_ranking_eval.csv"))
     a = ap.parse_args()
-    os.chdir(ROOT)
 
     rec, skipped, n_houses = build_records(a.summary)
 

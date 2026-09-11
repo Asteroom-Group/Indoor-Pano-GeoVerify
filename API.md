@@ -38,12 +38,12 @@ result = run_house("Office_A", settings=s)
 
 ### 輸出一：通道方位
 
-每一對都有值。欄位：
+欄位：
 
 | 欄位 | 存在條件 | 說明 |
 |---|---|---|
-| `az_ij` / `az_ji` | 每一對 | 建議通道方位（度，0~360）。開啟語意矯正且規則命中時，改為門中心 |
-| `az_source` | 有上游方向或幾何方位時 | `geo` 來自相對位姿，`coarse` 來自上游關注位置。語意矯正不改此欄 |
+| `az_ij` / `az_ji` | 每一對都有欄位 | 建議通道方位（度，0~360）。開啟語意矯正且規則命中時，改為門中心。沒有連通矩陣且沒有幾何方位時為 `null` |
+| `az_source` | 有方位值時 | `geo` 來自相對位姿，`coarse` 來自上游關注位置。方位為空值時此欄缺席。語意矯正不改此欄 |
 | `semantic_corrected` | 每一對 | 布林。此對的輸出一是否被語意門中心改寫 |
 
 來源標示與是否矯正是兩個獨立欄位。未開啟語意矯正時，`semantic_corrected` 一律為 `false`。
@@ -54,6 +54,10 @@ result = run_house("Office_A", settings=s)
 此規則需要共視區域才能判斷，因此只作用於 `az_source` 為 `geo` 的方位。上游來源（`coarse`）的配對沒有共視區域，方位維持原值。
 
 開關：`Settings(semantic_correct=True)` 或 `export_public_houses(..., semantic_correct=True)`。預設關閉。語意圖缺席時流程照常跑完，矯正標記為否。
+
+`with_regions=False` 只讓共視區域不出現在交付檔。相對位姿與語意矯正仍按各自的條件執行。
+
+沒有連通矩陣時，該房影像的兩兩配對全部寫入。取不到方位的配對，`az_ij` / `az_ji` 為 `null`，且沒有 `az_source`。有連通矩陣時，每一對都有方位值與來源。連通矩陣是否缺席寫在房層的 `has_connectivity_matrix`。
 
 ### 輸出二：相對位姿
 
@@ -259,18 +263,20 @@ s = Settings(datasets="...", output="...", cache="...", matrices="...")
 任取兩個相鄰步驟，只要把上一步的產出路徑傳給下一步即可單獨呼叫。匹配步驟可傳入 `matcher=`，測試或無 GPU 時注入替身。
 
 `match_pairs` 需要 GPU（或呼叫端提供的 matcher）。其餘步驟為 CPU。
+`mode` 只接受 `direct` 與 `core`。部分配對失敗時，`outputs` 含 `n_fail`、`failures`、`ok_pairs`，後續幾何驗證只處理成功的配對。
 
 ### 2.1 `config.Settings`
 
 | 參數 | 對應 | 未傳入時 |
 |---|---|---|
 | `datasets` | 全景資料集根目錄 | `ROMA_GEO_DATASETS` 或專案內 `datasets/` |
-| `matrices` | 連通矩陣目錄 | `ROMA_GEO_MATRICES` 或 `matrices/<版本>/` |
+| `matrices` | 連通矩陣目錄 | 有 `output` 時為 `<output>/matrices`；否則 `ROMA_GEO_MATRICES` 或專案內 `matrices/<版本>/` |
 | `output` | 產出根目錄 | `ROMA_GEO_OUTPUT` 或專案內 `Output/` |
 | `cache` | 匹配快取 | `ROMA_GEO_CACHE` 或 `roma_match/cache/` |
 | `pair_threshold` | 挑配對門檻 | `ROMA_GEO_PAIR_THRESHOLD` 或 `PAIR_THRESHOLD` |
-| `house_data` | 內部房子 JSON 目錄 | `stitch_tool/data/` |
+| `house_data` | 內部房子 JSON 目錄 | 有 `output` 時為 `<output>/house_data`；否則專案內 `stitch_tool/data/` |
 | `semantic` | 語意圖根目錄 | `<datasets>/semantic/` |
+| `semantic_out` | 語意門 JSON 目錄 | 有 `output` 時為 `<output>/semantic`；否則專案內 `stitch_tool/semantic/` |
 | `public_houses` | 對外交付目錄 | `<output>/public_houses` |
 | `connections` | 上游連通 JSON 目錄 | 無預設，缺席則略過轉矩陣 |
 | `semantic_correct` | 是否對輸出一做語意矯正 | `False` |
@@ -286,6 +292,7 @@ s = Settings(datasets="...", output="...", cache="...", matrices="...")
 | `upstream_connectivity` | 沒有上游連通矩陣（或連通 JSON） |
 | `ground_truth` | 沒有 HOTSPOT 標註 |
 | `semantic_maps` | 沒有門語意圖 |
+| `matching` | 匹配步驟有部分配對失敗 |
 
 對應的降級行為見 README「可選輸入」。
 

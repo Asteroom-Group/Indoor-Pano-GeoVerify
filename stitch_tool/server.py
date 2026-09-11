@@ -44,6 +44,11 @@ os.makedirs(STATE_DIR, exist_ok=True)
 _SAFE = re.compile(r"^[A-Za-z0-9_\-.]+$")         # 房子名 / 檔名白名單，擋路徑穿越
 
 
+def _safe_id(s):
+    """白名單識別名。單獨的 . 與 .. 即使字元集合允許也不通過。"""
+    return bool(s) and s not in (".", "..") and _SAFE.match(s) is not None
+
+
 def _house_dir(house):
     """bundle 內某房的資料夾（不存在回 None）。"""
     d = os.path.join(BUNDLE_ROOT, house)
@@ -205,7 +210,7 @@ class Handler(SimpleHTTPRequestHandler):
         m = re.match(r"^/api/house/([^/]+)$", path)
         if m:
             house = unquote(m.group(1))
-            if not _SAFE.match(house):
+            if not _safe_id(house):
                 return self._err(400, "bad house name")
             hdir = os.path.join(BUNDLE_ROOT, house)
             fp = os.path.join(hdir, f"{house}.json")
@@ -226,7 +231,7 @@ class Handler(SimpleHTTPRequestHandler):
         m = re.match(r"^/api/state/([^/]+)$", path)
         if m:
             house = unquote(m.group(1))
-            if not _SAFE.match(house):
+            if not _safe_id(house):
                 return self._err(400, "bad house name")
             fp = os.path.join(STATE_DIR, f"{house}.json")
             if os.path.exists(fp):
@@ -236,7 +241,7 @@ class Handler(SimpleHTTPRequestHandler):
         m = re.match(r"^/images/([^/]+)/([^/]+)$", path)
         if m:
             house, fname = unquote(m.group(1)), unquote(m.group(2))
-            if not (_SAFE.match(house) and _SAFE.match(fname)):
+            if not (_safe_id(house) and _safe_id(fname)):
                 return self._err(400, "bad path")
             return self._serve_image(house, fname)
 
@@ -247,13 +252,13 @@ class Handler(SimpleHTTPRequestHandler):
         m = re.match(r"^/api/regions/([^/]+)$", path)
         if m:
             house = unquote(m.group(1))
-            if not _SAFE.match(house):
+            if not _safe_id(house):
                 return self._err(400, "bad house name")
             from urllib.parse import parse_qs
             q = parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
             a = os.path.splitext((q.get("a") or [""])[0])[0]
             b = os.path.splitext((q.get("b") or [""])[0])[0]
-            if not (a and b and _SAFE.match(a) and _SAFE.match(b)):
+            if not (a and b and _safe_id(a) and _safe_id(b)):
                 return self._err(400, "bad image name")
             rdir = os.path.join(BUNDLE_ROOT, house, "regions")
             p_ab = os.path.join(rdir, f"{house}_{a}_{b}.json")
@@ -278,7 +283,7 @@ class Handler(SimpleHTTPRequestHandler):
         m = re.match(r"^/api/semantic_doors/([^/]+)$", path)
         if m:
             house = unquote(m.group(1))
-            if not _SAFE.match(house):
+            if not _safe_id(house):
                 return self._err(400, "bad house name")
             fp = os.path.join(BUNDLE_ROOT, house, "semantic.json")
             if not os.path.exists(fp):
@@ -293,7 +298,7 @@ class Handler(SimpleHTTPRequestHandler):
         m = re.match(r"^/api/state/([^/]+)$", path)
         if m:
             house = unquote(m.group(1))
-            if not _SAFE.match(house):
+            if not _safe_id(house):
                 return self._err(400, "bad house name")
             try:
                 n = int(self.headers.get("Content-Length", 0))
@@ -308,7 +313,7 @@ class Handler(SimpleHTTPRequestHandler):
         m = re.match(r"^/api/roma_match/([^/]+)$", path)
         if m:
             house = unquote(m.group(1))
-            if not _SAFE.match(house):
+            if not _safe_id(house):
                 return self._err(400, "bad house name")
             try:
                 n = int(self.headers.get("Content-Length", 0))
@@ -333,7 +338,7 @@ class Handler(SimpleHTTPRequestHandler):
         img_a, img_b = body.get("img_a"), body.get("img_b")
         if not img_a or not img_b:
             return self._err(400, "img_a and img_b required")
-        if not (_SAFE.match(img_a) and _SAFE.match(img_b)):
+        if not (_safe_id(img_a) and _safe_id(img_b)):
             return self._err(400, "bad image name")
         img_dir = _images_dir(house)
         if not os.path.isdir(img_dir):
@@ -370,7 +375,7 @@ class Handler(SimpleHTTPRequestHandler):
         q = parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
         rel = unquote((q.get("rel") or [""])[0]).replace("\\", "/")
         parts = [p for p in rel.split("/") if p not in ("", ".")]
-        if not parts or any(p == ".." or not _SAFE.match(p) for p in parts):
+        if not parts or any(p == ".." or not _safe_id(p) for p in parts):
             return self._err(400, "bad rel path")
         try:
             n = int(self.headers.get("Content-Length", 0))

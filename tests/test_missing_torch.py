@@ -34,15 +34,6 @@ def _run_code(code, cwd=None):
     )
 
 
-def _assert_readable_torch_error(test, result):
-    text = result.stdout + "\n" + result.stderr
-    test.assertNotEqual(result.returncode, 0, text)
-    test.assertIn("torch", text)
-    test.assertIn("requirements-core.txt", text)
-    test.assertNotIn("No module named 'torch'", text.split("requirements-core.txt")[0][-80:]
-                     if "requirements-core.txt" in text else text)
-
-
 class TestVerifyPairMissingTorch(unittest.TestCase):
     def test_verify_pair_names_torch_and_source(self):
         r = _run_code("""

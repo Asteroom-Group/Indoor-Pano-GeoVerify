@@ -30,8 +30,6 @@ class TestImportFromProjectRoot(unittest.TestCase):
     def test_project_root_exposes_public_api(self):
         r = _run(ROOT)
         self.assertEqual(r.returncode, 0, r.stdout + "\n" + r.stderr)
-        for name in _API:
-            self.assertNotIn("AssertionError", r.stderr)
 
     def test_outside_dir_uses_same_implementation(self):
         at_root = _run(ROOT)

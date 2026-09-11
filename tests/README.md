@@ -57,6 +57,8 @@
 | `test_match_mode_defaults.py` | 各進入點匹配模式預設均為 direct |
 | `test_import_from_root.py` | 專案根目錄未改 sys.path 時仍能 `import roma_geo` 取得對外 API |
 | `test_missing_torch.py` | 缺少 torch 時 verify_pair 等進入點指出缺少什麼與安裝依據 |
+| `test_addendum5.py` | 追加5：模組搜尋路徑、產出路徑、部分匹配失敗、降級方位契約、區域開關、快取檔名、彙總累積、輸出精度 |
+| `test_addendum6.py` | 追加6：降級保留全部配對、無方位為空值、有矩陣時配對集合不變 |
 
 期望值一律由**規約或獨立算法**推得，不從受測程式碼反推。合成資料以指定的 R、t 正向
 投影出兩側觀測，受測程式碼須解回同一組 R、t；`wedge_width` 另以不同的列舉方式暴力
@@ -81,8 +83,8 @@
 | per-pair JSON | `Output/roma_regions/` | schema 版本、位姿與旗標三者一致、內點率自洽、區域占比與上限 |
 | `_summary.csv` | 同上 | 欄位與批次程式宣告的完全相同 |
 | 連通性矩陣 | `matrices/<版本>/` | `(N,N,3)` 與影像清單對齊、連通分數對稱、方位為單位長或未填 |
-| house JSON | `stitch_tool/data/` | 索引在範圍內、方位規約公式一致、`az_source` 有值時僅為 `geo` 或 `coarse`，無方向來源時可缺席 |
-| 對外交付子集 | `Output/public_houses/` | 不含內部欄位、`has_geometry` 為布林、共視區域兩側齊備 |
+| house JSON | `stitch_tool/data/` | 索引在範圍內、方位規約公式一致、`az_source` 有值時僅為 `geo` 或 `coarse`；連通矩陣缺席時方位可為空值 |
+| 對外交付子集 | `Output/public_houses/` | 不含內部欄位、`has_geometry` 為布林、共視區域兩側齊備；降級時方位可為空值 |
 
 抽樣為決定性等距抽樣，同一批檔案在任何機器上都取到同一組。來源目錄不存在時該類回報
 略過，其餘照常檢查。各路徑皆依 `config.py` 解析，可用環境變數改指他處。

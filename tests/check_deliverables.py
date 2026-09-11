@@ -255,10 +255,16 @@ def check_house_json(data_dir):
                 n_geo += 1
                 if not p.get("geo_posed"):
                     problems.append("%s: az_source=geo 但 geo_posed 為假" % house)
-            for key in ("az_ij", "az_ji"):
-                v = p.get(key)
-                if v is not None and not (0.0 <= v < 360.0):
-                    problems.append("%s: %s 超出 [0,360)（%s）" % (house, key, v))
+            vij, vji = p.get("az_ij"), p.get("az_ji")
+            if vij is None and vji is None:
+                if not degraded:
+                    problems.append("%s: 通道方位為空值，且此房不是連通矩陣缺席的降級" % house)
+            elif vij is None or vji is None:
+                problems.append("%s: az_ij 與 az_ji 須同為數值或同為空值" % house)
+            else:
+                for key, v in (("az_ij", vij), ("az_ji", vji)):
+                    if not (0.0 <= v < 360.0):
+                        problems.append("%s: %s 超出 [0,360)（%s）" % (house, key, v))
             if len(problems) > 50:
                 break
     pct = (100.0 * n_geo / tot_pairs) if tot_pairs else 0.0
@@ -308,6 +314,26 @@ def check_public_houses(pub_dir):
                     problems.append("%s: 無位姿卻帶 R/t" % house)
                 if "az_ij" not in p or "az_ji" not in p:
                     problems.append("%s: 通道方位缺席" % house)
+                else:
+                    degraded = d.get("has_connectivity_matrix") is False
+                    vij, vji = p.get("az_ij"), p.get("az_ji")
+                    empty = vij is None and vji is None
+                    if empty:
+                        if not degraded:
+                            problems.append(
+                                "%s: 通道方位為空值，且此房不是連通矩陣缺席的降級" % house)
+                        if "az_source" in p:
+                            problems.append("%s: 無方位卻帶 az_source" % house)
+                    elif vij is None or vji is None:
+                        problems.append("%s: az_ij 與 az_ji 須同為數值或同為空值" % house)
+                    else:
+                        for key, v in (("az_ij", vij), ("az_ji", vji)):
+                            if not (0.0 <= v < 360.0):
+                                problems.append("%s: %s 超出 [0,360)（%s）"
+                                                % (house, key, v))
+                        src = p.get("az_source")
+                        if src not in ("geo", "coarse"):
+                            problems.append("%s: 有方位卻缺 az_source" % house)
             if not (0 <= p.get("i", -1) < n_img and 0 <= p.get("j", -1) < n_img):
                 problems.append("%s: pair 索引超出影像範圍" % house)
             if "regions_order" in p:

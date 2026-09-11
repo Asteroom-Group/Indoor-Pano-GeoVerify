@@ -181,6 +181,8 @@ def select_pairs(settings, houses, out_csv=None, threshold=None, pool="mean"):
 
 def match_pairs(settings, pairs_csv, matcher=None, mode="direct"):
     """對配對清單做 RoMa 匹配，寫入快取。matcher 由呼叫端傳入時不自行載入模型。"""
+    if mode not in ("direct", "core"):
+        raise ValueError("mode 必須是 direct 或 core，收到 %r" % (mode,))
     if matcher is None:
         from . import require_matching_deps
         require_matching_deps("載入匹配模型")
@@ -198,6 +200,7 @@ def match_pairs(settings, pairs_csv, matcher=None, mode="direct"):
     ds = settings.datasets_root()
     n_done = n_fail = 0
     errors = []
+    ok_pairs = []
     for r in rows:
         pa = find_house_image(r["house"], r["img_a"], datasets_root=ds)
         pb = find_house_image(r["house"], r["img_b"], datasets_root=ds)
@@ -214,18 +217,34 @@ def match_pairs(settings, pairs_csv, matcher=None, mode="direct"):
             else:
                 matcher.match_core(pa, pb)
             n_done += 1
+            ok_pairs.append((r["house"], r["img_a"], r["img_b"]))
         except RomaGeoError:
             raise
         except Exception as e:
             n_fail += 1
-            errors.append("%s: %s" % (type(e).__name__, e))
+            errors.append("%s %s/%s: %s: %s"
+                          % (r["house"], r["img_a"], r["img_b"], type(e).__name__, e))
     if n_done == 0 and n_fail:
         raise RomaGeoError(
             "；".join(errors[:3]),
             input_name="匹配",
             condition="全部 %d 對都失敗" % n_fail,
         )
-    return StepResult("match_pairs", outputs={"n_done": n_done, "n_fail": n_fail, "cache_dir": settings.cache_root()})
+    degradations = []
+    if n_fail:
+        degradations.append(Degradation(
+            "matching", "partial",
+            "%d 對失敗：%s" % (n_fail, "；".join(errors[:3])),
+        ))
+    return StepResult(
+        "match_pairs",
+        outputs={
+            "n_done": n_done, "n_fail": n_fail, "failures": errors,
+            "ok_pairs": ok_pairs, "cache_dir": settings.cache_root(),
+        },
+        degradations=degradations,
+        message="%d 對完成，%d 對失敗" % (n_done, n_fail) if n_fail else "",
+    )
 
 
 def estimate_poses(settings, pairs=None, pairs_csv=None, resume=False, limit=0):
@@ -280,7 +299,22 @@ def evaluate_ranking(settings, summary_csv=None):
                 "略過排序評估（需要 HOTSPOT 標註）",
             )],
         )
-    return StepResult("evaluate_ranking", outputs={"summary_csv": summary_csv})
+    out_csv = os.path.join(settings.regions_root(), "_ranking_eval.csv")
+    from pose_regions.covis_ranking_eval import run_ranking_eval
+    info = run_ranking_eval(
+        summary_csv, out_csv,
+        datasets=settings.datasets_root(),
+        refined_dir=settings.matrices_root("refined"),
+        oof_dir=settings.matrices_root("oof"),
+    )
+    return StepResult(
+        "evaluate_ranking",
+        outputs={
+            "summary_csv": summary_csv,
+            "ranking_eval_csv": out_csv,
+            "n_rows": info.get("n_rows", 0),
+        },
+    )
 
 
 def prepare_house(settings, houses, oof_dir=None):
@@ -301,7 +335,8 @@ def prepare_house(settings, houses, oof_dir=None):
     last_path = None
     for h in houses:
         npy = os.path.join(oof_dir, h + ".npy") if oof_dir else ""
-        if not (npy and os.path.isfile(npy)):
+        imgs_json = os.path.join(oof_dir, h + "_images.json") if oof_dir else ""
+        if not (npy and os.path.isfile(npy) and imgs_json and os.path.isfile(imgs_json)):
             degradations.append(Degradation(
                 "upstream_connectivity", "absent",
                 "改由影像清單與幾何驗證結果組房",
@@ -378,7 +413,7 @@ def export_public_houses(settings, houses=None, with_regions=True, semantic_corr
     written = ep.export_houses(
         in_dir=settings.house_data_dir(),
         out_dir=settings.public_dir(),
-        regions_dir=settings.regions_root() if with_regions else None,
+        regions_dir=settings.regions_root(),
         with_regions=with_regions,
         datasets_dir=settings.datasets_root(),
         houses=houses,
@@ -407,9 +442,15 @@ def run_house(house, settings, matcher=None, run_match=True):
     if run_match:
         r = match_pairs(settings, pairs_csv, matcher=matcher)
         steps.append(r)
-
-    r = estimate_poses(settings, pairs_csv=pairs_csv)
-    steps.append(r)
+        degradations.extend(r.degradations)
+        if r.outputs.get("n_fail"):
+            r = estimate_poses(settings, pairs=r.outputs.get("ok_pairs") or [])
+        else:
+            r = estimate_poses(settings, pairs_csv=pairs_csv)
+        steps.append(r)
+    else:
+        r = estimate_poses(settings, pairs_csv=pairs_csv)
+        steps.append(r)
 
     r = evaluate_ranking(settings)
     steps.append(r)

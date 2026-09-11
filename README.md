@@ -63,7 +63,7 @@ result = run_house("Office_A", settings=s)
 | 標註真值 | `gt_*` 為空值；排序評估略過 | `degradations` 含 `ground_truth`；沒有標註時 `gt_connected` 為 `null`，標註存在且該對不在相鄰清單時為 `false` |
 | 上游語意圖 | 語意門步驟略過 | `degradations` 含 `semantic_maps` |
 
-方位來源寫在 `az_source`：`geo` 為幾何驗證，`coarse` 為上游連通方向。兩者都沒有時該欄缺席。
+方位來源寫在 `az_source`：`geo` 為幾何驗證，`coarse` 為上游連通方向。沒有連通矩陣時仍寫出該房全部配對；取不到方位的配對，方位為空值、來源欄位缺席。連通矩陣是否缺席寫在 `has_connectivity_matrix`。
 
 ## 對外契約
 
@@ -78,8 +78,8 @@ result = run_house("Office_A", settings=s)
 - 相對位姿的尺度未知。
 - `flags.no_covisibility` 表示這一對湊不出足夠的對極內點，兩張圖仍可能相連。
 - RoMa 匹配需要 GPU。幾何驗證在 CPU 上執行。
-- 影像識別碼含底線時，從快取檔名回推可能歧義。逐步呼叫請傳明確的配對清單。
-- 房屋目錄含 `_RESTRICTED` 標記檔時，對外匯出整批停下。
+- 逐步呼叫幾何驗證時請傳明確的配對清單，流程沿用清單裡的房子名與影像名。命令列掃描快取時若檔名無法唯一回推，會列出略過的檔與原因。
+- 房屋目錄含 `_RESTRICTED` 標記檔時，對外匯出整批停下，此次已寫出的交付檔會刪除。
 
 未見過的房子只要有全景影像即可進入流程，不要求既有資料集才有的欄位或檔名格式。
 
@@ -112,6 +112,7 @@ venv\Scripts\python.exe tests\run_all.py
 ## 路徑與門檻
 
 呼叫端以 `config.Settings(...)` 傳入。未傳入的項目才讀環境變數或專案預設。
+只指定資料集、產出、快取時，內部產出路徑（房子 JSON、語意門、連通矩陣寫入位置）落在產出根目錄底下，不會寫進安裝來源。
 
 | 項目 | 環境變數 | 預設 |
 |---|---|---|

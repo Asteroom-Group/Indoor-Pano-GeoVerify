@@ -52,13 +52,13 @@ ROOT = os.path.dirname(SCRIPT_DIR)
 try:
     from .estimate_relative_pose import (parse_cache_name, find_house_image, erp_to_bearing,
                                          ransac_E, select_pose, rotation_only_fit, sampson_residual,
-                                         CACHE_SUFFIX)
+                                         CACHE_SUFFIX, match_cache_to_dataset)
 except ImportError:
     if SCRIPT_DIR not in sys.path:
         sys.path.insert(0, SCRIPT_DIR)
     from estimate_relative_pose import (parse_cache_name, find_house_image, erp_to_bearing,
                                         ransac_E, select_pose, rotation_only_fit, sampson_residual,
-                                        CACHE_SUFFIX)
+                                        CACHE_SUFFIX, match_cache_to_dataset)
 
 SCHEMA_VERSION = "wp1-step3-v2"   # v2(2026-07-23):nadir 前濾預設開啟(lat_filter 60);params.lat_max / n.lat_drop 欄位
 
@@ -358,6 +358,20 @@ def analyze_pair(m_all, Wa, Ha, Wb, Hb, conf_min, max_pts, thresh_deg, iters,
 
 
 # ---------- summary 列 ----------
+def _merge_summary_rows(path, new_rows):
+    """以 (house, {img_a, img_b}) 合併既有彙總列。指定配對時累積，不覆寫其他房子。"""
+    by = {}
+    if os.path.isfile(path):
+        with open(path, encoding="utf-8", newline="") as f:
+            for row in csv.DictReader(f):
+                key = (row["house"], frozenset({row["img_a"], row["img_b"]}))
+                by[key] = row
+    for row in new_rows:
+        key = (row["house"], frozenset({row["img_a"], row["img_b"]}))
+        by[key] = row
+    return [by[k] for k in sorted(by, key=lambda k: (k[0], min(k[1]), max(k[1])))]
+
+
 SUMMARY_COLS = ["house", "img_a", "img_b", "n_raw", "n_conf", "n_used", "n_inlier", "inlier_rate",
                 "conf_used",
                 "az_ab_deg", "az_ba_deg", "rot_angle_deg", "baseline_txz",
@@ -545,22 +559,24 @@ def run_pose_batch(cache_dir, out_dir, datasets_root=None, pairs=None, limit=0, 
     """
     from types import SimpleNamespace
     os.makedirs(out_dir, exist_ok=True)
+    jobs = []  # (house, na, nb, npz_path, swapped)
+    skipped = []
     if pairs is not None:
-        files = []
         for house, na, nb in pairs:
             p = os.path.join(cache_dir, "%s_%s_%s%s" % (house, na, nb, CACHE_SUFFIX))
             pr = os.path.join(cache_dir, "%s_%s_%s%s" % (house, nb, na, CACHE_SUFFIX))
             if os.path.isfile(p):
-                files.append(p)
+                jobs.append((house, na, nb, p, False))
             elif os.path.isfile(pr):
-                files.append(pr)
+                jobs.append((house, na, nb, pr, True))
             else:
                 from roma_geo.errors import RomaGeoError
                 raise RomaGeoError(
                     "檔案不存在：%s" % p,
                     input_name="匹配快取",
-                    condition="尚未執行匹配，或快取目錄不是 %s（配對 %s / %s / %s）"
-                    % (cache_dir, house, na, nb),
+                    condition="尚未寫入匹配快取。若匹配步驟曾回報失敗，原因在該步的 failures"
+                    "（配對 %s / %s / %s；目錄 %s）"
+                    % (house, na, nb, cache_dir),
                 )
     else:
         all_npz = sorted(glob.glob(os.path.join(cache_dir, "*.npz")))
@@ -568,17 +584,33 @@ def run_pose_batch(cache_dir, out_dir, datasets_root=None, pairs=None, limit=0, 
         n_other = len(all_npz) - len(files)
         if n_other:
             print(f"[info] 快取目錄有 {n_other} 個非 {CACHE_SUFFIX} 的檔案,已略過。")
+        for f in files:
+            try:
+                house, na, nb = parse_cache_name(f)
+                jobs.append((house, na, nb, f, False))
+            except SystemExit as e:
+                ident = match_cache_to_dataset(f, datasets_root)
+                if ident:
+                    jobs.append((ident[0], ident[1], ident[2], f, False))
+                else:
+                    skipped.append((os.path.basename(f), str(e)))
+        if skipped:
+            print("[skip] 無法由檔名回推房子與影像名：")
+            for name, why in skipped:
+                print("  %s：%s" % (name, why))
     if limit:
-        files = files[:limit]
+        jobs = jobs[:limit]
+    if not jobs and skipped:
+        print("[skip] 本批 %d 個快取檔全部略過。" % len(skipped))
     gt = HouseGT()
     rows, t_start = [], time.time()
     try:
         from tqdm import tqdm
-        seq = tqdm(files, desc="batch pose") if sys.stderr.isatty() else files
+        seq = tqdm(jobs, desc="batch pose") if sys.stderr.isatty() else jobs
     except Exception:
-        seq = files
-    for f in seq:
-        house, na, nb = parse_cache_name(f)
+        seq = jobs
+    missing_imgs = []
+    for house, na, nb, f, swapped in seq:
         jpath = os.path.join(out_dir, f"{house}_{na}_{nb}.json")
         if resume and os.path.exists(jpath):
             old = json.load(open(jpath, encoding="utf-8"))
@@ -600,12 +632,15 @@ def run_pose_batch(cache_dir, out_dir, datasets_root=None, pairs=None, limit=0, 
                     input_name="全景影像",
                     condition="房子 %s 在 %s 底下沒有這兩張圖" % (house, datasets_root or "datasets"),
                 )
+            missing_imgs.append("%s %s/%s" % (house, na, nb))
             print(f"[skip] 找不到圖 {house} {na}/{nb}")
             continue
         Wa, Ha = gt.img_size(img_a)
         Wb, Hb = gt.img_size(img_b)
         m = np.load(f)["matches"]
         m = m.astype(float) if m.size else np.zeros((0, 5))
+        if swapped and m.size:
+            m = m[:, [2, 3, 0, 1, 4]]
         res = analyze_pair(m, Wa, Ha, Wb, Hb, conf, max_pts, thresh_deg, iters,
                            sampler=sampler, retry_conf=retry_conf,
                            lat_max=(lat_filter if lat_filter and lat_filter > 0 else None))
@@ -621,11 +656,20 @@ def run_pose_batch(cache_dir, out_dir, datasets_root=None, pairs=None, limit=0, 
             json.dump(res, fh, ensure_ascii=False, separators=(",", ":"))
         rows.append(to_summary_row(house, na, nb, res, lab, gt_ab, gt_ba, same_room, dt_ms))
 
+    if missing_imgs and not rows:
+        print("[skip] 本批因找不到影像而全部略過：")
+        for item in missing_imgs:
+            print("  %s" % item)
+
     total_s = time.time() - t_start
-    with open(os.path.join(out_dir, "_summary.csv"), "w", newline="", encoding="utf-8") as fh:
+    summary_path = os.path.join(out_dir, "_summary.csv")
+    summary_rows = rows
+    if pairs is not None and os.path.isfile(summary_path):
+        summary_rows = _merge_summary_rows(summary_path, rows)
+    with open(summary_path, "w", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=SUMMARY_COLS)
         w.writeheader()
-        w.writerows(rows)
+        w.writerows(summary_rows)
     args_ns = SimpleNamespace(conf=conf, max_pts=max_pts, thresh_deg=thresh_deg, iters=iters,
                               sampler=sampler, lat_filter=lat_filter, retry_conf=retry_conf,
                               out=out_dir)

@@ -72,7 +72,8 @@ PAIR_FIELDS = {
 
 HOUSE_SCHEMA_VERSION = "house-v2"
 
-HOUSE_FIELDS = ["house", "n_images", "width", "height", "images", "az_convention"]
+HOUSE_FIELDS = ["house", "n_images", "width", "height", "images", "az_convention",
+                "has_connectivity_matrix"]
 
 #: 出現這些前綴就是內部欄位漏出去了（輸出前自檢用）。
 FORBIDDEN_PREFIXES = ("gt_", "az_coarse_", "roma_")
@@ -175,6 +176,9 @@ def attach_pose(house, pub, regions_dir):
         R, t = pose["R"], pose["t"]
         if swap:
             R, t = invert_pose(R, t)
+        else:
+            R = [[round(float(x), 6) for x in row] for row in R]
+            t = [round(float(x), 6) for x in t]
         p["R"] = R
         p["t"] = t
         n += 1
@@ -236,45 +240,56 @@ def export_houses(in_dir, out_dir, regions_dir=None, with_regions=True,
             condition="目錄 %s 沒有可匯出的 JSON" % in_dir,
         )
 
-    if with_regions and not regions_dir:
+    if not regions_dir:
         from .config import regions_root
         regions_dir = regions_root()
 
     os.makedirs(out_dir, exist_ok=True)
     tot_in = tot_out = tot_pairs = tot_regions = 0
     written = []
-    for f in files:
-        d = json.load(open(f, encoding="utf-8"))
-        house = d.get("house") or os.path.splitext(os.path.basename(f))[0]
-        why = restricted_reason(house, datasets_dir=datasets_dir)
-        if why:
-            raise RomaGeoError(
-                why,
-                input_name="房子 %s" % house,
-                condition="來自受限來源，不得對外交付",
-            )
-        pub = house_to_public(d)
-        if with_regions:
-            tot_regions += attach_regions(house, pub, regions_dir)
-        if regions_dir:
+    try:
+        for f in files:
+            d = json.load(open(f, encoding="utf-8"))
+            house = d.get("house") or os.path.splitext(os.path.basename(f))[0]
+            why = restricted_reason(house, datasets_dir=datasets_dir)
+            if why:
+                raise RomaGeoError(
+                    why,
+                    input_name="房子 %s" % house,
+                    condition="來自受限來源，不得對外交付",
+                )
+            pub = house_to_public(d)
+            need_regions = with_regions or semantic_correct
+            if need_regions:
+                tot_regions += attach_regions(house, pub, regions_dir)
             attach_pose(house, pub, regions_dir)
-        if semantic_correct:
-            from .semantic import apply_semantic_correction, load_doors_json
-            doors = load_doors_json(os.path.join(semantic_dir or "", house + ".json"))
-            apply_semantic_correction(pub, doors)
-        bad = leaked_fields(pub)
-        if bad:
-            raise RomaGeoError(
-                "輸出帶有內部欄位：%s" % sorted(bad),
-                input_name="房子 %s" % house,
-                condition="對外子集混入了內部欄位",
-            )
-        out_path = os.path.join(out_dir, f"{house}.json")
-        json.dump(pub, open(out_path, "w", encoding="utf-8"), ensure_ascii=False)
-        tot_in += os.path.getsize(f)
-        tot_out += os.path.getsize(out_path)
-        tot_pairs += len(pub["pairs"])
-        written.append(out_path)
+            if semantic_correct:
+                from .semantic import apply_semantic_correction, load_doors_json
+                doors = load_doors_json(os.path.join(semantic_dir or "", house + ".json"))
+                apply_semantic_correction(pub, doors)
+            if need_regions and not with_regions:
+                for p in pub["pairs"]:
+                    p.pop("regions", None)
+            bad = leaked_fields(pub)
+            if bad:
+                raise RomaGeoError(
+                    "輸出帶有內部欄位：%s" % sorted(bad),
+                    input_name="房子 %s" % house,
+                    condition="對外子集混入了內部欄位",
+                )
+            out_path = os.path.join(out_dir, f"{house}.json")
+            json.dump(pub, open(out_path, "w", encoding="utf-8"), ensure_ascii=False)
+            tot_in += os.path.getsize(f)
+            tot_out += os.path.getsize(out_path)
+            tot_pairs += len(pub["pairs"])
+            written.append(out_path)
+    except Exception:
+        for path in written:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+        raise
 
     print(f"{len(files)} 房 · {tot_pairs} 對 → {out_dir}")
     if tot_in:

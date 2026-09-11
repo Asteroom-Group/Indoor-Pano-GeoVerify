@@ -118,14 +118,16 @@ class RoMaMatcher:
 
     def _get_cache_info(self, path_a, path_b, mode):        
         """獲取快取路徑與對稱性資訊 (統一 0.1 門檻)"""
-        import sys
-        _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        if _root not in sys.path:
-            sys.path.insert(0, _root)
         try:
             from roma_geo.names import house_of, image_stem
         except ImportError:
-            from names import house_of, image_stem
+            def image_stem(path):
+                return os.path.splitext(os.path.basename(str(path)))[0]
+
+            def house_of(path):
+                parts = [p for p in str(path).replace("\\", "/").split("/")
+                         if p not in ("", ".", "..")]
+                return parts[-2] if len(parts) >= 2 else "unknown"
 
         ha, na = house_of(path_a), image_stem(path_a)
         hb, nb = house_of(path_b), image_stem(path_b)

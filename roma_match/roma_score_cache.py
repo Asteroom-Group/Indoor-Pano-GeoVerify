@@ -73,9 +73,9 @@ class RomaScoreCache:
 
     def save(self, path):
         os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-        houses = np.array([k[0] for k in self._keys], dtype=object)
-        a_names = np.array([k[1] for k in self._keys], dtype=object)
-        b_names = np.array([k[2] for k in self._keys], dtype=object)
+        houses = np.array([k[0] for k in self._keys], dtype="U")
+        a_names = np.array([k[1] for k in self._keys], dtype="U")
+        b_names = np.array([k[2] for k in self._keys], dtype="U")
         rows = np.array([self._keys[k] for k in self._keys], dtype=np.int64)
         order = np.argsort(rows)
         np.savez_compressed(
@@ -91,7 +91,7 @@ class RomaScoreCache:
         cache = cls()
         if not os.path.exists(path):
             return cache
-        d = np.load(path, allow_pickle=True)
+        d = np.load(path, allow_pickle=False)
         houses, a_names, b_names = d["houses"], d["a_names"], d["b_names"]
         match_count, conf_sum, conf_mean = d["match_count"], d["conf_sum"], d["conf_mean"]
         for idx in range(len(houses)):

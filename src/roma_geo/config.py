@@ -174,9 +174,12 @@ class Settings:
         return self._abs(self._datasets) if self._datasets else datasets_root()
 
     def matrices_root(self, variant="refined"):
-        if not self._matrices:
+        if self._matrices:
+            base = self._abs(self._matrices)
+        elif self._output:
+            base = os.path.join(self.output_root(), "matrices")
+        else:
             return matrices_root(variant)
-        base = self._abs(self._matrices)
         sub = os.path.join(base, "%s_matrices" % variant)
         if os.path.isdir(sub):
             return sub
@@ -206,6 +209,8 @@ class Settings:
     def house_data_dir(self):
         if self._house_data:
             return self._abs(self._house_data)
+        if self._output:
+            return os.path.join(self.output_root(), "house_data")
         return os.path.join(PROJECT_ROOT, "stitch_tool", "data")
 
     def public_dir(self):
@@ -221,6 +226,8 @@ class Settings:
     def semantic_out_dir(self):
         if self._semantic_out:
             return self._abs(self._semantic_out)
+        if self._output:
+            return os.path.join(self.output_root(), "semantic")
         return os.path.join(PROJECT_ROOT, "stitch_tool", "semantic")
 
 

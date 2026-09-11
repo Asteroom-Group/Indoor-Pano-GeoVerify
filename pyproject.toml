@@ -13,10 +13,11 @@ readme = "README.md"
 roma-geo = "roma_geo.__main__:main"
 
 [tool.setuptools]
-packages = ["roma_geo", "pose_regions", "roma_match", "core_roma_match"]
+packages = ["roma_geo", "pose_regions", "roma_match", "core_roma_match", "semantic_doors"]
 
 [tool.setuptools.package-dir]
 roma_geo = "src/roma_geo"
 pose_regions = "pose_regions"
 roma_match = "roma_match"
 core_roma_match = "core_roma_match"
+semantic_doors = "semantic_doors"

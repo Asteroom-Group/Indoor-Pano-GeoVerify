@@ -160,18 +160,20 @@ def _size(path, default_w, default_h):
 
 
 def verify_pairs(pairs, progress=False, **kw):
-    """對多組圖做幾何驗證，全程重用同一個 matcher。"""
+    """對多組圖做幾何驗證，全程重用同一個 matcher。pairs 可以是產生器。"""
     if kw.get("matcher") is None:
         require_matching_deps("做幾何驗證")
     m = kw.pop("matcher", None) or get_matcher(
         kw.get("model_type", "roma_v2"), kw.get("device"),
         kw.get("use_cache", True), kw.get("cache_dir"))
-    for i, (a, b) in enumerate(pairs, 1):
+    seq = list(pairs) if progress else pairs
+    n = len(seq) if progress else None
+    for i, (a, b) in enumerate(seq, 1):
         res = verify_pair(a, b, matcher=m, **kw)
         if progress:
             posed = "有位姿" if res.get("pose") else "無位姿"
             print("[%d/%d] %s %s · %d 區域 · %.2fs"
-                  % (i, len(pairs), res["img_a"][:8], posed,
+                  % (i, n, res["img_a"][:8], posed,
                      len(res.get("regions") or []), res["timing"]["total_s"]), flush=True)
         yield res
 

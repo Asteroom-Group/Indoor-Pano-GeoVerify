@@ -32,23 +32,12 @@ import csv
 import glob
 import json
 import os
-import sys
 
 import numpy as np
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # 本檔位於專案根目錄下一層，故 dirname 一次即為根目錄。
 ROOT = os.path.dirname(SCRIPT_DIR)
-_SRC = os.path.join(ROOT, "src")
-if _SRC not in sys.path:
-    sys.path.insert(0, _SRC)
-if ROOT not in sys.path:
-    sys.path.append(ROOT)
-from roma_geo.config import semantic_root, regions_root    # noqa: E402
-
-SEM_DIR = semantic_root()                         # 可用 ROMA_GEO_DATASETS 覆寫，見 config.py
-REG_DIR = regions_root()                        # 可用 ROMA_GEO_OUTPUT 覆寫，見 config.py
-DATA_DIR = os.path.join(ROOT, "stitch_tool", "data")
 CACHE = os.path.join(SCRIPT_DIR, "_door_cache.json")
 OUT_MD = os.path.join(SCRIPT_DIR, "semantic_door_eval.md")
 
@@ -184,17 +173,21 @@ def main():
                     help="只看跨房案例;預設同房與跨房皆納入")
     ap.add_argument("--refresh", action="store_true", help="忽略門快取重抽")
     args = ap.parse_args()
+    from roma_geo.config import semantic_root, regions_root
+    sem_dir = semantic_root()
+    reg_dir = regions_root()
+    data_dir = os.path.join(ROOT, "stitch_tool", "data")
 
     # ---- 門抽取(含快取)----
     cache = {}
     if os.path.exists(CACHE) and not args.refresh:
         cache = json.load(open(CACHE, encoding="utf-8"))
-    task_ids = sorted(os.listdir(SEM_DIR))
+    task_ids = sorted(os.listdir(sem_dir))
     if args.houses:
         task_ids = [t for t in task_ids if t in args.houses]
     n_new = 0
     for tid in task_ids:
-        for mp in sorted(glob.glob(os.path.join(SEM_DIR, tid, "*_mask.png"))):
+        for mp in sorted(glob.glob(os.path.join(sem_dir, tid, "*_mask.png"))):
             img = os.path.basename(mp)[:-len("_mask.png")]
             key = tid + "/" + img
             if key in cache:
@@ -217,7 +210,7 @@ def main():
 
     # ---- GT / coarse ----
     coarse, gt = {}, {}
-    for fp in sorted(glob.glob(os.path.join(DATA_DIR, "*.json"))):
+    for fp in sorted(glob.glob(os.path.join(data_dir, "*.json"))):
         hd = json.load(open(fp, encoding="utf-8"))
         if not isinstance(hd, dict) or "pairs" not in hd:
             continue
@@ -239,7 +232,7 @@ def main():
 
     rows = []
     n_pair = 0
-    for fp in glob.glob(os.path.join(REG_DIR, "*.json")):
+    for fp in glob.glob(os.path.join(reg_dir, "*.json")):
         if os.path.basename(fp).startswith("_"):
             continue
         try:

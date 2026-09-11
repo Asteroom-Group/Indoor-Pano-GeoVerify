@@ -240,16 +240,75 @@ def find_house_image(house, img_name, max_depth=5, datasets_root=None):
         root = os.path.abspath(os.path.expanduser(root)) if root else \
             os.path.join(os.path.dirname(SCRIPT_DIR), "datasets")
     cur = os.path.join(root, house)
+    try:
+        from roma_geo.names import find_image_file, dir_has_images
+    except ImportError:
+        find_image_file = dir_has_images = None
     for _ in range(max_depth + 1):
         if not os.path.isdir(cur):
             return None
-        for ext in (".jpg", ".JPG", ".jpeg"):
-            p = os.path.join(cur, img_name + ext)
-            if os.path.exists(p):
+        if find_image_file is not None:
+            p = find_image_file(cur, img_name)
+            if p:
                 return p
-        if glob.glob(os.path.join(cur, "*.jpg")) or glob.glob(os.path.join(cur, "*.JPG")):
-            return None            # 這層有圖但沒有這張,不再往下找
+            if dir_has_images(cur):
+                return None
+        else:
+            for ext in (".jpg", ".JPG", ".jpeg", ".JPEG"):
+                p = os.path.join(cur, img_name + ext)
+                if os.path.exists(p):
+                    return p
+            if glob.glob(os.path.join(cur, "*.jpg")) or glob.glob(os.path.join(cur, "*.JPG")) \
+                    or glob.glob(os.path.join(cur, "*.jpeg")) or glob.glob(os.path.join(cur, "*.JPEG")):
+                return None
         cur = os.path.join(cur, house)
+    return None
+
+
+def _list_image_stems(datasets_root, house, max_depth=5):
+    """列出一間房的影像識別碼，供快取檔名對回已知房子與影像。"""
+    try:
+        from roma_geo.names import is_image_filename
+    except ImportError:
+        def is_image_filename(name):
+            return os.path.splitext(name)[1].lower() in (".jpg", ".jpeg")
+    cur = os.path.join(datasets_root, house)
+    for _ in range(max_depth + 1):
+        if not os.path.isdir(cur):
+            return []
+        names = [os.path.splitext(n)[0] for n in os.listdir(cur) if is_image_filename(n)]
+        if names:
+            return names
+        cur = os.path.join(cur, house)
+    return []
+
+
+def match_cache_to_dataset(npz_path, datasets_root):
+    """用資料集裡已知的房子名與影像名拆快取檔名。對不上回 None。"""
+    if not datasets_root or not os.path.isdir(datasets_root):
+        return None
+    base = os.path.basename(npz_path)
+    if not base.endswith(CACHE_SUFFIX):
+        return None
+    rest = base[:-len(CACHE_SUFFIX)]
+    try:
+        houses = [n for n in os.listdir(datasets_root)
+                  if os.path.isdir(os.path.join(datasets_root, n))]
+    except OSError:
+        return None
+    houses.sort(key=len, reverse=True)
+    for house in houses:
+        prefix = house + "_"
+        if not rest.startswith(prefix):
+            continue
+        rem = rest[len(prefix):]
+        stems = set(_list_image_stems(datasets_root, house))
+        for na in stems:
+            token = na + "_"
+            if rem.startswith(token):
+                nb = rem[len(token):]
+                if nb in stems:
+                    return house, na, nb
     return None
 
 def load_cache_npz(npz_path, conf_min, max_pts, img_a=None, img_b=None):

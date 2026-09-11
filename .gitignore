@@ -54,3 +54,9 @@ bundles/
 *.egg-info/
 build/
 dist/
+
+# 由既有快取重生的衍生產物（不隨 repo 走，缺了會自動略過或重新產生）：
+#   roma_scores.npz        environments/batch_match.py --aggregate_scores，約 150 秒
+#   batch_pose_report.md   每次 batch_pose_from_cache.py 跑完自動生成
+roma_match/roma_scores.npz
+Output/roma_regions/batch_pose_report.md

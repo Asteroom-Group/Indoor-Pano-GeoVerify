@@ -127,9 +127,10 @@ def build_house(house: str, oof_dir: str, roma_cache=None, ranking_lookup=None, 
         if task_dir is None:
             print(f"[skip] {house}: 無連通矩陣，也找不到影像資料夾")
             return None
+        from roma_geo.names import is_image_filename
         images = sorted(
             n for n in os.listdir(task_dir)
-            if n.lower().endswith((".jpg", ".jpeg")) and os.path.isfile(os.path.join(task_dir, n))
+            if is_image_filename(n) and os.path.isfile(os.path.join(task_dir, n))
         )
         if not images:
             print(f"[skip] {house}: 影像資料夾沒有 jpg")
@@ -203,12 +204,11 @@ def build_house(house: str, oof_dir: str, roma_cache=None, ranking_lookup=None, 
             else:
                 pair = {
                     "i": i, "j": j,
+                    "az_ij": None if az_ij is None else round(az_ij, 2) % 360.0,
+                    "az_ji": None if az_ji is None else round(az_ji, 2) % 360.0,
                     **gt_pair_fields(gt, ai, aj),
                     **geo_blank,
                 }
-                if az_ij is not None:
-                    pair["az_ij"] = round(az_ij, 2) % 360.0
-                    pair["az_ji"] = round(az_ji, 2) % 360.0
                 if az_source is not None:
                     pair["az_source"] = az_source
             if roma_cache is not None:
@@ -259,9 +259,8 @@ def build_house(house: str, oof_dir: str, roma_cache=None, ranking_lookup=None, 
         "az_convention": upstream_direction.CONVENTION,
         "has_gt": bool(gt),
         "n_gt_connected_pairs": sum(1 for p in pairs if p["gt_connected"]),
+        "has_connectivity_matrix": M is not None,
     }
-    if M is None:
-        out["has_connectivity_matrix"] = False
     return out
 
 
@@ -285,8 +284,12 @@ def main():
 
     roma_cache = None
     if not args.no_roma_scores and RomaScoreCache is not None and os.path.exists(args.roma_scores):
-        roma_cache = RomaScoreCache.load(args.roma_scores)
-        print(f"[roma] Loaded {roma_cache.num_edges()} aggregated RoMa pair scores from {args.roma_scores}")
+        try:
+            roma_cache = RomaScoreCache.load(args.roma_scores)
+            print(f"[roma] Loaded {roma_cache.num_edges()} aggregated RoMa pair scores from {args.roma_scores}")
+        except (ValueError, OSError, KeyError) as e:
+            print("[roma] 略過分數快取（%s）。舊格式請重新產生。" % e)
+            roma_cache = None
 
     ranking_lookup = None
     if not args.no_ranking_eval and os.path.exists(args.ranking_eval):
