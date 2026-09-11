@@ -42,6 +42,34 @@ class TestImportDoesNotStealNames(unittest.TestCase):
             self.assertNotEqual(os.path.normcase(os.path.abspath(sys.path[0])),
                                 os.path.normcase(root))
 
+    def test_root_shim_leaves_user_config(self):
+        """載入專案根目錄相容層之後，使用端的 config 仍是自己的。"""
+        import subprocess
+        import textwrap
+        from _support import ROOT, temp_dir
+        with temp_dir() as d:
+            open(os.path.join(d, "config.py"), "w", encoding="utf-8").write(
+                "marker = 'user-config'\n")
+            code = textwrap.dedent("""
+                import os, sys
+                sys.path.insert(0, %r)
+                sys.path.insert(1, %r)
+                import roma_geo
+                sys.modules.pop("config", None)
+                import config
+                print(getattr(config, "marker", "STOLEN"))
+                print("path0", os.path.normcase(os.path.abspath(sys.path[0] or ".")))
+            """ % (d, ROOT))
+            env = os.environ.copy()
+            env.pop("PYTHONPATH", None)
+            r = subprocess.run(
+                [sys.executable, "-c", code],
+                cwd=d, env=env, capture_output=True, text=True,
+            )
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            self.assertIn("user-config", r.stdout)
+            self.assertNotIn("STOLEN", r.stdout)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

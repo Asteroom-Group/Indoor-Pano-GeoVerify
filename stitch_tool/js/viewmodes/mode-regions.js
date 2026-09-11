@@ -148,8 +148,8 @@ function refresh(){
     const bits = [
       st + (pair.prob != null ? ' ' + (pair.prob * 100).toFixed(0) + '%' : ''),
       regs.length + ' 個共視區域',
-      'conf_used=' + (rj.conf_used != null ? rj.conf_used : '。'),
-      'inlier=' + (rj.inlier_rate != null ? rj.inlier_rate : '。'),
+      'conf_used=' + (rj.conf_used != null ? rj.conf_used : '—'),
+      'inlier=' + (rj.inlier_rate != null ? rj.inlier_rate : '—'),
     ];
     if(f.no_covisibility) bits.push('<b style="color:#e05a3a">無共視證據</b>');
     if(f.degenerate_rot_only) bits.push('<b style="color:#e0a53a">近零基線(兩點位幾乎同位)</b>');

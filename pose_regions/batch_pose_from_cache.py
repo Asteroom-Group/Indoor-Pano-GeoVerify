@@ -41,7 +41,7 @@ GT 欄位(供驗收交叉比對,非計算輸入):
   venv/Scripts/python.exe pose_regions/batch_pose_from_cache.py --limit 20 # 冒煙
   --resume 會跳過已存在的 JSON(重讀其內容補 summary 列),中斷可續跑。
 """
-import argparse, csv, glob, json, os, sys, time
+import argparse, csv, glob, json, os, sys, tempfile, time
 import numpy as np
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -52,13 +52,13 @@ ROOT = os.path.dirname(SCRIPT_DIR)
 try:
     from .estimate_relative_pose import (parse_cache_name, find_house_image, erp_to_bearing,
                                          ransac_E, select_pose, rotation_only_fit, sampson_residual,
-                                         CACHE_SUFFIX, match_cache_to_dataset)
+                                         CACHE_SUFFIX, match_cache_to_dataset, identify_cache_file)
 except ImportError:
     if SCRIPT_DIR not in sys.path:
         sys.path.insert(0, SCRIPT_DIR)
     from estimate_relative_pose import (parse_cache_name, find_house_image, erp_to_bearing,
                                         ransac_E, select_pose, rotation_only_fit, sampson_residual,
-                                        CACHE_SUFFIX, match_cache_to_dataset)
+                                        CACHE_SUFFIX, match_cache_to_dataset, identify_cache_file)
 
 SCHEMA_VERSION = "wp1-step3-v2"   # v2(2026-07-23):nadir 前濾預設開啟(lat_filter 60);params.lat_max / n.lat_drop 欄位
 
@@ -358,18 +358,51 @@ def analyze_pair(m_all, Wa, Ha, Wb, Hb, conf_min, max_pts, thresh_deg, iters,
 
 
 # ---------- summary 列 ----------
+def _csv_fields_or_raise(fields, expected, path):
+    have = list(fields or [])
+    extra = [c for c in have if c not in expected]
+    missing = [c for c in expected if c not in have]
+    if extra or missing:
+        from roma_geo.errors import RomaGeoError
+        raise RomaGeoError(
+            "多了 %s，少了 %s" % (extra or "無", missing or "無"),
+            input_name="彙總檔",
+            condition="既有檔 %s 的欄位與現行不一致" % path,
+        )
+
+
 def _merge_summary_rows(path, new_rows):
     """以 (house, {img_a, img_b}) 合併既有彙總列。指定配對時累積，不覆寫其他房子。"""
     by = {}
     if os.path.isfile(path):
         with open(path, encoding="utf-8", newline="") as f:
-            for row in csv.DictReader(f):
+            reader = csv.DictReader(f)
+            _csv_fields_or_raise(reader.fieldnames, SUMMARY_COLS, path)
+            for row in reader:
                 key = (row["house"], frozenset({row["img_a"], row["img_b"]}))
                 by[key] = row
     for row in new_rows:
         key = (row["house"], frozenset({row["img_a"], row["img_b"]}))
         by[key] = row
     return [by[k] for k in sorted(by, key=lambda k: (k[0], min(k[1]), max(k[1])))]
+
+
+def _atomic_write_csv(path, fieldnames, rows):
+    directory = os.path.dirname(os.path.abspath(path)) or "."
+    os.makedirs(directory, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix="._summary_", suffix=".tmp", dir=directory)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as fh:
+            w = csv.DictWriter(fh, fieldnames=fieldnames, extrasaction="raise")
+            w.writeheader()
+            w.writerows(rows)
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
 
 
 SUMMARY_COLS = ["house", "img_a", "img_b", "n_raw", "n_conf", "n_used", "n_inlier", "inlier_rate",
@@ -585,15 +618,11 @@ def run_pose_batch(cache_dir, out_dir, datasets_root=None, pairs=None, limit=0, 
         if n_other:
             print(f"[info] 快取目錄有 {n_other} 個非 {CACHE_SUFFIX} 的檔案,已略過。")
         for f in files:
-            try:
-                house, na, nb = parse_cache_name(f)
-                jobs.append((house, na, nb, f, False))
-            except SystemExit as e:
-                ident = match_cache_to_dataset(f, datasets_root)
-                if ident:
-                    jobs.append((ident[0], ident[1], ident[2], f, False))
-                else:
-                    skipped.append((os.path.basename(f), str(e)))
+            ident = identify_cache_file(f, datasets_root)
+            if ident:
+                jobs.append((ident[0], ident[1], ident[2], f, False))
+            else:
+                skipped.append((os.path.basename(f), "無法確定房子與影像名"))
         if skipped:
             print("[skip] 無法由檔名回推房子與影像名：")
             for name, why in skipped:
@@ -666,10 +695,7 @@ def run_pose_batch(cache_dir, out_dir, datasets_root=None, pairs=None, limit=0, 
     summary_rows = rows
     if pairs is not None and os.path.isfile(summary_path):
         summary_rows = _merge_summary_rows(summary_path, rows)
-    with open(summary_path, "w", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=SUMMARY_COLS)
-        w.writeheader()
-        w.writerows(summary_rows)
+    _atomic_write_csv(summary_path, SUMMARY_COLS, summary_rows)
     args_ns = SimpleNamespace(conf=conf, max_pts=max_pts, thresh_deg=thresh_deg, iters=iters,
                               sampler=sampler, lat_filter=lat_filter, retry_conf=retry_conf,
                               out=out_dir)

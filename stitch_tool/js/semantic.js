@@ -29,18 +29,28 @@ function regionAzSpan(poly, W){
   return { r0: pxToAz(x0, W), r1: pxToAz(x1, W), rw: (x1 - x0) / W * 360 };
 }
 
-/** 兩個（可能過縫）角區間的重疊角度。逐字對應 az_overlap()。*/
+/** 兩個（可能過縫）角區間的重疊角度。與交付路徑 roma_geo.semantic.az_overlap 相同。*/
 function azOverlap(a0, a1, b0, b1){
-  const norm = (s, e) => { const w = ((e - s) % 360 + 360) % 360; return [((s % 360) + 360) % 360, w]; };
-  const [s1, w1] = norm(a0, a1);
-  const [s2, w2] = norm(b0, b1);
-  let best = 0;
-  for(const sh of [-360, 0, 360]){
-    const lo = Math.max(s1, s2 + sh);
-    const hi = Math.min(s1 + w1, s2 + sh + w2);
-    if(hi - lo > best) best = hi - lo;
+  const segs = (x0, x1) => {
+    const raw = x1 - x0;
+    const start = ((x0 % 360) + 360) % 360;
+    const width = ((raw % 360) + 360) % 360;
+    if(width === 0){
+      if(Math.abs(raw) < 1e-12) return [];
+      return [[0, 360]];
+    }
+    const end = start + width;
+    if(end <= 360 + 1e-12) return [[start, Math.min(end, 360)]];
+    return [[start, 360], [0, end - 360]];
+  };
+  let total = 0;
+  for(const [s1, e1] of segs(a0, a1)){
+    for(const [s2, e2] of segs(b0, b1)){
+      const lo = Math.max(s1, s2), hi = Math.min(e1, e2);
+      if(hi > lo) total += hi - lo;
+    }
   }
-  return Math.max(0, best);
+  return total;
 }
 
 function baseName(fname){

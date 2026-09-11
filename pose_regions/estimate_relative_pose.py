@@ -283,6 +283,30 @@ def _list_image_stems(datasets_root, house, max_depth=5):
     return []
 
 
+def identify_cache_file(npz_path, datasets_root=None):
+    """確定快取檔對應的 (house, na, nb)。UUID 優先，其次用資料集核對，推測須通過驗證。"""
+    base = os.path.basename(npz_path)
+    m = _CACHE_RE.match(base)
+    if m:
+        return m.group("house"), m.group("na"), m.group("nb")
+    ident = match_cache_to_dataset(npz_path, datasets_root)
+    if ident:
+        return ident
+    if not base.endswith(CACHE_SUFFIX):
+        return None
+    rest = base[:-len(CACHE_SUFFIX)]
+    parts = rest.rsplit("_", 2)
+    if len(parts) != 3 or not all(parts):
+        return None
+    house, na, nb = parts
+    if not datasets_root:
+        return None
+    if find_house_image(house, na, datasets_root=datasets_root) and \
+            find_house_image(house, nb, datasets_root=datasets_root):
+        return house, na, nb
+    return None
+
+
 def match_cache_to_dataset(npz_path, datasets_root):
     """用資料集裡已知的房子名與影像名拆快取檔名。對不上回 None。"""
     if not datasets_root or not os.path.isdir(datasets_root):

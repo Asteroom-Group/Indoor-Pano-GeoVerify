@@ -254,7 +254,7 @@ class TestExportIndependent(unittest.TestCase):
                 "has_gt": False, "has_connectivity_matrix": False,
                 "pairs": [{
                     "i": 0, "j": 1, "az_ij": 10.0, "az_ji": 190.0,
-                    "az_source": "geo", "geo_posed": 1,
+                    "az_source": "geo", "geo_posed": 0,
                     "geo_n_inlier": 40, "geo_inlier_rate": 0.8, "geo_conf_used": 0.65,
                     "gt_connected": None,
                 }],
@@ -266,7 +266,7 @@ class TestExportIndependent(unittest.TestCase):
             pub = json.load(open(result.outputs["public_json"], encoding="utf-8"))
             self.assertEqual(pub["house"], HOUSE)
             self.assertNotIn("gt_connected", pub["pairs"][0])
-            self.assertTrue(pub["pairs"][0]["has_geometry"])
+            self.assertFalse(pub["pairs"][0]["has_geometry"])
             self.assertNotIn("prob", pub["pairs"][0])
 
 

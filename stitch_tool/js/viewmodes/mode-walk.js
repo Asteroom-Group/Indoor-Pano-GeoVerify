@@ -480,7 +480,7 @@ function paint(){
   const azS = P.azStart.toFixed(0) + '°', azE = P.azEnter.toFixed(0) + '°';
   let showPin = false;
 
-  const azDoor = (P.doorS != null) ? P.doorS.toFixed(0) + '°' : '。';
+  const azDoor = (P.doorS != null) ? P.doorS.toFixed(0) + '°' : '—';
   switch(kind){
     case 'holdDoor':
       blit(ctx, P.doorFrame
@@ -730,7 +730,7 @@ function refresh(){
         (main.k != null ? ' · 主區 R' + main.k : '') +
         (nTurn ? ' · 轉向' + (turnMs / 1000).toFixed(1) + 's' : '') +
         (END_WITH_LOOKBACK ? ' · 回看' + (lbMs / 1000).toFixed(1) + 's' : '') +
-        ' · conf=' + (gates.conf_used != null ? gates.conf_used : '。');
+        ' · conf=' + (gates.conf_used != null ? gates.conf_used : '—');
 
       _prep = {
         turnA: turn.frames,

@@ -118,7 +118,8 @@ venv\Scripts\python.exe tests\run_all.py
 |---|---|---|
 | 全景資料集 | `ROMA_GEO_DATASETS` | `datasets/` |
 | 門語意圖 | （跟隨資料集） | `<datasets>/semantic/` |
-| 連通性矩陣 | `ROMA_GEO_MATRICES` | `matrices/<版本>/` |
+| 連通性矩陣 | `ROMA_GEO_MATRICES` | `matrices/<版本>/`（不隨產出根目錄變動） |
+| 上游連通 JSON | `ROMA_GEO_CONNECTIONS` | 無（缺席則略過轉矩陣） |
 | 挑配對門檻 | `ROMA_GEO_PAIR_THRESHOLD` | `config.PAIR_THRESHOLD`（現值 0.0） |
 | 產出根目錄 | `ROMA_GEO_OUTPUT` | `Output/` |
 | 匹配快取 | `ROMA_GEO_CACHE` | `roma_match/cache/` |

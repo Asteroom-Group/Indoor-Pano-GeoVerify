@@ -81,9 +81,7 @@ class TestN2SemanticDoorsWithoutProjectOnPath(unittest.TestCase):
                 cwd=d, env=env, capture_output=True, text=True,
             )
             self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-            self.assertTrue(r.stdout.strip().startswith("OK")
-                            or r.stdout.strip().startswith("READABLE"),
-                            r.stdout + r.stderr)
+            self.assertTrue(r.stdout.strip().startswith("OK"), r.stdout + r.stderr)
             self.assertNotIn("ModuleNotFoundError", r.stdout + r.stderr)
 
 
@@ -97,16 +95,18 @@ class TestN3SettingsWritePathsStayUnderOutput(unittest.TestCase):
             cache = os.path.join(d, "cache")
             s = Settings(datasets=ds, output=out, cache=cache)
             root = os.path.normcase(os.path.abspath(PROJECT_ROOT))
-            paths = [
-                s.datasets_root(), s.output_root(), s.cache_root(),
-                s.matrices_root(), s.house_data_dir(), s.semantic_out_dir(),
-                s.public_dir(), s.regions_root(), s.semantic_root(),
+            write_paths = [
+                s.output_root(), s.cache_root(),
+                s.house_data_dir(), s.semantic_out_dir(),
+                s.public_dir(), s.regions_root(),
             ]
-            for p in paths:
+            for p in write_paths:
                 npth = os.path.normcase(os.path.abspath(p))
                 self.assertFalse(
                     npth == root or npth.startswith(root + os.sep),
                     "%s 落在安裝來源 %s" % (p, PROJECT_ROOT))
+            self.assertFalse(os.path.normcase(s.matrices_root()).startswith(
+                os.path.normcase(s.output_root()) + os.sep))
 
 
 class TestN4CovisRankingEvalUsesPackageConfig(unittest.TestCase):

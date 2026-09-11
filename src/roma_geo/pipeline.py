@@ -3,6 +3,7 @@ import csv
 import json
 import os
 import sys
+import tempfile
 
 from .config import PROJECT_ROOT, Settings
 from .errors import RomaGeoError
@@ -58,13 +59,48 @@ def _read_pairs_csv(path):
         return [(r["house"], r["img_a"], r["img_b"]) for r in csv.DictReader(f)]
 
 
+_PAIRS_COLS = ["house", "img_a", "img_b", "score"]
+
+
 def _write_pairs_csv(path, rows):
-    os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
-    with open(path, "w", encoding="utf-8", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["house", "img_a", "img_b", "score"])
-        for h, x, y, s in sorted(rows, key=lambda r: (r[0], r[1], r[2])):
-            w.writerow([h, x, y, "" if s is None else round(float(s), 4)])
+    """寫入配對清單。同一路徑多次呼叫時累積，與 _summary.csv 相同。"""
+    by = {}
+    if os.path.isfile(path):
+        with open(path, encoding="utf-8", newline="") as f:
+            reader = csv.DictReader(f)
+            have = list(reader.fieldnames or [])
+            extra = [c for c in have if c not in _PAIRS_COLS]
+            missing = [c for c in _PAIRS_COLS if c not in have]
+            if extra or missing:
+                raise RomaGeoError(
+                    "多了 %s，少了 %s" % (extra or "無", missing or "無"),
+                    input_name="配對清單",
+                    condition="既有檔 %s 的欄位與現行不一致" % path,
+                )
+            for r in reader:
+                key = (r["house"], frozenset({r["img_a"], r["img_b"]}))
+                score = r.get("score")
+                by[key] = (r["house"], r["img_a"], r["img_b"],
+                           None if score in (None, "") else score)
+    for h, x, y, s in rows:
+        by[(h, frozenset({x, y}))] = (h, x, y, s)
+    merged = sorted(by.values(), key=lambda r: (r[0], r[1], r[2]))
+    directory = os.path.dirname(os.path.abspath(path)) or "."
+    os.makedirs(directory, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix="._pairs_", suffix=".tmp", dir=directory)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(_PAIRS_COLS)
+            for h, x, y, s in merged:
+                w.writerow([h, x, y, "" if s is None else round(float(s), 4)])
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
     return path
 
 
@@ -139,7 +175,16 @@ def select_pairs(settings, houses, out_csv=None, threshold=None, pool="mean"):
     if have_matrix:
         _add_path("environments")
         import select_pairs as sp
-        collected = sp.collect(mdir, have_matrix, pool)
+        try:
+            collected = sp.collect(mdir, have_matrix, pool)
+        except SystemExit as e:
+            raise RomaGeoError(
+                str(e).strip() or "連通矩陣與影像清單不一致",
+                input_name="連通矩陣",
+                condition="矩陣形狀或影像清單長度不合契約",
+            ) from e
+        except RomaGeoError:
+            raise
         thr = settings.pair_threshold() if threshold is None else threshold
         rows.extend(r for r in collected if r[3] >= thr)
 

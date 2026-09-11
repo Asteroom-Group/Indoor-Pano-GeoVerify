@@ -26,7 +26,7 @@ def _house_json():
     return {"house": HOUSE, "n_images": 2, "width": 4096, "height": 2048,
             "images": ["a", "b"], "az_convention": "erp", "doors": [],
             "pairs": [{"i": 0, "j": 1, "prob": 0.9, "az_ij": 10.0, "az_ji": -170.0,
-                       "az_source": "geometry", "geo_posed": True,
+                       "az_source": "geometry", "geo_posed": False,
                        "n_inlier": 100, "inlier_rate": 0.5, "conf_used": 0.65}]}
 
 

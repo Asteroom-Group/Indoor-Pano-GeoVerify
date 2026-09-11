@@ -62,6 +62,11 @@ DEFAULT_OUTPUT = os.path.join(PROJECT_ROOT, "Output")
 ENV_CACHE = "ROMA_GEO_CACHE"
 DEFAULT_CACHE = os.path.join(PROJECT_ROOT, "roma_match", "cache")
 
+ENV_CONNECTIONS = "ROMA_GEO_CONNECTIONS"
+ENV_HOUSE_DATA = "ROMA_GEO_HOUSE_DATA"
+ENV_SEMANTIC_OUT = "ROMA_GEO_SEMANTIC_OUT"
+ENV_PUBLIC = "ROMA_GEO_PUBLIC_HOUSES"
+
 
 def _from_env(name: str, default: str) -> str:
     p = os.environ.get(name)
@@ -176,8 +181,6 @@ class Settings:
     def matrices_root(self, variant="refined"):
         if self._matrices:
             base = self._abs(self._matrices)
-        elif self._output:
-            base = os.path.join(self.output_root(), "matrices")
         else:
             return matrices_root(variant)
         sub = os.path.join(base, "%s_matrices" % variant)
@@ -209,6 +212,9 @@ class Settings:
     def house_data_dir(self):
         if self._house_data:
             return self._abs(self._house_data)
+        env = os.environ.get(ENV_HOUSE_DATA)
+        if env:
+            return self._abs(env)
         if self._output:
             return os.path.join(self.output_root(), "house_data")
         return os.path.join(PROJECT_ROOT, "stitch_tool", "data")
@@ -216,16 +222,25 @@ class Settings:
     def public_dir(self):
         if self._public_houses:
             return self._abs(self._public_houses)
+        env = os.environ.get(ENV_PUBLIC)
+        if env:
+            return self._abs(env)
         return os.path.join(self.output_root(), "public_houses")
 
     def connections_dir(self):
         if self._connections:
             return self._abs(self._connections)
+        env = os.environ.get(ENV_CONNECTIONS)
+        if env:
+            return self._abs(env)
         return None
 
     def semantic_out_dir(self):
         if self._semantic_out:
             return self._abs(self._semantic_out)
+        env = os.environ.get(ENV_SEMANTIC_OUT)
+        if env:
+            return self._abs(env)
         if self._output:
             return os.path.join(self.output_root(), "semantic")
         return os.path.join(PROJECT_ROOT, "stitch_tool", "semantic")

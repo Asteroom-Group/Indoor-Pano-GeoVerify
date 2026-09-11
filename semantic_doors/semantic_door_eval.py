@@ -140,18 +140,9 @@ def extract_doors(mask_path, merge_gap_deg=3.0):
 
 
 def az_overlap(a0, a1, b0, b1):
-    """兩個(可過縫)角區間的重疊角度。區間以 [a0,a1] 順時針表示。"""
-    def norm(s, e):
-        w = (e - s) % 360.0
-        return s % 360.0, w
-    s1, w1 = norm(a0, a1)
-    s2, w2 = norm(b0, b1)
-    best = 0.0
-    for sh in (-360.0, 0.0, 360.0):
-        lo = max(s1, s2 + sh)
-        hi = min(s1 + w1, s2 + sh + w2)
-        best = max(best, hi - lo)
-    return max(0.0, best)
+    """與交付路徑同一份實作。"""
+    from roma_geo.semantic import az_overlap as _overlap
+    return _overlap(a0, a1, b0, b1)
 
 
 def region_az_span(poly, W):

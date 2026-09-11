@@ -35,7 +35,7 @@ from _support import ROOT  # noqa: F401（匯入時補 sys.path）
 import export_public
 import roma_geo
 import upstream_direction
-from config import matrices_root, regions_root
+from config import datasets_root, matrices_root, regions_root
 from pose_regions.batch_pose_from_cache import SCHEMA_VERSION, SUMMARY_COLS
 
 OK, FAIL, SKIP = "OK", "FAIL", "SKIP"
@@ -274,7 +274,7 @@ def check_house_json(data_dir):
 
 
 # ---------- 對外交付子集 ----------
-def check_public_houses(pub_dir):
+def check_public_houses(pub_dir, datasets_dir=None):
     files = sorted(f for f in glob.glob(os.path.join(pub_dir, "*.json"))
                    if not os.path.basename(f).startswith("_"))
     if not files:
@@ -285,15 +285,20 @@ def check_public_houses(pub_dir):
     allowed_region = set(roma_geo.PUBLIC_REGION_FIELDS) | {"a", "b"}
     allowed_side = set(roma_geo.PUBLIC_REGION_SIDE_FIELDS)
     problems, tot_pairs, n_regions = [], 0, 0
+    ds = datasets_dir if datasets_dir is not None else datasets_root()
+    if not os.path.isdir(ds):
+        problems.append("受限來源未驗到：資料集目錄不存在（%s）" % ds)
     for f in files:
         house = os.path.splitext(os.path.basename(f))[0]
         d = _load(f)
         leaked = export_public.leaked_fields(d)
         if leaked:
             problems.append("%s: 含內部欄位 %s" % (house, sorted(leaked)))
-        why = export_public.restricted_reason(house)
-        if why:
-            problems.append("%s: 來自受限來源，不得對外交付（%s）" % (house, why.splitlines()[0]))
+        if os.path.isdir(ds):
+            why = export_public.restricted_reason(house, datasets_dir=ds)
+            if why:
+                problems.append("%s: 來自受限來源，不得對外交付（%s）"
+                                % (house, why.splitlines()[0]))
         n_img = len(d.get("images") or [])
         for p in d.get("pairs") or []:
             tot_pairs += 1
@@ -361,7 +366,7 @@ def check_public_houses(pub_dir):
 
 # ---------- 匯總 ----------
 def run_checks(limit=200, regions_dir=None, matrices_dir=None,
-               house_dir=None, public_dir=None):
+               house_dir=None, public_dir=None, datasets_dir=None):
     regions_dir = regions_dir or regions_root()
     matrices_dir = matrices_dir or matrices_root()
     house_dir = house_dir or os.path.join(ROOT, "stitch_tool", "data")
@@ -370,7 +375,7 @@ def run_checks(limit=200, regions_dir=None, matrices_dir=None,
             check_summary_csv(regions_dir),
             check_matrices(matrices_dir),
             check_house_json(house_dir),
-            check_public_houses(public_dir)]
+            check_public_houses(public_dir, datasets_dir=datasets_dir)]
 
 
 def report(results, stream=sys.stdout):
@@ -395,11 +400,13 @@ def main(argv=None):
     ap.add_argument("--matrices_dir", default=None, help="連通性矩陣目錄")
     ap.add_argument("--house_dir", default=None, help="house JSON 目錄")
     ap.add_argument("--public_dir", default=None, help="對外交付子集目錄")
+    ap.add_argument("--datasets", default=None, help="資料集根目錄（判定受限來源）")
     a = ap.parse_args(argv)
 
     results = run_checks(limit=0 if a.all else a.limit,
                          regions_dir=a.regions_dir, matrices_dir=a.matrices_dir,
-                         house_dir=a.house_dir, public_dir=a.public_dir)
+                         house_dir=a.house_dir, public_dir=a.public_dir,
+                         datasets_dir=a.datasets)
     return 1 if report(results) else 0
 
 

@@ -48,6 +48,7 @@ if ROOT not in sys.path:
     sys.path.append(ROOT)
 
 from roma_geo.config import matrices_root, pair_threshold, regions_root   # noqa: E402
+from roma_geo.errors import RomaGeoError  # noqa: E402
 
 
 def load_house(mdir, house):
@@ -58,11 +59,19 @@ def load_house(mdir, house):
         return None, None
     M = np.load(npy)
     if M.ndim != 3 or M.shape[0] != M.shape[1] or M.shape[2] < 1:
-        raise SystemExit(f"[FAIL] {house}.npy 形狀 {M.shape} 不合契約 (N,N,>=1)，見 matrices/README.md")
+        raise RomaGeoError(
+            "%s.npy 形狀 %s 不合契約 (N,N,>=1)" % (house, M.shape),
+            input_name="連通矩陣",
+            condition="見 matrices/README.md",
+        )
     imgs = [os.path.splitext(x)[0] for x in json.load(open(js, encoding="utf-8"))]
     if len(imgs) != M.shape[0]:
-        raise SystemExit(f"[FAIL] {house}：_images.json 長度 {len(imgs)} != 矩陣 {M.shape[0]}，"
-                         "row/col 對不上，見 matrices/README.md")
+        raise RomaGeoError(
+            "%s：_images.json 長度 %s != 矩陣 %s，row/col 對不上"
+            % (house, len(imgs), M.shape[0]),
+            input_name="連通矩陣",
+            condition="見 matrices/README.md",
+        )
     return imgs, M[:, :, 0].astype(np.float64)
 
 
@@ -218,4 +227,7 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except RomaGeoError as e:
+        raise SystemExit("[FAIL] %s" % e)

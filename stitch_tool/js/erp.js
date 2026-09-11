@@ -1049,7 +1049,7 @@ function showRecoCandidate(){
       '<div class="rp-target">img ' + c.otherImg + '</div>' +
       '<div class="rp-prob">' + (c.prob * 100).toFixed(0) + '%</div>' +
       '<div class="rp-sub">' + oname + '<br>Δaz ' + c.dAz.toFixed(0) + '° · 對面方位 ' +
-        (c.oppAz != null ? c.oppAz.toFixed(0) + '°' : '。') + '</div>' +
+        (c.oppAz != null ? c.oppAz.toFixed(0) + '°' : '—') + '</div>' +
       '<div class="rp-nav">' +
         '<button class="sp-btn ghost" id="reco-prev">‹ 上一個</button>' +
         '<button class="sp-btn ghost" id="reco-next">下一個 ›</button>' +

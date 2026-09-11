@@ -270,18 +270,20 @@ s = Settings(datasets="...", output="...", cache="...", matrices="...")
 | 參數 | 對應 | 未傳入時 |
 |---|---|---|
 | `datasets` | 全景資料集根目錄 | `ROMA_GEO_DATASETS` 或專案內 `datasets/` |
-| `matrices` | 連通矩陣目錄 | 有 `output` 時為 `<output>/matrices`；否則 `ROMA_GEO_MATRICES` 或專案內 `matrices/<版本>/` |
+| `matrices` | 連通矩陣目錄 | `ROMA_GEO_MATRICES` 或專案內 `matrices/<版本>/`。不隨 `output` 變動 |
 | `output` | 產出根目錄 | `ROMA_GEO_OUTPUT` 或專案內 `Output/` |
 | `cache` | 匹配快取 | `ROMA_GEO_CACHE` 或 `roma_match/cache/` |
 | `pair_threshold` | 挑配對門檻 | `ROMA_GEO_PAIR_THRESHOLD` 或 `PAIR_THRESHOLD` |
-| `house_data` | 內部房子 JSON 目錄 | 有 `output` 時為 `<output>/house_data`；否則專案內 `stitch_tool/data/` |
+| `house_data` | 內部房子 JSON 目錄 | `ROMA_GEO_HOUSE_DATA`，否則有 `output` 時為 `<output>/house_data`，再否則專案內 `stitch_tool/data/` |
 | `semantic` | 語意圖根目錄 | `<datasets>/semantic/` |
-| `semantic_out` | 語意門 JSON 目錄 | 有 `output` 時為 `<output>/semantic`；否則專案內 `stitch_tool/semantic/` |
-| `public_houses` | 對外交付目錄 | `<output>/public_houses` |
-| `connections` | 上游連通 JSON 目錄 | 無預設，缺席則略過轉矩陣 |
+| `semantic_out` | 語意門 JSON 目錄 | `ROMA_GEO_SEMANTIC_OUT`，否則有 `output` 時為 `<output>/semantic`，再否則專案內 `stitch_tool/semantic/` |
+| `public_houses` | 對外交付目錄 | `ROMA_GEO_PUBLIC_HOUSES` 或 `<output>/public_houses` |
+| `connections` | 上游連通 JSON 目錄 | `ROMA_GEO_CONNECTIONS`；未指定則缺席，略過轉矩陣 |
 | `semantic_correct` | 是否對輸出一做語意矯正 | `False` |
 
-相對路徑會轉成絕對路徑。呼叫端不必設定環境變數，也不必把工作目錄切到專案根。
+優先序一律為：建構參數，其次環境變數，最後預設值。輸入類路徑（資料集、連通矩陣、語意圖、上游連通 JSON）不隨產出根目錄變動。相對路徑以行程工作目錄為基準轉成絕對路徑。語意門目錄未指定時視為缺席，不組相對路徑。
+
+配對清單 `_pairs.csv` 與彙總檔 `_summary.csv` 寫入同一路徑時皆為累積：後續呼叫合併列，不覆寫其他房子。欄位不符時以 `RomaGeoError` 中止，原檔不變。
 
 ### 2.2 可選輸入缺席時的回傳
 

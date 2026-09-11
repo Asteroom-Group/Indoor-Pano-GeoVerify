@@ -264,7 +264,7 @@ function buildIsoList(){
   }
   if(isoTitle){
     isoTitle.textContent = count > 0
-      ? ('未連接圖片（' + count + '）。' + (isErpOn() ? '左鍵設上圖/右鍵設下圖' : '點擊前往'))
+      ? ('未連接圖片（' + count + '）— ' + (isErpOn() ? '左鍵設上圖/右鍵設下圖' : '點擊前往'))
       : '所有圖片皆已連通 🎉';
   }
 }

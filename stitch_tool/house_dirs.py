@@ -9,8 +9,14 @@ resolve_task_dir() 由淺到深持續往下找同名子資料夾，直到找到�
 或超過 max_depth 才放棄回傳 None。
 """
 import os
+import sys
 
-from roma_geo.names import dir_has_images, is_image_filename
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_SRC = os.path.join(_ROOT, "src")
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
+
+from roma_geo.names import dir_has_images, is_image_filename  # noqa: E402
 
 
 def resolve_task_dir(data_root: str, house: str, max_depth: int = 5):

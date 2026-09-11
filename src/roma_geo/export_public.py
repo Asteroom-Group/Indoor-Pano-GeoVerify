@@ -90,6 +90,25 @@ def pair_to_public(p: dict) -> dict:
     return out
 
 
+def _assert_pose_matches_flag(house, pub):
+    """has_geometry 與 R/t 必須同步。不成立時不得寫檔。"""
+    for p in pub.get("pairs") or []:
+        has = bool(p.get("has_geometry"))
+        has_rt = "R" in p and "t" in p
+        if has and not has_rt:
+            raise RomaGeoError(
+                "有位姿卻缺 R/t",
+                input_name="房子 %s" % house,
+                condition="has_geometry 與相對位姿不同步",
+            )
+        if not has and ("R" in p or "t" in p):
+            raise RomaGeoError(
+                "無位姿卻帶 R/t",
+                input_name="房子 %s" % house,
+                condition="has_geometry 與相對位姿不同步",
+            )
+
+
 def house_to_public(d: dict) -> dict:
     """內部 house JSON dict → 對外子集（純函式，不碰檔案）。"""
     out = {k: d[k] for k in HOUSE_FIELDS if k in d}
@@ -244,52 +263,75 @@ def export_houses(in_dir, out_dir, regions_dir=None, with_regions=True,
         from .config import regions_root
         regions_dir = regions_root()
 
+    names = []
+    for f in files:
+        d = json.load(open(f, encoding="utf-8"))
+        names.append(d.get("house") or os.path.splitext(os.path.basename(f))[0])
+    existing = []
+    if os.path.isdir(out_dir):
+        existing = [os.path.splitext(os.path.basename(p))[0]
+                    for p in glob.glob(os.path.join(out_dir, "*.json"))
+                    if not os.path.basename(p).startswith("_")]
+    blocked = []
+    seen = set()
+    for house in names + existing:
+        if house in seen:
+            continue
+        seen.add(house)
+        why = restricted_reason(house, datasets_dir=datasets_dir)
+        if why:
+            blocked.append((house, why))
+    if blocked:
+        os.makedirs(out_dir, exist_ok=True)
+        for house, _why in blocked:
+            leftover = os.path.join(out_dir, house + ".json")
+            if os.path.isfile(leftover):
+                os.remove(leftover)
+        house, why = blocked[0]
+        raise RomaGeoError(
+            why,
+            input_name="房子 %s" % house,
+            condition="來自受限來源，不得對外交付",
+        )
+
     os.makedirs(out_dir, exist_ok=True)
-    tot_in = tot_out = tot_pairs = tot_regions = 0
+    prepared = []
+    tot_regions = 0
+    for f, house in zip(files, names):
+        d = json.load(open(f, encoding="utf-8"))
+        pub = house_to_public(d)
+        need_regions = with_regions or semantic_correct
+        if need_regions:
+            tot_regions += attach_regions(house, pub, regions_dir)
+        attach_pose(house, pub, regions_dir)
+        if semantic_correct:
+            from .semantic import apply_semantic_correction, load_doors_json
+            doors = {}
+            if semantic_dir:
+                doors = load_doors_json(os.path.join(semantic_dir, house + ".json"))
+            apply_semantic_correction(pub, doors)
+        if need_regions and not with_regions:
+            for p in pub["pairs"]:
+                p.pop("regions", None)
+        bad = leaked_fields(pub)
+        if bad:
+            raise RomaGeoError(
+                "輸出帶有內部欄位：%s" % sorted(bad),
+                input_name="房子 %s" % house,
+                condition="對外子集混入了內部欄位",
+            )
+        _assert_pose_matches_flag(house, pub)
+        prepared.append((f, house, pub))
+
+    tot_in = tot_out = tot_pairs = 0
     written = []
-    try:
-        for f in files:
-            d = json.load(open(f, encoding="utf-8"))
-            house = d.get("house") or os.path.splitext(os.path.basename(f))[0]
-            why = restricted_reason(house, datasets_dir=datasets_dir)
-            if why:
-                raise RomaGeoError(
-                    why,
-                    input_name="房子 %s" % house,
-                    condition="來自受限來源，不得對外交付",
-                )
-            pub = house_to_public(d)
-            need_regions = with_regions or semantic_correct
-            if need_regions:
-                tot_regions += attach_regions(house, pub, regions_dir)
-            attach_pose(house, pub, regions_dir)
-            if semantic_correct:
-                from .semantic import apply_semantic_correction, load_doors_json
-                doors = load_doors_json(os.path.join(semantic_dir or "", house + ".json"))
-                apply_semantic_correction(pub, doors)
-            if need_regions and not with_regions:
-                for p in pub["pairs"]:
-                    p.pop("regions", None)
-            bad = leaked_fields(pub)
-            if bad:
-                raise RomaGeoError(
-                    "輸出帶有內部欄位：%s" % sorted(bad),
-                    input_name="房子 %s" % house,
-                    condition="對外子集混入了內部欄位",
-                )
-            out_path = os.path.join(out_dir, f"{house}.json")
-            json.dump(pub, open(out_path, "w", encoding="utf-8"), ensure_ascii=False)
-            tot_in += os.path.getsize(f)
-            tot_out += os.path.getsize(out_path)
-            tot_pairs += len(pub["pairs"])
-            written.append(out_path)
-    except Exception:
-        for path in written:
-            try:
-                os.remove(path)
-            except OSError:
-                pass
-        raise
+    for f, house, pub in prepared:
+        out_path = os.path.join(out_dir, "%s.json" % house)
+        json.dump(pub, open(out_path, "w", encoding="utf-8"), ensure_ascii=False)
+        tot_in += os.path.getsize(f)
+        tot_out += os.path.getsize(out_path)
+        tot_pairs += len(pub["pairs"])
+        written.append(out_path)
 
     print(f"{len(files)} 房 · {tot_pairs} 對 → {out_dir}")
     if tot_in:

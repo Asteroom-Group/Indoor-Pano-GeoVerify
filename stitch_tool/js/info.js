@@ -54,12 +54,12 @@ export function refreshInfoPair(){
     const azSrcTxt = sh.text
       ? (' · ' + (sh.fallback ? '<span style="color:#e05a3a">⚠ ' + sh.text + '</span>' : sh.text))
       : '';
-    const probTxt = (nav.curPair.prob != null) ? (nav.curPair.prob * 100).toFixed(1) + '%' : '。';
+    const probTxt = (nav.curPair.prob != null) ? (nav.curPair.prob * 100).toFixed(1) + '%' : '—';
     el.innerHTML = '目前對 <b>' + nav.curPair.i + '–' + nav.curPair.j + '</b> · prob ' +
       probTxt + ' · ' + statusLabel(st) + (azTxt ? (' · 通道方位 ' + azTxt + azSrcTxt) : '');
   } else if(nav.reciprocalKey != null){
     el.innerHTML = '穿門檢視 img ' + nav.curImage + '（點藍圈返回；下一對 ' +
-      (nav.curPair ? '<b>' + nav.curPair.i + '–' + nav.curPair.j + '</b>' : '。') + ' 按 Esc 前往）';
+      (nav.curPair ? '<b>' + nav.curPair.i + '–' + nav.curPair.j + '</b>' : '—') + ' 按 Esc 前往）';
   } else if(nav.curPair){
     el.innerHTML = '已確認，下一對 <b>' + nav.curPair.i + '–' + nav.curPair.j + '</b>（點綠圈穿門，或按 Esc 前往）';
   } else if(hd){
