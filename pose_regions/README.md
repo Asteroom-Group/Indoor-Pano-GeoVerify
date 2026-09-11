@@ -1,4 +1,4 @@
-# pose_regions — 相對位姿與共視區域(RoMa 匹配的幾何驗證層)
+# pose_regions：相對位姿與共視區域(RoMa 匹配的幾何驗證層)
 
 從 RoMa 的 ERP 全景匹配點估計兩張圖之間的相對位姿(R、t 方向;尺度未知),
 並以對極幾何過濾不合理匹配、萃取共視區域多邊形。不需要 GT pose / 深度 / layout。
@@ -50,7 +50,7 @@ python estimate_relative_pose.py --selftest
 - 內容:`matches` (K,5) = **(x_a, y_a, x_b, y_b, conf)**,座標 = **原圖 ERP 像素**(A 圖前兩欄、B 圖後兩欄)。
 - 座標為**連續值**(RoMaV2 內部 512×512 warp 雙線性取樣後放大回原圖;非格點量化)。
 - conf 底床 **0.1**(存完整結果供不同門檻共享;上層讀取時再過濾)。
-- **原圖尺寸依房子而異**(7 種:5376×2688 ~ 8192×4096)——換算球面射線時必須用
+- **原圖尺寸依房子而異**(7 種:5376×2688 ~ 8192×4096)。換算球面射線時必須用
  **該房實際 W×H**,不能寫死 8192×4096。
 
 此約定由 `spike_cache_consistency.py` 驗證(座標範圍、最近鄰距離、對極交叉驗證、
@@ -61,9 +61,9 @@ python estimate_relative_pose.py --selftest
 8 點法每次迭代抽 8 點 minimal sample(E 只有 5 自由度,存在 5 點法,但線性 8 點法在點數
 充足時是標準務實選擇;輸入是單位球面射線,天然良態,不需 Hartley 正規化)。兩種取樣:
 
-- **`stratified`(預設)**:(1) **conf 漸進池**(PROSAC-lite)——點按 RoMa conf 降冪排序,
+- **`stratified`(預設)**:(1) **conf 漸進池**(PROSAC-lite)。點按 RoMa conf 降冪排序,
   取樣池從 top 25% 逐塊(每 256 迭代)放寬到 100%,高 conf 點先被抽到;
-  (2) **方位分桶**——每個 sample 的 8 點在 A 側方位 12 桶(30°)間輪替,提升空間分散度/
+  (2) **方位分桶**。每個 sample 的 8 點在 A 側方位 12 桶(30°)間輪替,提升空間分散度/
   條件數;只在「有點的桶」之間輪替,門洞 pair 支撐窄不會被強迫散開。
   conf 只影響「先抽誰」;內點判定與最終 refit 都對全部點做,不被 conf 偏見污染。
 - **`uniform`**:完全均勻隨機(對照/重現舊數據用)。
@@ -77,8 +77,7 @@ python estimate_relative_pose.py --selftest
 
 ## nadir 前濾(`--lat_filter`,批次限定)
 
-天底腳架帶(lat < −60°)在每張全景圖上長得一樣,會產生系統性的跨圖假匹配 ——
-這種匹配過得了對極驗證但沒有語意。`--lat_filter 60` 在 RANSAC 前丟掉「任一側
+天底腳架帶(lat < −60°)在每張全景圖上長得一樣,會產生系統性的跨圖假匹配。這種匹配過得了對極驗證但沒有語意。`--lat_filter 60` 在 RANSAC 前丟掉「任一側
 |lat| > 60°」的匹配點(天底與天頂對稱處理),丟掉的點數記入 JSON 的 `n.lat_drop`、
 參數記入 `params.lat_max`。
 
@@ -116,9 +115,9 @@ venv/Scripts/python.exe pose_regions/batch_pose_from_cache.py --limit 20  # 冒�
 ```
 
 輸出三份:
-1. `Output/roma_regions/{house}_{imgA}_{imgB}.json` — per-pair 結果(下方 schema;**不入 git**,約 20 分鐘可重生)
-2. `Output/roma_regions/_summary.csv` — 每 pair 一列指標總表(入 git,供驗收與出圖)
-3. `Output/roma_regions/batch_pose_report.md` — 耗時與分佈自動報告(耗時、inlier 率
+1. `Output/roma_regions/{house}_{imgA}_{imgB}.json`：per-pair 結果(下方 schema;**不入 git**,約 20 分鐘可重生)
+2. `Output/roma_regions/_summary.csv`：每 pair 一列指標總表(入 git,供驗收與出圖)
+3. `Output/roma_regions/batch_pose_report.md`：耗時與分佈自動報告(耗時、inlier 率
    分佈、GT 方位交叉誤差、旗標統計;跟著 `--out` 走,故與該批的 `_summary.csv` 同批)
 
 ### 自適應 conf(`--retry_conf`,預設 0.3)
@@ -131,13 +130,13 @@ venv/Scripts/python.exe pose_regions/batch_pose_from_cache.py --limit 20  # 冒�
 ⚠ **欄位門檻說明**:`flags.low_matches` 記錄基準層(conf 0.65)點數是否 <30;
 `n.conf` 與 `n.used` 則記錄最終採用層(`conf_used`)的點數,`n.used` 另外套了
 `max_pts` 上限(超過即抽樣,故 `n.used` ≤ `n.conf`,`inlier_rate` 的分母是 `n.used`)。
-因此降級重試時會出現「`low_matches=true` 但 `n.conf` ≥30」,此為預期現象而非矛盾。
+因此降級重試時會出現「`low_matches=true` 但 `n.conf` ≥30」,此為預期現象。
 
 **⚠ 撈回層品質重尾**:0.3 級的方位誤差分佈,尾巴遠比 0.65 級長。下游必須用
 `conf_used` + inlier 率 + 旗標一起 gate,**0.3 級位姿不可直接當 0.65 級用**。
 各層的覆蓋率與誤差分位數見 `batch_pose_report.md`。
 
-語意提醒:`no_covisibility` = 無共視證據,**不是**「不連通」——
+語意提醒:`no_covisibility` = 無共視證據,**不是**「不連通」。
 幾何驗證驗的是共視 + 幾何一致,不是可通行。
 
 ### per-pair JSON schema
@@ -218,12 +217,12 @@ venv/Scripts/python.exe pose_regions/render_region_overlay.py --sample 3
 
 輸出 `Output/roma_regions/overlays/*.jpg`(gitignore;A 上 B 下堆疊、region 兩側同色
 半透明 + 邊框 + 編號、az_ab/az_ba 黃線、GT hotspot 青色虛線、資訊列)。
-**overlay 不全量產出**,只做抽樣或 on-demand —— 全量產出的磁碟用量不合理。
+**overlay 不全量產出**,只做抽樣或 on-demand：全量產出的磁碟用量不合理。
 
 **過縫繪製約定**(已在本渲染器驗證):polygon x 可能超出 [0,W) 以保連續;
 繪製時同一多邊形平移 −W / 0 / +W 各畫一次,超界自然裁掉即可。
 
-**⚠ 主區重心落在天底帶(仰角 < −60°,腳架與地面盲區)者不可直接採信** —— 該帶在各張
+**⚠ 主區重心落在天底帶(仰角 < −60°,腳架與地面盲區)者不可直接採信**：該帶在各張
 全景圖上外觀相同,是系統性假匹配熱點。`--lat_filter`(預設 60,見上方章節)已在 RANSAC
 前濾掉這些點;渲染器與 `/api/regions` 另會對殘餘者標示警示。
 
@@ -237,7 +236,7 @@ python pose_regions/covis_ranking_eval.py          # 約 1 分鐘,純 CPU
 族群 = `_summary.csv` 的全部列(粗篩存活者),GT 用 `datasets/*_HOTSPOT.json` 完整鄰接重建
 (不用 `metadata/*.csv`,那份只覆蓋 68%),另算 BFS topology distance。輸出
 `covis_ranking_report.md` + `Output/roma_regions/_ranking_eval.csv`(每 pair 一列,
-含 coarse logit —— 矩陣本身在 gitignore 內,這份 CSV 是唯一入庫的分數快照)。
+含 coarse logit：矩陣本身在 gitignore 內,這份 CSV 是唯一入庫的分數快照)。
 
 結論摘要(數字與完整表格見 `covis_ranking_report.md`):
 
@@ -245,7 +244,7 @@ python pose_regions/covis_ranking_eval.py          # 約 1 分鐘,純 CPU
   提升,且免訓練的 rank 平均幾乎追平學習式組合,因此增益不是擬合假象。
 - **上限沒被打破**:增益幾乎都來自距離較遠的負例。在「看得到、走不到」的相鄰房間
   這道牆上,幾何與 coarse 量的是同一件事,殘餘誤差被濃縮到牆上而不是穿過它。
-- **覆蓋率是硬限制**:並非所有正例都拿得到 inlier 或位姿,因此幾何分數
+- **覆蓋率是硬限制**:部分正例拿不到 inlier 或位姿,因此幾何分數
  **只能當特徵,不能當獨立過濾器**。
 - ⚠ 此族群本來就由 coarse filter 挑出,coarse 的 AP 被截斷,不可與全矩陣評測相比,
   也不可讀成「幾何贏過模型」。

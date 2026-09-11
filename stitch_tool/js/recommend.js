@@ -1,5 +1,5 @@
 /* =========================================================================
-   recommend.js — 未連接通道「放圈推薦候選」純函式（可 node 測試）
+   recommend.js：未連接通道「放圈推薦候選」純函式（可 node 測試）
    低層模組：只 import geometry(angDiff) 與 state(pairStatus)。不觸碰 DOM。
    使用者在某圖放橘圈（方位 az）後，推薦「此圖看向對方的方位」與圈方位差
      < 角度窗（RECO_WINDOW，預設 25°）的所有 pending pair，依 prob 由高到低排序，
@@ -8,7 +8,7 @@
 
 import { angDiff } from './geometry.js';
 
-/** 推薦匹配的角度窗（度）。圈方位與「此圖看向對方的方位」差小於此值才視為候選。 */
+/** 推薦匹配的角度窗（度）。圈方位與「此圖看向對方的方位」差小於此值才視為候選。*/
 export const RECO_WINDOW = 25;
 
 /**

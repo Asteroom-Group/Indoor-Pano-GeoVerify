@@ -82,7 +82,7 @@ class RoMaScanPipeline:
             for c in clusters
         ]
 
-        # 4. 局部細化 — 批次 GPU 推論
+        # 4. 局部細化：批次 GPU 推論
         img_a_cv, img_b_cv = ImageHandler.load_cv2(img_a), ImageHandler.load_cv2(img_b)
         refiner = LocalRefiner(self.matcher, export_dir,
                                draw_lines=draw_lines, line_percent=line_percent, line_alpha=line_alpha)
@@ -153,7 +153,7 @@ class RoMaScanPipeline:
         與 batch_size=1 完全一致。
 
         批次加速的價值在外層的 cache-aware 設計 (match_core_batch)，
-        而非此處改變呼叫順序。RoMa V2 的 model.sample() 使用 KDE 隨機取樣，
+        呼叫順序維持原樣。RoMa V2 的 model.sample() 使用 KDE 隨機取樣，
         若改變 global_match 與 refine 的交錯順序，會導致相同 pair
         在不同 batch_size 下產出不同結果。
         """

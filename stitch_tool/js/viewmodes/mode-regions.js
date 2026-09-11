@@ -1,7 +1,7 @@
 /* =========================================================================
-   viewmodes/mode-regions.js — 「共視區域遮罩」檢視模式插件
+   viewmodes/mode-regions.js：「共視區域遮罩」檢視模式插件
    讀 區域 JSON(/api/regions,schema wp1-step3-v1):兩張 ERP 上下
-   並排,同一 region 兩側塗同色半透明遮罩+編號 —「A 的這塊 和 B 的那塊 是同一塊
+   並排,同一 region 兩側塗同色半透明遮罩+編號。「A 的這塊 和 B 的那塊 是同一塊
    實體空間」。方向資訊不畫(遮罩直觀、方位線不直觀;方向請用
    「裁切對」模式看,那才是為方向設計的呈現)。
 
@@ -21,7 +21,7 @@ const CW = 1024, CH = 512;    // canvas 內部解析度(ERP 2:1)
 const PALETTE = ['#e6194b', '#3cb44b', '#4363d8', '#f58231', '#911eb4', '#42d4f4', '#f032e6', '#bfef45'];
 
 let _root = null, _visible = false, _token = 0, _lastKey = '';
-// 通道頂帶:本模式預設關 —「檢視模式單一用途」的既有回饋(區域模式只講區域)
+// 通道頂帶:本模式預設關：「檢視模式單一用途」的既有回饋(區域模式只講區域)
 let _bandOn = false;
 const _imgCache = new Map();   // url -> Promise<HTMLImageElement>(遮罩底圖直接用 <img>,不需像素存取)
 
@@ -76,7 +76,7 @@ function syncBandBtn(){
 
 function setHint(html){ const el = document.getElementById('regions-hint'); if(el) el.innerHTML = html || ''; }
 
-/** 在 ctx 上畫一側的所有 region(座標 = 原圖像素,依 W,H 縮放;過縫平移三次)。 */
+/** 在 ctx 上畫一側的所有 region(座標 = 原圖像素,依 W,H 縮放;過縫平移三次)。*/
 function drawSide(ctx, regions, side, W, H){
   regions.forEach((reg, k) => {
     const poly = (reg[side] && reg[side].polygon) || [];
@@ -148,8 +148,8 @@ function refresh(){
     const bits = [
       st + (pair.prob != null ? ' ' + (pair.prob * 100).toFixed(0) + '%' : ''),
       regs.length + ' 個共視區域',
-      'conf_used=' + (rj.conf_used != null ? rj.conf_used : '—'),
-      'inlier=' + (rj.inlier_rate != null ? rj.inlier_rate : '—'),
+      'conf_used=' + (rj.conf_used != null ? rj.conf_used : '。'),
+      'inlier=' + (rj.inlier_rate != null ? rj.inlier_rate : '。'),
     ];
     if(f.no_covisibility) bits.push('<b style="color:#e05a3a">無共視證據</b>');
     if(f.degenerate_rot_only) bits.push('<b style="color:#e0a53a">近零基線(兩點位幾乎同位)</b>');

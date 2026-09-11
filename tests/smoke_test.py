@@ -20,9 +20,11 @@ import os
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT)
+SRC = os.path.join(ROOT, "src")
+sys.path.insert(0, SRC)
+sys.path.append(ROOT)
 
-from config import datasets_root                    # noqa: E402（要先補 sys.path）
+from roma_geo.config import datasets_root                    # noqa: E402
 from roma_geo import verify_pair, to_public         # noqa: E402
 
 HOUSE = "DollhouseTask_58553"
@@ -30,7 +32,7 @@ IMG_A = "08ddb590-a6df-409d-850f-e45f59efa7a0"
 IMG_B = "08ddb590-ad9f-4647-8dab-ccfd0b14c8da"
 IMG_DIR = os.path.join(datasets_root(), HOUSE, HOUSE)
 
-# ⚠ 參考結果**不可**放在 Output/roma_regions/ —— 那是 batch_pose_from_cache.py 的輸出
+# ⚠ 參考結果**不可**放在 Output/roma_regions/：那是 batch_pose_from_cache.py 的輸出
 # 目錄，不帶 --resume 跑一次全量就會把它覆蓋成當下環境的結果，此後本測試變成與自身
 # 比對而永遠通過。放在 tests/ 底下，批次寫不到。
 REF = os.path.join(os.path.dirname(os.path.abspath(__file__)), "smoke_ref_58553.json")
@@ -50,7 +52,7 @@ def main():
     ref = json.load(open(REF, encoding="utf-8"))
 
     print("=" * 70)
-    print("  Roma_Geo 煙霧測試 —— 經由 verify_pair() 單一入口")
+    print("  Roma_Geo 煙霧測試。經由 verify_pair() 單一入口")
     print("=" * 70)
 
     # 關快取，強制真的跑 GPU forward（不然只量到讀 npz 的速度）
@@ -63,7 +65,7 @@ def main():
     same_params = res["params"] == ref["params"]
     print(f"    新：{json.dumps(res['params'], ensure_ascii=False)}")
     print(f"    舊：{json.dumps(ref['params'], ensure_ascii=False)}")
-    print(f"    {'[OK] 逐項相同' if same_params else '[FAIL] 參數不同 —— 比較無意義'}")
+    print(f"    {'[OK] 逐項相同' if same_params else '[FAIL] 參數不同。比較無意義'}")
 
     print(f"\n[3] 逐欄對照")
     print(f"    {'欄位':<18}{'新環境':>14}{'舊環境(參考)':>16}")
@@ -105,7 +107,7 @@ def main():
     ok = (same_params and not leaked and ok_az
           and (pn is not None) == (po is not None)
           and len(res.get("regions") or []) == len(ref.get("regions") or []))
-    print(f"  結論：{'PASS —— 新舊環境幾何結論一致，對外契約正確' if ok else 'CHECK —— 見上方'}")
+    print(f"  結論：{'PASS：新舊環境幾何結論一致，對外契約正確' if ok else 'CHECK：見上方'}")
     print("=" * 70)
     return 0 if ok else 1
 

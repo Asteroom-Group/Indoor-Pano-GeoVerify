@@ -1,13 +1,13 @@
 /* =========================================================================
-   events.js — 極簡 pub/sub 事件匯流排
+   events.js：極簡 pub/sub 事件匯流排
    低層模組：不 import 任何其它模組。
    目的：動作函式只 emit，UI 元件（minimap / queue / compass …）訂閱重繪，
    根治「改了狀態卻忘了呼叫重繪」這類 bug（原 buildMinimap 散落 13 處）。
 
    慣用事件：
-     'house-loaded'  — 選完房子、house data 與 state 就緒後
-     'state-changed' — 任何 STATE（confirmed/rejected/… 或 ui）寫入後
-     'view-changed'  — curImage / curPair / 導覽狀態改變後
+     'house-loaded'：選完房子、house data 與 state 就緒後
+     'state-changed'：任何 STATE（confirmed/rejected/… 或 ui）寫入後
+     'view-changed'：curImage / curPair / 導覽狀態改變後
    ========================================================================= */
 
 const _subs = Object.create(null);   // event name -> [handler,...]

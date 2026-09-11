@@ -1,5 +1,5 @@
 /* =========================================================================
-   viewmodes/pairsel.js — 檢視模式共用的「目前配對」推導(非插件,純 helper)
+   viewmodes/pairsel.js：檢視模式共用的「目前配對」推導(非插件,純 helper)
    mode-crop / mode-morph 共用;插件之間不得互相 import(否則停用一個插件的
    import 行會被另一個插件的依賴拖回來,違反可插拔性)。
    邏輯與 erp.renderERP 同款:優先 nav.curPair,否則用 ERP 面板推導;

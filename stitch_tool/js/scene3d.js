@@ -1,5 +1,5 @@
 /* =========================================================================
-   scene3d.js — three.js 全景場景：初始化 / 動畫 / 相機 / raycast / pointer 事件 /
+   scene3d.js：three.js 全景場景：初始化 / 動畫 / 相機 / raycast / pointer 事件 /
                 材質快取 / 標記建立 / buildMarkersForImage / buildDoorLayer / applyFaint /
                 loadImageView（貼圖+相機+標記）。
    依賴全域 THREE。import config/geometry/clustering/state/nav/modes/dispatch/compass/events/util。
@@ -32,12 +32,12 @@ let isDragCam = false, downX = 0, downY = 0, downLon = 0, downLat = 0;
 let lon = 0, lat = 0;
 let draggingMarker = null, dragMoved = false;
 
-/** 目前場景中的 THREE.Sprite 標記。 */
+/** 目前場景中的 THREE.Sprite 標記。*/
 let markers = [];
 
-/** 需求 3：目前 hover 的可點圈圈（cursor:pointer + 微放大）。 */
+/** 需求 3：目前 hover 的可點圈圈（cursor:pointer + 微放大）。*/
 let hoveredMarker = null;
-/** hover 放大倍率。 */
+/** hover 放大倍率。*/
 const HOVER_SCALE = 1.18;
 
 /** @returns {THREE.Camera} */
@@ -60,7 +60,7 @@ export function setCameraLonTo(newLon){ lon = newLon; lat = 0; }
 // =========================================================================
 //  SETUP
 // =========================================================================
-/** 初始化 three.js 場景、相機、球體、事件。 */
+/** 初始化 three.js 場景、相機、球體、事件。*/
 export function initThree(){
   const c = document.getElementById('viewer');
   scene = new THREE.Scene();
@@ -186,13 +186,13 @@ function onPointerMove(e){
   setHover((hov && isClickableMarker(hov)) ? hov : null);
 }
 
-/** 可被點擊/互動的圈（排除 GT 淡標記與已否決紅圈的 no-op 視覺標記）。 */
+/** 可被點擊/互動的圈（排除 GT 淡標記與已否決紅圈的 no-op 視覺標記）。*/
 function isClickableMarker(m){
   const r = m.userData.role;
   return r !== 'gt' && r !== 'rejected-view';
 }
 
-/** 設定 hover 標記：舊的復原 baseScale，新的放大並把 canvas cursor 設 pointer。 */
+/** 設定 hover 標記：舊的復原 baseScale，新的放大並把 canvas cursor 設 pointer。*/
 function setHover(m){
   if(hoveredMarker === m) return;
   if(hoveredMarker){
@@ -432,7 +432,7 @@ export function makeMarker(az, color, opts){
   scene.add(spr); markers.push(spr);
   return spr;
 }
-/** 移除所有標記。 */
+/** 移除所有標記。*/
 export function clearMarkers(){
   for(let i = 0; i < markers.length; i++) {
     scene.remove(markers[i]);
@@ -450,7 +450,7 @@ function setMarkerColor(m, color, filled){
 }
 /** @returns {THREE.Sprite|undefined} 目前的候選（琥珀）標記 */
 export function getCandidateMarker(){ return markers.find(m => m.userData.role === 'candidate'); }
-/** 把目前候選標記轉為已確認（綠、實心、可穿門）。 */
+/** 把目前候選標記轉為已確認（綠、實心、可穿門）。*/
 export function promoteCandidateToConfirmed(targetImg){
   const mk = getCandidateMarker();
   if(mk){ setMarkerColor(mk, COL.green, true); mk.userData.role = 'confirmed'; mk.userData.targetImg = targetImg; }
@@ -596,13 +596,13 @@ function updateConfirmedAz(m){
   if(nav.curImage === c.i) c.az_i = round1(d.az);
   else if(nav.curImage === c.j) c.az_j = round1(d.az);
 }
-/** 由目前橘色標記重建此圖的 extra list。 */
+/** 由目前橘色標記重建此圖的 extra list。*/
 function persistExtraFromMarkers(){
   const key = String(nav.curImage), arr = [];
   markers.forEach(m => { if(m.userData.role === 'extra') arr.push(round1(m.userData.az)); });
   if(arr.length) STATE.extra_channels[key] = arr; else delete STATE.extra_channels[key];
 }
-/** 刪除一個未連接通道橘圈（右鍵點它）。 */
+/** 刪除一個未連接通道橘圈（右鍵點它）。*/
 function deleteExtraMarker(m){
   const idx = markers.indexOf(m); if(idx >= 0) markers.splice(idx, 1);
   scene.remove(m);
@@ -612,7 +612,7 @@ function deleteExtraMarker(m){
   emit('state-changed');
   toast('已刪除未連接通道');
 }
-/** U 模式：在指標處球面放橘圈。 */
+/** U 模式：在指標處球面放橘圈。*/
 function placeUnconnAtPointer(){
   const p = pickSphere(); if(!p) return;
   const az = posToAz(p);
@@ -625,10 +625,10 @@ function placeUnconnAtPointer(){
   emit('state-changed');
 }
 
-/** 重置相機 fov 到 75。 */
+/** 重置相機 fov 到 75。*/
 export function resetView(){ camera.fov = 75; camera.updateProjectionMatrix(); }
 
-/** 訂閱事件：GT / 門顯示層開關改變時，重畫目前圖的 3D 標記。 */
+/** 訂閱事件：GT / 門顯示層開關改變時，重畫目前圖的 3D 標記。*/
 export function initScene3d(){
   on('rebuild-markers', () => {
     if(getHouseData() && nav.curImage >= 0) buildMarkersForImage(nav.curImage, nav.curPair);

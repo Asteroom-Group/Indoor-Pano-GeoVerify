@@ -10,7 +10,7 @@
 族群 = Output/roma_regions/_summary.csv 全部列(= coarse filter R90 存活者)。
 GT = datasets/*_HOTSPOT.json 完整鄰接(不用 metadata/*.csv,那份只覆蓋 68% 的 cache pair),
      另以 BFS 算 topology distance,供「殘餘 FP 落在第幾層鄰居」的組成分析。
-無位姿(no_covisibility)的 pair 幾何分數一律 0(誠實排在最後),不排除 —— 排除會
+無位姿(no_covisibility)的 pair 幾何分數一律 0(誠實排在最後),不排除。排除會
 把覆蓋率問題藏起來。
 
 對照的分數:
@@ -131,7 +131,7 @@ def rank01(v):
 def logistic_oof(X, y, groups, folds=5, iters=400, lr=0.5, l2=1e-3, seed=0):
     """house-grouped 5-fold 的小型 logistic(純 numpy 梯度下降);回傳 out-of-fold 分數。
 
-    折的分配只依房名排序後輪流,與訓練用 fold_map 無關 —— 這裡只是要一個「組合權重
+    折的分配只依房名排序後輪流,與訓練用 fold_map 無關。這裡只是要一個「組合權重
     沒看過該房」的乾淨估計,coarse 分數本身已是 OOF。
     """
     gs = sorted(set(groups))
@@ -345,12 +345,12 @@ def main():
     L.append(f"- 被移除的 {len(rem):,} 個 FP 中,**d3 以上佔 {100*(d[rem] >= 3).mean():.0f}%**,"
              f"d2 只佔 {100*(d[rem] == 2).mean():.0f}%;新進 FP {len(add):,} 個。")
     L.append("\n**結論**:幾何驗證清掉的幾乎都是遠距離負例;在 d2(看得到、走不到)這道牆上,"
-             "它與 coarse filter 量的是同一件事,提供不了新資訊 —— 殘餘誤差被濃縮到牆上,"
+             "它與 coarse filter 量的是同一件事,提供不了新資訊。殘餘誤差被濃縮到牆上,"
              "而不是穿過牆。共視類證據到此榨乾,要再往上需要的是**可達性**證據。\n")
     L.append(f"**覆蓋率另一道限制**:只有 {100*((S('n_inlier') > 0) & (y == 1)).sum()/npos:.1f}% "
              f"的正例拿得到任何 inlier、{100*y[posed == 1].sum()/npos:.1f}% 拿得到位姿,"
              "所以幾何分數單獨用時 recall 上不了 90%(要衝 90% 得收進整個零分群,"
-             "精確度掉回基準率 —— 表 1 的 P@R90 欄就是這個現象)。"
+             "精確度掉回基準率。表 1 的 P@R90 欄就是這個現象)。"
              "它只能當特徵,不能當獨立過濾器。\n")
 
     with open(a.report, "w", encoding="utf-8") as f:

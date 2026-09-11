@@ -1,5 +1,5 @@
 /* =========================================================================
-   viewmodes/mode-morph.js — 「動態 morph」檢視模式插件(已停用,見 viewmodes/index.js)
+   viewmodes/mode-morph.js：「動態 morph」檢視模式插件(已停用,見 viewmodes/index.js)
    用 RoMa cache 的稀疏 matches(/api/roma_match,同離線 cache,命中即秒回)建
    三角網格 warp,把「A 的裁切視角」向「B 的對應視角」漸變(來回播放)。
    真連通看起來像「走過去」;假連通(外觀相似誤匹配)會扭曲穿幫。
@@ -62,7 +62,7 @@ function buildDom(){
 function setInfo(t){ const el = document.getElementById('morph-info'); if(el) el.textContent = t || ''; }
 
 // ---- 網格位移場(IDW) ----
-/** 對 (GRID+1)² 個頂點,用 1/(d²+soft) 反距離加權出位移向量場。 */
+/** 對 (GRID+1)² 個頂點,用 1/(d²+soft) 反距離加權出位移向量場。*/
 function buildMesh(src, dst){
   const n = GRID + 1, step = SIZE / GRID, soft = 900;   // soft≈30px²:近點不爆量
   const disp = new Float32Array(n * n * 2);
@@ -111,7 +111,7 @@ function drawTri(ctx, img, s0, s1, s2, d0, d1, d2){
   ctx.restore();
 }
 
-/** 畫一層 warp:頂點 = 規則網格 + t×位移場。 */
+/** 畫一層 warp:頂點 = 規則網格 + t×位移場。*/
 function drawWarpLayer(ctx, img, disp, t, alpha){
   const n = GRID + 1, step = SIZE / GRID;
   ctx.globalAlpha = alpha;
@@ -208,7 +208,7 @@ function refresh(){
       if(src.length >= MAX_PTS) break;
     }
     if(src.length < 8){
-      setInfo('可用匹配不足(' + src.length + ' 點)— 這一對缺乏共視證據,無法 morph');
+      setInfo('可用匹配不足(' + src.length + ' 點)。這一對缺乏共視證據,無法 morph');
       _lastKey = key;                      // 記住結果,避免重試迴圈
       return;
     }
@@ -248,5 +248,5 @@ registerViewMode({
   refresh,
 });
 
-/** 有沒有可推導的配對(僅供進入提示,不影響流程)。 */
+/** 有沒有可推導的配對(僅供進入提示,不影響流程)。*/
 function nav_hasPair(){ return !!deriveViewPair(); }

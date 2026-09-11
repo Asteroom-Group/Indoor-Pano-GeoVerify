@@ -5,12 +5,12 @@
 
 經對外入口 `roma_geo.verify_pairs()` 執行。
 
-比較的是幾何結論而非逐點數值（RoMa 的取樣帶隨機性，不同 torch 版本的浮點結果
+比較的是幾何結論（RoMa 的取樣帶隨機性，不同 torch 版本的浮點結果
 亦有微差）。判準為：
 
-  1. 位姿有無的一致率        —— 兩邊都有位姿 / 都沒有位姿
+  1. 位姿有無的一致率：兩邊都有位姿 / 都沒有位姿
   2. 共視區域數的一致率
-  3. 通道方位角的圓角差       —— 中位數與 ≤5° 的比例
+  3. 通道方位角的圓角差：中位數與 ≤5° 的比例
 
 其中 1 與 3 決定 PASS / CHECK。⚠ 3 只看「兩邊 n_inlier 皆 ≥ MIN_INLIER_FOR_AZ_GATE」
 的配對；低證據的配對逐次執行本來就會跳動，放進判準會讓這個檢查頻繁誤報
@@ -189,8 +189,8 @@ def main():
     ok = (posed_agree / n >= MIN_POSED_AGREE
           and (med_az_strong is None or med_az_strong <= MAX_MEDIAN_AZ_DEG))
     print("\n" + "=" * 72)
-    print("  結論：%s" % ("PASS —— 本環境與參考結果的幾何結論一致"
-                          if ok else "CHECK —— 未達判準，見上方數字"))
+    print("  結論：%s" % ("PASS：本環境與參考結果的幾何結論一致"
+                          if ok else "CHECK：未達判準，見上方數字"))
     print("  判準：位姿一致率 ≥%.0f%% 且 方位角差中位 ≤%.0f°"
           "（後者只看兩邊 n_inlier ≥ %d 的配對）"
           % (100 * MIN_POSED_AGREE, MAX_MEDIAN_AZ_DEG, MIN_INLIER_FOR_AZ_GATE))

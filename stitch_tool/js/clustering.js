@@ -1,5 +1,5 @@
 /* =========================================================================
-   clustering.js — 門聚類（純函式，3D 與 ERP 共用）
+   clustering.js：門聚類（純函式，3D 與 ERP 共用）
    低層模組：只 import config / geometry。不觸碰 DOM，不 import 高層模組。
    依賴的 houseData / STATE / pairStatus 一律以參數注入，維持純函式與可測試性。
    演算法逐字沿用原 app.js（doorCandidates / circMean / clusterDoors）。

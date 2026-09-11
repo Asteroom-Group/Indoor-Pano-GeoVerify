@@ -1,6 +1,6 @@
 /* =========================================================================
-   semantic.js — 語意輔助：用子計畫一的門語意圖校正通道方位
-   低層模組：只 import api.js（不 import state/erp，維持既有分層——低層不依賴高層）。
+   semantic.js：語意輔助：用子計畫一的門語意圖校正通道方位
+   低層模組：只 import api.js（不 import state/erp，維持既有分層。低層不依賴高層）。
 
    演算法與門檻的驗證依據見 semantic_doors/semantic_door_eval.md，此處逐字沿用：
      對某一側（i 或 j），取該圖的門清單與該對的共視區域（/api/regions）多邊形，算「每個
@@ -9,27 +9,27 @@
    region 的方位區間與 az_overlap 計算方式逐字對應 semantic_door_eval.py 的
    region_az_span()/az_overlap()（同一套 px_to_az 慣例：0=圖中央、((x/W)*360-180) mod 360），
    刻意不用 regions JSON 已存的 az_range 欄位（那是未 mod 360 的簽名版本，且是否所有 schema
-   版本都有該欄位未知）——改為和驗證腳本一樣直接從 polygon 現算，確保數值與驗證結果逐一對應。
+   版本都有該欄位未知）。改為和驗證腳本一樣直接從 polygon 現算，確保數值與驗證結果逐一對應。
    ========================================================================= */
 
 import { fetchSemanticDoors, fetchRegions } from './api.js';
 
 /** 共視區落在門內的比例 ≥ 此值才採用門中心方位。
  *  此值由門先驗差分測試選定（見 semantic_doors/semantic_door_eval.md）；
- *  更動須重跑該評估，否則校正結果與驗證結論不再對應。 */
+ *  更動須重跑該評估，否則校正結果與驗證結論不再對應。*/
 export const CONTAIN_THRESHOLD = 0.8;
 
-/** pipeline 方位角約定：0=圖中央，((x/W)*360-180) mod 360，與 az_ij/az_ji 同一套。 */
+/** pipeline 方位角約定：0=圖中央，((x/W)*360-180) mod 360，與 az_ij/az_ji 同一套。*/
 function pxToAz(x, W){ return (((x / W) * 360 - 180) % 360 + 360) % 360; }
 
-/** 由多邊形（原圖像素座標）算方位區間 [r0,r1] 與寬度（度）。逐字對應 region_az_span()。 */
+/** 由多邊形（原圖像素座標）算方位區間 [r0,r1] 與寬度（度）。逐字對應 region_az_span()。*/
 function regionAzSpan(poly, W){
   let x0 = Infinity, x1 = -Infinity;
   for(const p of poly){ if(p[0] < x0) x0 = p[0]; if(p[0] > x1) x1 = p[0]; }
   return { r0: pxToAz(x0, W), r1: pxToAz(x1, W), rw: (x1 - x0) / W * 360 };
 }
 
-/** 兩個（可能過縫）角區間的重疊角度。逐字對應 az_overlap()。 */
+/** 兩個（可能過縫）角區間的重疊角度。逐字對應 az_overlap()。*/
 function azOverlap(a0, a1, b0, b1){
   const norm = (s, e) => { const w = ((e - s) % 360 + 360) % 360; return [((s % 360) + 360) % 360, w]; };
   const [s1, w1] = norm(a0, a1);
@@ -54,7 +54,7 @@ const _doorsInflight = new Map();
 const _regionsCache = new Map();    // "house|a|b" -> regionsJson|null（null=此對無區域資料）
 const _regionsInflight = new Map();
 
-/** @returns {object|null|undefined} undefined=尚未抓過；null=該房無語意圖；否則 doors map。 */
+/** @returns {object|null|undefined} undefined=尚未抓過；null=該房無語意圖；否則 doors map。*/
 export function getCachedHouseDoors(house){
   return _doorsCache.get(house);
 }
@@ -62,7 +62,7 @@ export function getCachedHouseDoors(house){
 /**
  * 確保 house 的語意門資料已抓取（有快取直接回傳；抓取中則搭上同一個 in-flight promise）。
  * onReady 保證在資料就緒時被呼叫恰一次，即使多個呼叫端（ui.js 側欄提示 / erp.js 覆寫套用）
- * 同時搭上同一個進行中的請求，也都各自拿得到通知——不能只讓「第一個發起請求的人」拿到。
+ * 同時搭上同一個進行中的請求，也都各自拿得到通知。不能只讓「第一個發起請求的人」拿到。
  */
 export function ensureHouseDoors(house, onReady){
   if(_doorsCache.has(house)){
@@ -86,12 +86,12 @@ export function ensureHouseDoors(house, onReady){
 
 function regionsKey(house, a, b){ return house + '|' + a + '|' + b; }
 
-/** @returns {object|null|undefined} undefined=尚未抓過；null=此對無區域資料；否則原始 regions JSON。 */
+/** @returns {object|null|undefined} undefined=尚未抓過；null=此對無區域資料；否則原始 regions JSON。*/
 function getCachedRegions(house, imgA, imgB){
   return _regionsCache.get(regionsKey(house, imgA, imgB));
 }
 
-/** 同 ensureHouseDoors：onReady 保證對每個呼叫端各觸發一次，即使搭上同一個 in-flight 請求。 */
+/** 同 ensureHouseDoors：onReady 保證對每個呼叫端各觸發一次，即使搭上同一個 in-flight 請求。*/
 function ensureRegions(house, imgA, imgB, onReady){
   const key = regionsKey(house, imgA, imgB);
   if(_regionsCache.has(key)){

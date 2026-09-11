@@ -1,12 +1,12 @@
 /* =========================================================================
-   pairing.js — ERP 面板與「衍生配對」的單一真相邏輯（結構解耦）
+   pairing.js：ERP 面板與「衍生配對」的單一真相邏輯（結構解耦）
    低層純邏輯模組：只 import state（讀 pairs/confirmed/pairKey/pairStatus）。
    不 import 高層（erp/scene3d/dispatch/ui），也不觸碰 DOM，維持可單元測試。
 
    兩個核心：
-     ensureErpPanes(nav, hd)   — 保證 nav.erpTopImg/erpBotImg 永遠有效且互異。
+     ensureErpPanes(nav, hd)：保證 nav.erpTopImg/erpBotImg 永遠有效且互異。
                                   進 ERP / 換圖前呼叫；無 curPair 也能初始化。
-     derivePairForPanes(top,bot,hd,STATE) — 由「面板正在顯示的兩張圖」衍生出目前配對語意：
+     derivePairForPanes(top,bot,hd,STATE)：由「面板正在顯示的兩張圖」衍生出目前配對語意：
        { kind:'pair',      pair }      兩圖為 hd.pairs 中一對   -> 主標記可拖曳、Y/N 可用
        { kind:'confirmed', pair }      兩圖為 STATE.confirmed 一邊（含 pairs 沒有的人工邊）
                                         -> 綠色主標記、Y 停用（已確認）、N=撤銷確認

@@ -1,5 +1,5 @@
 /* =========================================================================
-   minimap.js — 路線圖（2D canvas，力導向佈局，綠邊=已確認）+ 放大彈窗
+   minimap.js：路線圖（2D canvas，力導向佈局，綠邊=已確認）+ 放大彈窗
    訂閱 'house-loaded' / 'state-changed' / 'view-changed' 自動重繪。
 
    力導向佈局 + 放大彈窗：
@@ -23,7 +23,7 @@ import { forceLayout, isIsolated } from './layout.js';
 import { toast } from './util.js';
 import { on, emit } from './events.js';
 
-/** 命中判定的額外容差（節點半徑之外再加幾 px），小圖節點縮小時仍好點。 */
+/** 命中判定的額外容差（節點半徑之外再加幾 px），小圖節點縮小時仍好點。*/
 const HIT_PAD = 8;
 
 /**
@@ -31,14 +31,14 @@ const HIT_PAD = 8;
  */
 let _layoutsCache = new Map();
 
-/** 目前 confirmed 邊清單（[i,j]），只取節點都在範圍內者。 */
+/** 目前 confirmed 邊清單（[i,j]），只取節點都在範圍內者。*/
 function confirmedEdges(N){
   const out = [];
   STATE.confirmed.forEach(c => { if(c.i < N && c.j < N && c.i !== c.j) out.push([c.i, c.j]); });
   return out;
 }
 
-/** 佈局指紋：節點數 + 排序後的確認邊 key 串（confirmed 變了才重算）。 */
+/** 佈局指紋：節點數 + 排序後的確認邊 key 串（confirmed 變了才重算）。*/
 function layoutKey(N, edges){
   const keys = edges.map(e => (e[0] < e[1] ? e[0] + '_' + e[1] : e[1] + '_' + e[0])).sort();
   return N + '|' + keys.join(',');
@@ -74,7 +74,7 @@ function getNormLayout(N, nodeR, W, H){
   return norm;
 }
 
-/** 讓 house 切換 / reset 時強制丟棄佈局快取（下一次重算）。 */
+/** 讓 house 切換 / reset 時強制丟棄佈局快取（下一次重算）。*/
 export function invalidateMapLayout(){ _layoutsCache.clear(); }
 
 /**
@@ -88,7 +88,7 @@ function project(W, H, norm){
   return norm.map(p => ({ x:pad + p.x * iw, y:pad + p.y * ih }));
 }
 
-/** 依 canvas 尺寸與節點數決定節點半徑（小圖 / 節點多時縮小，但有下限保可視）。 */
+/** 依 canvas 尺寸與節點數決定節點半徑（小圖 / 節點多時縮小，但有下限保可視）。*/
 function nodeRadiusFor(W, H, N){
   const base = Math.min(W, H) / 2;
   let r = base * 0.05;
@@ -143,7 +143,7 @@ function drawInto(canvasId, highlightImg, hiColor, opts){
   }
 }
 
-/** 重繪所有小路線圖（3D 單張 + ERP 雙張）。ERP 上/下圖用不同高亮色。 */
+/** 重繪所有小路線圖（3D 單張 + ERP 雙張）。ERP 上/下圖用不同高亮色。*/
 export function buildMinimap(){
   const erp = isErpOn();
   if(!erp){
@@ -183,7 +183,7 @@ function hitNode(cv, e, big){
 // =========================================================================
 let _modalOpen = false;
 
-/** 開啟放大彈窗。 */
+/** 開啟放大彈窗。*/
 export function openMapModal(){
   const hd = getHouseData(); if(!hd) return;
   const m = document.getElementById('map-modal'); if(!m) return;
@@ -199,7 +199,7 @@ export function openMapModal(){
   buildIsoList();
 }
 
-/** 關閉放大彈窗。 */
+/** 關閉放大彈窗。*/
 export function closeMapModal(){
   _modalOpen = false;
   const m = document.getElementById('map-modal');
@@ -208,7 +208,7 @@ export function closeMapModal(){
   if(tip) tip.style.opacity = '0';
 }
 
-/** 在彈窗大 canvas 畫力導向圖（全標號、放大樣式）；ERP 模式同時高亮兩張圖。 */
+/** 在彈窗大 canvas 畫力導向圖（全標號、放大樣式）；ERP 模式同時高亮兩張圖。*/
 function drawModal(){
   const cv = document.getElementById('map-modal-canvas'); if(!cv) return;
   const hd = getHouseData(); if(!hd) return;
@@ -242,7 +242,7 @@ function drawModal(){
   for(let t = 0; t < N; t++){ g.fillText(t, pos[t].x, pos[t].y - (nodeR + 10)); }
 }
 
-/** 彈窗底部「未連接圖片」快速入口列（孤立節點）。 */
+/** 彈窗底部「未連接圖片」快速入口列（孤立節點）。*/
 function buildIsoList(){
   const wrap = document.getElementById('map-modal-iso-list'); if(!wrap) return;
   wrap.innerHTML = '';
@@ -264,7 +264,7 @@ function buildIsoList(){
   }
   if(isoTitle){
     isoTitle.textContent = count > 0
-      ? ('未連接圖片（' + count + '）— ' + (isErpOn() ? '左鍵設上圖/右鍵設下圖' : '點擊前往'))
+      ? ('未連接圖片（' + count + '）。' + (isErpOn() ? '左鍵設上圖/右鍵設下圖' : '點擊前往'))
       : '所有圖片皆已連通 🎉';
   }
 }
@@ -290,7 +290,7 @@ function gotoFromModal(idx, btn){
 // =========================================================================
 //  可見性 / toggle（沿用需求 2）
 // =========================================================================
-/** 依 ERP 開關 / 收合狀態切換單張(3D) vs 雙張(ERP) 路線圖顯示與標籤。 */
+/** 依 ERP 開關 / 收合狀態切換單張(3D) vs 雙張(ERP) 路線圖顯示與標籤。*/
 export function applyMinimapVisibility(){
   const shown = STATE.ui.minimap !== false;
   const erp = isErpOn();
@@ -309,7 +309,7 @@ export function applyMinimapVisibility(){
   if(shown) buildMinimap();
 }
 
-/** 切換路線圖顯示/隱藏。 */
+/** 切換路線圖顯示/隱藏。*/
 export function toggleMinimap(){
   STATE.ui.minimap = (STATE.ui.minimap === false);
   applyMinimapVisibility();
@@ -317,7 +317,7 @@ export function toggleMinimap(){
   emit('state-changed');
 }
 
-/** ERP 小標籤內的 ⤢ 是 innerHTML 重建的，需重新綁定。 */
+/** ERP 小標籤內的 ⤢ 是 innerHTML 重建的，需重新綁定。*/
 function rewireExpandSm(){
   const t = document.getElementById('minimap-expand-top');
   if(t) t.onclick = (e) => { e.stopPropagation(); openMapModal(); };
@@ -325,7 +325,7 @@ function rewireExpandSm(){
   if(b) b.onclick = (e) => { e.stopPropagation(); openMapModal(); };
 }
 
-/** 綁定 canvas 點擊/雙擊、toggle、放大鈕、modal 關閉。boot 時一次。 */
+/** 綁定 canvas 點擊/雙擊、toggle、放大鈕、modal 關閉。boot 時一次。*/
 function wireMinimapClicks(){
   const bind = (id, handler) => { const cv = document.getElementById(id); if(cv) cv.addEventListener('click', handler); };
   bind('minimap', function(e){ const idx = hitNode(e.currentTarget, e); if(idx >= 0) goto3DImage(idx); });
@@ -368,10 +368,10 @@ function wireMinimapClicks(){
   }, true);
 }
 
-/** @returns {boolean} 放大彈窗是否開啟（供其它模組查詢）。 */
+/** @returns {boolean} 放大彈窗是否開啟（供其它模組查詢）。*/
 export function isMapModalOpen(){ return _modalOpen; }
 
-/** 訂閱事件：資料/狀態/視角變更時重繪；ERP 開關/排列時切換單/雙。 */
+/** 訂閱事件：資料/狀態/視角變更時重繪；ERP 開關/排列時切換單/雙。*/
 export function initMinimap(){
   on('house-loaded', () => { invalidateMapLayout(); applyMinimapVisibility(); });
   on('state-changed', buildMinimap);   // confirmed 改變 -> getNormLayout 依指紋自動重算

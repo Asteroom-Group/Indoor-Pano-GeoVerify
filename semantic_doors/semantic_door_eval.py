@@ -39,9 +39,12 @@ import numpy as np
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # 本檔位於專案根目錄下一層，故 dirname 一次即為根目錄。
 ROOT = os.path.dirname(SCRIPT_DIR)
+_SRC = os.path.join(ROOT, "src")
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
 if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
-from config import semantic_root, regions_root    # noqa: E402（要先補 sys.path）
+    sys.path.append(ROOT)
+from roma_geo.config import semantic_root, regions_root    # noqa: E402
 
 SEM_DIR = semantic_root()                         # 可用 ROMA_GEO_DATASETS 覆寫，見 config.py
 REG_DIR = regions_root()                        # 可用 ROMA_GEO_OUTPUT 覆寫，見 config.py

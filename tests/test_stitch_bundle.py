@@ -1,7 +1,7 @@
 """
 工具載入對外交付檔的相容層測試，以及 HOTSPOT 真值（GT）即時補上的測試。
 
-`export_public.py` 的交付檔可以直接放進產出包給工具載入——工具渲染得出來，即為
+`export_public.py` 的交付檔可以直接放進產出包給工具載入。工具渲染得出來，即為
 「交付內容足夠」的直接檢驗。要成立有三個前提，本檔逐一驗證：
 
   1. 包內的 `<house>.json` 是交付檔本身，未經改寫（改寫過就不算檢驗了）。
@@ -13,7 +13,7 @@
 
 本檔另涵蓋 `gt_hotspot.py`（HOTSPOT 真值的載入／對映／比對回報，`prepare_house_data.py`
 建檔時與 `server.py` 即時補 GT 共用同一份實作）：第 2 點說的「標明無 GT 真值」只是
-交付檔轉換當下的狀態，bundle 內若帶了 HOTSPOT 檔，伺服器讀取時會嘗試即時補上——
+交付檔轉換當下的狀態，bundle 內若帶了 HOTSPOT 檔，伺服器讀取時會嘗試即時補上。
 真的對得上才補，房號對不上時必須在回報訊息裡明說，不能安靜地假裝有 GT
 （使用者曾把別棟房子的 HOTSPOT 放錯資料夾，因為安靜不顯示而誤以為功能沒接上）。
 """
@@ -117,7 +117,7 @@ class TestPublicHouseToTool(unittest.TestCase):
             self.assertEqual(p[k], self.src["pairs"][0][k])
 
     def test_marks_absence_of_ground_truth(self):
-        """交付檔不含真值；工具據 has_gt=false 顯示「無 GT 真值」而非誤以為疊層失效。"""
+        """交付檔不含真值；工具據 has_gt=false 顯示「無 GT 真值」。"""
         self.assertIs(self.out["has_gt"], False)
         self.assertEqual(self.out["n_gt_connected_pairs"], 0)
 
@@ -259,7 +259,7 @@ class TestRoundTrip(unittest.TestCase):
 
 def hotspot_room(owner, roomidx, targets_with_x):
     """建一筆 HOTSPOTOFROOM 項目。`targets_with_x` 為 `[(檔名, x座標), ...]`，依序對映
-    `ToIDName.IDName` 與 `HSLoc.Coordinate`——兩者逐項對應，是規約明定的格式（見
+    `ToIDName.IDName` 與 `HSLoc.Coordinate`。兩者逐項對應，是規約明定的格式（見
     gt_hotspot.py 模組說明），不是巧合。"""
     return {
         "IDName": owner,
@@ -278,7 +278,7 @@ def az_of(x, w=W_DEF):
 
 
 def house_without_gt(house, images):
-    """『還沒有 GT 欄位』的房子資料——對外交付檔轉換後的形狀：每對沒有 gt_connected
+    """『還沒有 GT 欄位』的房子資料。對外交付檔轉換後的形狀：每對沒有 gt_connected
     鍵，是 has_gt_fields() 判定「還沒算過」、augment_house_with_gt 因此該接手的前提。"""
     pairs = []
     for i in range(len(images)):
@@ -371,7 +371,7 @@ class TestGtPairFields(unittest.TestCase):
 
 
 class TestFindHotspotFiles(unittest.TestCase):
-    """尋找 HOTSPOT 檔案：一律排序；recursive=True 才往子資料夾找——bundle 資料夾裡
+    """尋找 HOTSPOT 檔案：一律排序；recursive=True 才往子資料夾找。bundle 資料夾裡
     HOTSPOT 檔不一定乖乖放在最上層，這是實際發生過的真實佈局，不是假設性邊界情況。"""
 
     def test_sorted_output_regardless_of_glob_order(self):
@@ -440,7 +440,7 @@ class TestLoadGtOrderIndependence(unittest.TestCase):
         """直接傳入未排序的路徑清單也要得到同一個結果。
 
         上一個測試經由 `find_hotspot_files` 取得清單，而該函式本身已排序，因此驗不到
-        `load_gt` 自己那層排序。但 `load_gt` 的契約是「呼叫端不必自行排序」——若這層
+        `load_gt` 自己那層排序。但 `load_gt` 的契約是「呼叫端不必自行排序」。若這層
         排序被當成冗餘而移除，直接以 `glob` 結果呼叫的路徑就會退回依賴檔案系統列舉
         順序，Linux 與 Windows 取到不同樓層的座標，且不會有任何錯誤徵兆。
         """
@@ -501,7 +501,7 @@ class TestHasGtFields(unittest.TestCase):
 
 class TestMatchReport(unittest.TestCase):
     """比對回報：無論全對不上、部分對上、或全數相符都要出聲，不能只在「正常」時才
-    輸出——安靜地不顯示 GT 正是使用者曾經誤以為功能沒接上的原因。"""
+    輸出。安靜地不顯示 GT 正是使用者曾經誤以為功能沒接上的原因。"""
 
     def test_zero_overlap_reports_recognizable_warning(self):
         gt = {"x1.jpg": {"x2.jpg": 0.0}, "x3.jpg": {"x2.jpg": 10.0}}   # 提到 x1,x2,x3 三張
@@ -521,7 +521,7 @@ class TestMatchReport(unittest.TestCase):
     def test_house_images_not_covered_are_reported(self):
         """兩層樓只放一層：被提到的影像確實全屬本房，但本房有影像沒被標註涵蓋。
 
-        這是實測發現會誤導的情況——舊判斷式只比「HOTSPOT 提到的有幾張落在本房」，
+        這是實測發現會誤導的情況。舊判斷式只比「HOTSPOT 提到的有幾張落在本房」，
         缺樓層時該式不成立而回報「全數相符」，使用者會誤以為真值完整，未涵蓋影像
         的配對卻一律顯示 GT 不連通，看起來像模型誤報。
         """
@@ -629,7 +629,7 @@ class TestAugmentHouseWithGt(unittest.TestCase):
         self.assertEqual(out["pairs"][0]["gt_az_ij"], 12.34)
 
     def test_no_hotspot_in_bundle_is_unchanged(self):
-        """包內沒有 HOTSPOT：行為與本功能實作之前相同——原樣回傳，不印訊息。"""
+        """包內沒有 HOTSPOT：行為與本功能實作之前相同。原樣回傳，不印訊息。"""
         images = ["a.jpg", "b.jpg"]
         house = house_without_gt("H5", images)
         with temp_dir() as d:
@@ -657,7 +657,7 @@ class TestAugmentHouseWithGt(unittest.TestCase):
 
     def test_same_room_images_keep_independent_connections(self):
         """Roomidx 相同表示同房；但連通判定完全看各自的 ToIDName，同房不代表連通關係
-        會互相取代或合併——每張圖各自的鄰接清單必須維持獨立。"""
+        會互相取代或合併。每張圖各自的鄰接清單必須維持獨立。"""
         images = ["ra.jpg", "rb.jpg", "rc.jpg", "rd.jpg"]
         hs = {"HOTSPOTOFROOM": [
             hotspot_room("ra.jpg", 0, [("rc.jpg", 0.0)]),   # ra、rb 同房 (Roomidx=0)

@@ -1,5 +1,5 @@
 /* =========================================================================
-   dispatch.js — 唯一的圈圈點擊分派入口 handleCircleClick(targetInfo)
+   dispatch.js：唯一的圈圈點擊分派入口 handleCircleClick(targetInfo)
    3D（scene3d.onPointerUp）與 ERP（erp dot onpointerdown）都呼叫它，收斂兩套點擊路徑。
 
    targetInfo 欄位：

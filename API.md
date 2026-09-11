@@ -4,6 +4,8 @@
 
 ## 開始使用
 
+先依 `README.md` 用 uv 建立環境，再於專案根目錄執行 `uv pip install -e . --python venv\Scripts\python.exe`。相依版本見 `environments/requirements-core.txt`。
+
 單對：
 
 ```python
@@ -16,8 +18,8 @@ pub = to_public(res)
 整間房：
 
 ```python
-from config import Settings
-from pipeline import run_house
+from roma_geo.config import Settings
+from roma_geo.pipeline import run_house
 
 s = Settings(datasets="資料集根目錄", output="產出根目錄", cache="快取目錄")
 result = run_house("Office_A", settings=s)
@@ -25,11 +27,50 @@ result = run_house("Office_A", settings=s)
 
 `Settings` 的每一項都可由呼叫端傳入。未傳入的項目才讀環境變數或專案預設。逐步呼叫見第 2 節。
 
+安裝後以 `roma_geo` 套件命名空間取用。
+命令列維持 `python roma_geo.py a.jpg b.jpg`，或 `python -m roma_geo`。
+
+---
+
+## 0. 整房交付檔的兩項輸出
+
+交付檔頂層帶 `schema_version`。現行值為 `house-v2`。沒有該欄的檔是變更前的格式，既有欄位仍可讀。
+
+### 輸出一：通道方位
+
+每一對都有值。欄位：
+
+| 欄位 | 存在條件 | 說明 |
+|---|---|---|
+| `az_ij` / `az_ji` | 每一對 | 建議通道方位（度，0~360）。開啟語意矯正且規則命中時，改為門中心 |
+| `az_source` | 有上游方向或幾何方位時 | `geo` 來自相對位姿，`coarse` 來自上游關注位置。語意矯正不改此欄 |
+| `semantic_corrected` | 每一對 | 布林。此對的輸出一是否被語意門中心改寫 |
+
+來源標示與是否矯正是兩個獨立欄位。未開啟語意矯正時，`semantic_corrected` 一律為 `false`。
+
+開啟語意矯正時，輸出一與「由輸出二自行推算的方位」會不一致。輸出一是最終建議方向，輸出二是原始幾何。這是設計上的區分。
+
+矯正規則：取與共視區域重疊度最高的門，且共視區域有八成以上落在該門範圍內時才改用門中心。
+此規則需要共視區域才能判斷，因此只作用於 `az_source` 為 `geo` 的方位。上游來源（`coarse`）的配對沒有共視區域，方位維持原值。
+
+開關：`Settings(semantic_correct=True)` 或 `export_public_houses(..., semantic_correct=True)`。預設關閉。語意圖缺席時流程照常跑完，矯正標記為否。
+
+### 輸出二：相對位姿
+
+| 欄位 | 存在條件 | 說明 |
+|---|---|---|
+| `R` | 僅在 `has_geometry` 為真 | 3×3 旋轉矩陣。`x_j = R · x_i + t` |
+| `t` | 僅在 `has_geometry` 為真 | 位移方向，長度為 1 |
+
+沒有跑匹配、或對應點不足以解出位姿時，`R` 與 `t` 缺席。不以零值或單位矩陣填充。
+
+位移向量長度為 1，且跨對之間沒有共用尺度。使用端無法直接以此拼出平面圖。語意矯正不改寫輸出二。
+
 ---
 
 ## 1. 單對幾何驗證
 
-入口為根目錄的 `roma_geo` 模組。
+入口為套件 `roma_geo`。
 
 ```python
 from roma_geo import verify_pair, verify_pairs, to_public, get_matcher
@@ -189,8 +230,8 @@ python roma_geo.py a.jpg b.jpg --public --out result.json
 每一個處理步驟都是函式，輸入與輸出由參數給定。不依賴前一步在全域狀態或固定位置留下的隱含資料。
 
 ```python
-from config import Settings
-from pipeline import (
+from roma_geo.config import Settings
+from roma_geo.pipeline import (
     ingest_connections, select_pairs, match_pairs, estimate_poses,
     evaluate_ranking, prepare_house, prepare_semantic, export_public_houses,
     run_house,
@@ -232,6 +273,7 @@ s = Settings(datasets="...", output="...", cache="...", matrices="...")
 | `semantic` | 語意圖根目錄 | `<datasets>/semantic/` |
 | `public_houses` | 對外交付目錄 | `<output>/public_houses` |
 | `connections` | 上游連通 JSON 目錄 | 無預設，缺席則略過轉矩陣 |
+| `semantic_correct` | 是否對輸出一做語意矯正 | `False` |
 
 相對路徑會轉成絕對路徑。呼叫端不必設定環境變數，也不必把工作目錄切到專案根。
 

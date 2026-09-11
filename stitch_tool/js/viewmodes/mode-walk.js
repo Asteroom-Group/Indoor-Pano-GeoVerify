@@ -1,5 +1,5 @@
 /* =========================================================================
-   viewmodes/mode-walk.js — 模式 D「走一遍」
+   viewmodes/mode-walk.js：模式 D「走一遍」
 
    任務7(2026-07-29)時間軸:
    - holdDoor: A 起手朝 B 相機方位(通道 az)明確停留
@@ -33,9 +33,9 @@ const FRAME_FAST_MS = 100;
 const FRAME_SLOW_MS = 350;
 const SCORE_N = 5;
 const PIN_W = 140;
-/** 任務7:預設 false。true 時在 holdIn 後接 lookBack(舊行為)。勿做 UI 按鈕。 */
+/** 任務7:預設 false。true 時在 holdIn 後接 lookBack(舊行為)。勿做 UI 按鈕。*/
 const END_WITH_LOOKBACK = false;
-/** 全程固定 FOV;先做 48,若太窄可改 FOV_WIDE。 */
+/** 全程固定 FOV;先做 48,若太窄可改 FOV_WIDE。*/
 const FOV_FIXED = FOV_NEAR;
 
 let _root = null, _visible = false;
@@ -50,7 +50,7 @@ let _regOn = true;
 let _bandOn = true;            // 通道頂帶(影片要共識區塊＋通道位置同顯 → 預設開)
 
 /** 任務7 段長:holdDoor → turnA → holdStart → fade → holdIn [→ lookBack?]。
-    degenerate:跳過轉向,起手即主區(或通道方位)停留後淡化。 */
+    degenerate:跳過轉向,起手即主區(或通道方位)停留後淡化。*/
 function segs(prep){
   const sumOf = list => (list || []).reduce((s, x) => s + x, 0);
   const list = [];
@@ -87,10 +87,10 @@ function atProgress(p, prep){
   return { kind:list[list.length - 1].kind, u:1, tInSeg:0, segMs:1, idx:list.length - 1 };
 }
 
-/** 段落序號(段數依退化/有無轉向而異,所以由段索引現算,不寫死 ①①′②②′③)。 */
+/** 段落序號(段數依退化/有無轉向而異,所以由段索引現算,不寫死 ①①′②②′③)。*/
 const SEG_NUM = ['①', '②', '③', '④', '⑤', '⑥', '⑦'];
 
-/** 依各幀時長表找目前幀(approach / lookBack 共用)。 */
+/** 依各幀時長表找目前幀(approach / lookBack 共用)。*/
 function timedFrame(u, frames, durs, scores){
   if(!frames || !frames.length) return { fr:null, score:0 };
   const total = (durs || []).reduce((s, x) => s + x, 0) || 1;
@@ -270,8 +270,8 @@ function easeCos(u){
 
 /**
  * 一幀上的兩層疊圖。ov = { reg, bandAz }:
- *   reg    共視遮罩(遮罩 OFF 時呼叫端已給 null) — 繪製本體在 regions-paint.js
- *   bandAz 該側的通道方位(頂帶標示;方位角-only) — 繪製本體在 marker.js
+ *   reg    共視遮罩(遮罩 OFF 時呼叫端已給 null)：繪製本體在 regions-paint.js
+ *   bandAz 該側的通道方位(頂帶標示;方位角-only)：繪製本體在 marker.js
  * walk 的幀是預渲染的,兩層都直接畫進 bake 出來的幀(與遮罩既有管線一致);
  * 兩個開關都走 `_lastKey=''; refresh()` rebake。
  */
@@ -283,7 +283,7 @@ function paintOverlays(ctx, ov, az, fov){
 
 /**
  * 共視區「畫面覆蓋分數」0~1。
- * 舊算法用「poly 邊有多少投進裁切圖」— 共視區占滿畫面時邊反而在 FOV 外,
+ * 舊算法用「poly 邊有多少投進裁切圖」。共視區占滿畫面時邊反而在 FOV 外,
  * 分數掉到 0 → 反而加速。改:裁切圖網格取樣 → 反投 ERP → 是否在 poly 內。
  */
 function regionInViewScore(sidePolys, W, H, az, fov){
@@ -316,12 +316,12 @@ function regionInViewScore(sidePolys, W, H, az, fov){
   return Math.min(1, hit / total / 0.25);
 }
 
-/** 讓出主線程一幀,避免預渲染卡死 UI。 */
+/** 讓出主線程一幀,避免預渲染卡死 UI。*/
 function yieldFrame(){
   return new Promise(r => setTimeout(r, 0));
 }
 
-/** 共用的 i/j 兩側 polygon 依「行走方向」改標 start/end(swap 已在共用模組處理)。 */
+/** 共用的 i/j 兩側 polygon 依「行走方向」改標 start/end(swap 已在共用模組處理)。*/
 function sidePolysFrom(rj, walkAb){
   const s = sidesFromRegions(rj);
   return walkAb
@@ -330,7 +330,7 @@ function sidePolysFrom(rj, walkAb){
 }
 
 /** polygon 重心 → 方位角。已把過縫的 x unwrap 成連續值(可超出 [0,W)),
-    所以算術平均 x 再換算即可,不需要圓形平均。 */
+    所以算術平均 x 再換算即可,不需要圓形平均。*/
 function polyCentroidAz(poly, W){
   if(!poly || poly.length < 3 || !W) return null;
   let sx = 0;
@@ -343,12 +343,12 @@ function polyCentroidAz(poly, W){
  * 主區(過渡兩端的鏡頭錨點)。**面積最大**,但淡化前後必須是「同一塊空間」,
  * 所以先在兩側都有 polygon 的 region 裡取兩側面積和最大者,再各取該 region
  * 在該側的重心;沒有兩側齊備的 region 時才退回逐側各取面積最大。
- * (規格原文寫「每側各取面積最大」— 但實測 7069 份 region JSON 裡,25.5% 的
+ * (規格原文寫「每側各取面積最大」。但實測 7069 份 region JSON 裡,25.5% 的
  *  多區 pair 兩側 argmax 落在不同 region,那樣淡化前後看的是兩塊不同空間,
  *  「同色=同一塊」的說服力就沒了。單一主區時兩種規則結果相同。)
  * 區域依 n 降冪排序 → 面積同分時取排前者,結果決定性。
  *
- * ⚠ 語意紅線:重心只是「鏡頭視覺錨點」,**不是**通道方位估計 —
+ * ⚠ 語意紅線:重心只是「鏡頭視覺錨點」,**不是**通道方位估計。
  *   2026-07-22 實測區域中心估通道方位誤差中位 39°~62°,az_ab 才是好的通道估計。
  *   不要把這個值回寫或顯示成任何「通道位置」。
  */
@@ -402,7 +402,7 @@ async function bakeFovsTimed(erp, az, fovFrom, fovTo, ov, onProg){
   return { frames, scores, durs };
 }
 
-/** 原地轉向(A 端轉向主區 / B 端轉身回看門):每幀依共視區是否入鏡調時長。 */
+/** 原地轉向(A 端轉向主區 / B 端轉身回看門):每幀依共視區是否入鏡調時長。*/
 async function bakeAzTimed(erp, azFrom, azTo, fov, ov, onProg, baseDone, nFrames){
   const d = deltaAz(azFrom, azTo);
   const N = Math.max(1, nFrames || ROT_FRAMES);
@@ -443,7 +443,7 @@ function cross(ctx, a, b, alpha){
   ctx.globalAlpha = 1;
 }
 
-/** 釘窗:穿門後角落續掛 A 端最後一幀。該幀現在是「A 側主區」而非門前,標籤照實寫。 */
+/** 釘窗:穿門後角落續掛 A 端最後一幀。該幀現在是「A 側主區」,標籤照實寫。*/
 function drawPin(ctx, pinFrame){
   if(!_pinOn || !pinFrame) return;
   const m = 10;
@@ -480,7 +480,7 @@ function paint(){
   const azS = P.azStart.toFixed(0) + '°', azE = P.azEnter.toFixed(0) + '°';
   let showPin = false;
 
-  const azDoor = (P.doorS != null) ? P.doorS.toFixed(0) + '°' : '—';
+  const azDoor = (P.doorS != null) ? P.doorS.toFixed(0) + '°' : '。';
   switch(kind){
     case 'holdDoor':
       blit(ctx, P.doorFrame
@@ -648,7 +648,7 @@ function refresh(){
         startIdx = pair.j; endIdx = pair.i;
       }
 
-      // 區域一律先算(視角鎖定與遮罩開關無關 — 遮罩 OFF 也照樣朝主區)。
+      // 區域一律先算(視角鎖定與遮罩開關無關：遮罩 OFF 也照樣朝主區)。
       const sides = sidePolysFrom(rj, walkAb);
       const main = mainRegionAz(sides);
 
@@ -730,7 +730,7 @@ function refresh(){
         (main.k != null ? ' · 主區 R' + main.k : '') +
         (nTurn ? ' · 轉向' + (turnMs / 1000).toFixed(1) + 's' : '') +
         (END_WITH_LOOKBACK ? ' · 回看' + (lbMs / 1000).toFixed(1) + 's' : '') +
-        ' · conf=' + (gates.conf_used != null ? gates.conf_used : '—');
+        ' · conf=' + (gates.conf_used != null ? gates.conf_used : '。');
 
       _prep = {
         turnA: turn.frames,

@@ -1,5 +1,5 @@
 /* =========================================================================
-   actions.js — 標註動作：Y/N/A、否決、無 ROI 淘汰、全連接、重新否決、reset 房屋。
+   actions.js：標註動作：Y/N/A、否決、無 ROI 淘汰、全連接、重新否決、reset 房屋。
    行為逐字沿用原 app.js（含 ERP 情境下的對側自動切換與門聚類淘汰收緊）。
    依賴：state / nav / scene3d / modes / clustering(via state helpers) / geometry / config / util / events。
    狀態變更後一律 emit('state-changed')（queue/minimap/compass 訂閱重繪），
@@ -22,9 +22,9 @@ import { isErpOn as erpOn, renderERP, getErpAzI, getErpAzJ } from './erp.js';
 import { toast, round1 } from './util.js';
 import { emit } from './events.js';
 
-/** 統一：狀態改變後通知所有 UI 重繪（queue/minimap/compass/info）。 */
+/** 統一：狀態改變後通知所有 UI 重繪（queue/minimap/compass/info）。*/
 function stateChanged(){ emit('state-changed'); }
-/** 若在 ERP，重繪 ERP。 */
+/** 若在 ERP，重繪 ERP。*/
 function renderErpIfOn(){ if(erpOn()) renderERP(); }
 
 // =========================================================================
@@ -62,7 +62,7 @@ export function confirmEdge(i, j, azI, azJ){
 // =========================================================================
 //  Y：確認連通
 // =========================================================================
-/** 確認目前 pair 連通。沿用原 actYes 全部邏輯（含自動淘汰與對側切換）。 */
+/** 確認目前 pair 連通。沿用原 actYes 全部邏輯（含自動淘汰與對側切換）。*/
 export function actYes(){
   const p = nav.curPair;
   const hd = getHouseData();
@@ -81,7 +81,7 @@ export function actYes(){
     } else { azI = p.az_ij; azJ = p.az_ji; }
   }
 
-  // 寫入確認邊（移除否決/淘汰、去重、autoEliminate 兩端、存檔）— 與「連接」鈕共用 helper
+  // 寫入確認邊（移除否決/淘汰、去重、autoEliminate 兩端、存檔）。與「連接」鈕共用 helper
   confirmEdge(p.i, p.j, azI, azJ);
   // 目前琥珀標記轉綠（可拖曳、可穿門，持久）
   if(mk){ promoteCandidateToConfirmed(nav.curImage === p.i ? p.j : p.i); }
@@ -95,7 +95,7 @@ export function actYes(){
 // =========================================================================
 //  N：否決（或對已確認的目前對重新否決）
 // =========================================================================
-/** 否決按鈕/鍵：對已確認的目前對彈確認框重新否決；否則切換否決模式。 */
+/** 否決按鈕/鍵：對已確認的目前對彈確認框重新否決；否則切換否決模式。*/
 export function actNo(){
   const p = nav.curPair;
   if(p && isConfirmed(p.i, p.j)){
@@ -105,23 +105,23 @@ export function actNo(){
   }
   toggleRejectMode();
 }
-/** 切換否決模式（互斥；經 modes 狀態機，含自動進/出 ERP）。 */
+/** 切換否決模式（互斥；經 modes 狀態機，含自動進/出 ERP）。*/
 export function toggleRejectMode(){ toggleMode('reject'); }
-/** 切換無 ROI 模式。 */
+/** 切換無 ROI 模式。*/
 export function toggleNoRoiMode(){ toggleMode('noRoi'); }
-/** 切換全連接模式。 */
+/** 切換全連接模式。*/
 export function toggleAllConnMode(){ toggleMode('allConn'); }
-/** 切換未連接通道模式。 */
+/** 切換未連接通道模式。*/
 export function toggleUnconn(){ toggleMode('unconn'); }
 
 // =========================================================================
 //  未連接通道：連接
 // =========================================================================
-/** 讀某圖目前的未連接通道橘圈方位陣列（兼容數字/字串 key）。 */
+/** 讀某圖目前的未連接通道橘圈方位陣列（兼容數字/字串 key）。*/
 function extraAzList(imgIdx){
   return (STATE.extra_channels[imgIdx] || STATE.extra_channels[String(imgIdx)] || []);
 }
-/** 移除某圖某方位的橘圈（連接成功後清掉，因為已變綠色確認邊）。 */
+/** 移除某圖某方位的橘圈（連接成功後清掉，因為已變綠色確認邊）。*/
 function removeExtraAz(imgIdx, az){
   const key = String(imgIdx);
   if(!STATE.extra_channels[key]) return;
@@ -207,7 +207,7 @@ export function clearAllUnconn(){
 }
 
 /**
- * unconn 推薦面板「就是這個(連通)」——把某推薦候選確認連通。
+ * unconn 推薦面板「就是這個(連通)」。把某推薦候選確認連通。
  * 此側（放圈圖 srcImg）方位優先用該圖的橘圈（若有），否則用候選在此圖看向對方的方位 candAz；
  * 對側方位優先用對側橘圈（若使用者也在對面放了橘圈），否則用候選的對面方位 oppAz。
  * 成功後移除此側用掉的橘圈（若有）與對側用掉的橘圈（若有），寫入 confirmed（含 autoEliminate、去重、存檔）。
@@ -462,7 +462,7 @@ export function autoEliminateForImage(p, base, star){
 // =========================================================================
 //  A：此圖全連接
 // =========================================================================
-/** A 鍵/按鈕：ERP 下切換全連接模式（點面板執行）；3D 下直接對目前圖執行。 */
+/** A 鍵/按鈕：ERP 下切換全連接模式（點面板執行）；3D 下直接對目前圖執行。*/
 export function actAllConn(){
   if(erpOn()){
     toggleAllConnMode();
@@ -531,7 +531,7 @@ export function performAllConnOnImage(targetImg){
   }
 }
 
-/** 解析完目前對後前進到下一個 pending（並 emit 重繪）。沿用原 advanceAfterResolve。 */
+/** 解析完目前對後前進到下一個 pending（並 emit 重繪）。沿用原 advanceAfterResolve。*/
 export function advanceAfterResolve(){
   scheduleSave();
   const next = firstPending();
@@ -550,7 +550,7 @@ function pairAzFrom(a, b, fromImg){
   if(!p) return null;
   return (p.i === fromImg) ? p.az_ij : (p.j === fromImg ? p.az_ji : null);
 }
-/** 把當初因確認 c 而被同門淘汰的候選救回為 pending。沿用原 undoClusterEliminations。 */
+/** 把當初因確認 c 而被同門淘汰的候選救回為 pending。沿用原 undoClusterEliminations。*/
 export function undoClusterEliminations(c){
   STATE.eliminated = STATE.eliminated.filter(p => {
     const aI = pairAzFrom(p[0], p[1], c.i), aJ = pairAzFrom(p[0], p[1], c.j);
@@ -559,7 +559,7 @@ export function undoClusterEliminations(c){
     return !(inI || inJ);
   });
 }
-/** 把已確認對 i–j 改為否決，救回同門被淘汰者，重畫。沿用原 rejectConfirmed。 */
+/** 把已確認對 i–j 改為否決，救回同門被淘汰者，重畫。沿用原 rejectConfirmed。*/
 export function rejectConfirmed(i, j){
   const hd = getHouseData();
   const c = STATE.confirmed.find(x => pairKey(x.i, x.j) === pairKey(i, j));
@@ -578,7 +578,7 @@ export function rejectConfirmed(i, j){
 // =========================================================================
 //  重置此房屋所有標註
 // =========================================================================
-/** 兩段確認後清空 STATE 並立即存檔、重畫、跳第一個 pending。沿用原 resetCurrentHouse。 */
+/** 兩段確認後清空 STATE 並立即存檔、重畫、跳第一個 pending。沿用原 resetCurrentHouse。*/
 export function resetCurrentHouse(){
   const hd = getHouseData();
   if(!getHouseName()){ toast('請先選擇房子'); return; }

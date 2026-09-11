@@ -1,4 +1,4 @@
-# environments/ — 環境建置與驗收
+# environments/：環境建置與驗收
 
 ## 目標配置
 

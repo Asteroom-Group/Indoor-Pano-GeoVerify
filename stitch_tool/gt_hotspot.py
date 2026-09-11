@@ -109,7 +109,7 @@ def has_gt_fields(house_data: dict) -> bool:
 
     `has_gt` 為真，或任一對已帶 `gt_connected` 鍵，即使值是 `False`：`has_gt=False`
     且每對都有 `gt_connected` 鍵，代表建檔當時真的找過 HOTSPOT 但沒找到，是「已有答案」
-    而非「還沒算過」，`augment_house_with_gt` 不應該覆寫它去猜 bundle 資料夾裡湊巧出現的
+    代表「已有答案」。`augment_house_with_gt` 不應該覆寫它去猜 bundle 資料夾裡湊巧出現的
     檔案。只有 schema 上完全沒有這些欄位（例如 `export_public.py` 的對外交付檔，
     刻意不含 `gt_*`，見該檔 `FORBIDDEN_PREFIXES`）才算「還沒算過」。
     """
@@ -162,7 +162,7 @@ def match_report(gt: dict, images) -> str:
         notes.append("HOTSPOT 提到的 %d 張影像中有 %d 張不屬於本房（可能混入其他房子的標註）"
                      % (n_hs, n_hs - n_match))
     if n_match < n_house:
-        # 措辭保留另一種可能：孤立的全景圖本來就不會出現在任何連接裡，並非一定缺檔。
+        # 措辭保留另一種可能：孤立的全景圖本來就不會出現在任何連接裡，不一定是缺檔。
         notes.append("本房 %d 張影像中有 %d 張未被標註涵蓋（可能少放了某一層樓的 HOTSPOT，"
                      "也可能該圖本來就沒有連接），這些影像的配對會一律顯示 GT 不連通"
                      % (n_house, n_house - n_match))
@@ -190,7 +190,7 @@ def augment_house_with_gt(house_data: dict, house_dir: str):
         GT 正是本函式存在的理由（使用者曾因此誤以為功能沒接上，見 `match_report`）。
         注意 `has_gt` 不是「HOTSPOT 檔案存在」就設真：若其中提到的影像與本房完全
         對不上（例如房號放錯），代表這份 HOTSPOT 根本不適用於這棟房子，`has_gt`
-        仍是 `False`。不然前端會顯示「GT連通 0」，看起來像已驗證的結論而非資料
+        仍是 `False`。不然前端會顯示「GT連通 0」，看起來像已驗證的結論，實際只是資料
         不適用，等同產生一份假 GT。
     """
     if has_gt_fields(house_data):

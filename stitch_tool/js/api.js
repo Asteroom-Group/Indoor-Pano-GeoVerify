@@ -1,5 +1,5 @@
 /* =========================================================================
-   api.js — 伺服器 API 封裝（server.py 端點，見 SPEC）
+   api.js：伺服器 API 封裝（server.py 端點，見 SPEC）
    低層模組：不 import 任何其它模組。URL 與 method 完全不變。
    ========================================================================= */
 
@@ -97,7 +97,7 @@ export function nadirWarning(rj){
 
 /**
  * GET /api/semantic_doors/<house> -> {house, doors:{<image檔名不含副檔名>:[{az,az0,az1,width_deg,px}]}}。
- * 404（該房沒有語意圖，見 prepare_semantic_doors.py）或任何請求失敗一律回傳 null——呼叫端視為
+ * 404（該房沒有語意圖，見 prepare_semantic_doors.py）或任何請求失敗一律回傳 null。呼叫端視為
  * 「此房無語意圖」，不拋例外（語意輔助勾選對沒有語意圖的房子必須完全不炸）。
  * @param {string} house
  * @returns {Promise<object|null>}

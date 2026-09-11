@@ -39,7 +39,7 @@ def env_report():
 
     ⚠ 兩項已知陷阱（2026-07-30 實測確認）：
       1. 套件名是 `fused-local-corr`，但**匯入名是 `local_corr`**。查錯名字會誤報「未安裝」。
-      2. 「裝了」≠「能用」——該 wheel 是預編的，torch ABI 不合時 `import` 會丟
+      2. 「裝了」≠「能用」。該 wheel 是預編的，torch ABI 不合時 `import` 會丟
          `undefined symbol: _ZNR5torch7Library4_def...`。所以必須**真的 import 一次**，
          只看 find_spec 會把「裝了但壞掉」誤判成可用。
     """
@@ -129,7 +129,7 @@ def main():
     env = env_report()
     print("[env] " + " | ".join("%s=%s" % kv for kv in env.items()), flush=True)
     if not env["fused_kernel_usable"]:
-        print("[env] ⚠ fused-local-corr 加速核心**不可用**（%s）—— 這是「未加速」的數字。"
+        print("[env] ⚠ fused-local-corr 加速核心**不可用**（%s）。這是「未加速」的數字。"
               % env["fused_kernel_note"], flush=True)
 
     pairs = sample_pairs(load_population(), args.n)

@@ -1,6 +1,6 @@
 """
 [模組用途]
-`RomaScoreCache` —— 以「無向配對」為鍵的稀疏聚合分數表。
+`RomaScoreCache`：以「無向配對」為鍵的稀疏聚合分數表。
 
 批次匹配跑完後，逐點的對應只留在 `roma_match/cache/` 的 `.npz` 內，記憶體中的匹配即丟棄。
 本模組另存一份「每對一筆」的聚合分數（匹配點數與信心度的總和／平均），讓下游工具
@@ -8,7 +8,7 @@
 也不必逐檔讀取原始對應。
 
 [鍵]
-`(house, min(imgA, imgB), max(imgA, imgB))` —— 無向。`match_direct(A, B)` 與
+`(house, min(imgA, imgB), max(imgA, imgB))`：無向。`match_direct(A, B)` 與
 `match_direct(B, A)` 共用同一份快取檔（見 `RoMaMatcher._get_cache_info` 的 `is_swapped`
 處理），描述的是同一組實體對應。
 

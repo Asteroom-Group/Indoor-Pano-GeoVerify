@@ -1,5 +1,5 @@
 /* =========================================================================
-   batch-panel.js — 批量否決浮動清單面板
+   batch-panel.js：批量否決浮動清單面板
    reject 模式中點任何圈（3D 或 ERP）→ 不再只否決單一 pair，而是：
      以該圈方位所在「聚類」（clustering.clusterDoors 的同 cluster members）取出全部 pending 候選，
      彈出固定於螢幕右側的浮動面板：每列「i–j · prob% · az°」+ checkbox（預設全勾）、
@@ -19,7 +19,7 @@ import { toast } from './util.js';
 import { nav } from './nav.js';
 import { setPanePreview, clearPanePreview, setErpPaneImage, isErpOn } from './erp.js';
 
-/** 目前面板列出的候選（{i,j,prob,az}）。 */
+/** 目前面板列出的候選（{i,j,prob,az}）。*/
 let _items = [];
 let _srcWhich = 'top';
 
@@ -95,7 +95,7 @@ export function openBatchReject(imgIdx, az, srcWhich){
   panel.style.display = 'flex';
 }
 
-/** 繪製面板清單列（含全選/全不選）。 */
+/** 繪製面板清單列（含全選/全不選）。*/
 function renderBody(){
   const body = document.getElementById('batch-panel-body'); if(!body) return;
   body.innerHTML = '';
@@ -127,14 +127,14 @@ function renderBody(){
   if(none) none.onclick = () => { setAll(false); };
 }
 
-/** 全選/全不選。 */
+/** 全選/全不選。*/
 function setAll(v){
   const body = document.getElementById('batch-panel-body'); if(!body) return;
   body.querySelectorAll('input[type=checkbox]').forEach(cb => { cb.checked = v; });
   updateDoCount();
 }
 
-/** 取得目前勾選的候選。 */
+/** 取得目前勾選的候選。*/
 function checkedItems(){
   const body = document.getElementById('batch-panel-body'); if(!body) return [];
   const out = [];
@@ -144,7 +144,7 @@ function checkedItems(){
   return out;
 }
 
-/** 更新「否決所選(N筆)」鈕文字與停用狀態。 */
+/** 更新「否決所選(N筆)」鈕文字與停用狀態。*/
 function updateDoCount(){
   const n = checkedItems().length;
   const btn = document.getElementById('batch-panel-do'); if(!btn) return;
@@ -153,7 +153,7 @@ function updateDoCount(){
   btn.classList.toggle('disabled', n === 0);
 }
 
-/** 執行批量否決（rejectPairs），關閉面板，reject 模式維持。 */
+/** 執行批量否決（rejectPairs），關閉面板，reject 模式維持。*/
 function doReject(){
   const items = checkedItems();
   if(items.length === 0){ return; }
@@ -162,7 +162,7 @@ function doReject(){
   // 不清 mode：reject 模式維持，可繼續點下一個圈
 }
 
-/** 關閉面板。 */
+/** 關閉面板。*/
 export function closeBatchReject(){
   const panel = document.getElementById('batch-panel');
   if(panel) panel.style.display = 'none';
@@ -170,7 +170,7 @@ export function closeBatchReject(){
   clearPanePreview();
 }
 
-/** 綁定面板按鈕（boot 一次）。 */
+/** 綁定面板按鈕（boot 一次）。*/
 export function initBatchPanel(){
   const bind = (id, fn) => { const el = document.getElementById(id); if(el) el.onclick = fn; };
   bind('batch-panel-do', doReject);

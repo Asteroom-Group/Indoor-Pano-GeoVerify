@@ -1,7 +1,7 @@
 """
 [腳本用途]
 把流程各階段的產出，組成一個「自足的房子產出包（bundle）」，供標註/檢視工具直接載入。
-工具因此不再依賴完整的資料集樹，改為「使用時手動選取一或數棟房子的產出包」——面向未知資料。
+工具因此不再依賴完整的資料集樹，改為「使用時手動選取一或數棟房子的產出包」。面向未知資料。
 
     <bundle_root>/<house>/
         <house>.json          幾何流程整合後的房子資料（連通、通道方位、共視統計）
@@ -21,7 +21,7 @@
         <house>.json          對外交付檔本身，未經任何修改
         images/*.jpg          該房 ERP 全景影像
 
-不放區域檔（交付檔已內嵌）、不放門語意、不放真值——下游收到的就是這些。工具能不能
+不放區域檔（交付檔已內嵌）、不放門語意、不放真值。下游收到的就是這些。工具能不能
 把它渲染出來，即為「交付內容是否足夠」的直接檢驗；缺什麼會當場看得出來，
 而不是等下游回報。
 
@@ -40,9 +40,12 @@ import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(SCRIPT_DIR)
+_SRC = os.path.join(ROOT_DIR, "src")
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
 if ROOT_DIR not in sys.path:
-    sys.path.insert(0, ROOT_DIR)
-from config import datasets_root, regions_root                 # noqa: E402
+    sys.path.append(ROOT_DIR)
+from roma_geo.config import datasets_root, regions_root                 # noqa: E402
 from house_dirs import resolve_task_dir                        # noqa: E402
 
 

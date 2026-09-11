@@ -1,5 +1,5 @@
 /* =========================================================================
-   viewmodes/registry.js — 檢視模式插件註冊表(插件化核心)
+   viewmodes/registry.js：檢視模式插件註冊表(插件化核心)
 
    「檢視模式」= 主畫面怎麼呈現目前的圖/配對:3D 球面、2D ERP 對比、透視裁切對、
    動態 morph…每個模式一個插件檔,放在 js/viewmodes/,由 index.js 逐行 import 註冊
@@ -17,8 +17,7 @@
      refresh() : void?   活躍中收到 'view-changed'(換圖/換對)時重繪(可省略)
 
    互斥規則:setViewMode(id) 先 exit 其它 active 插件再 enter 目標。
-   相容既有流程:標註模式(modes.js)會繞過 registry 直接 toggleErp() 自動帶入 ERP —
-   registry 訂閱 'view-changed',偵測到 ERP 被外部開啟時自動 exit 其它 overlay 模式,
+   相容既有流程:標註模式(modes.js)會繞過 registry 直接 toggleErp() 自動帶入 ERP。registry 訂閱 'view-changed',偵測到 ERP 被外部開啟時自動 exit 其它 overlay 模式,
    確保既有標註流程完全不變(ERP 永遠讓路)。
    ========================================================================= */
 
@@ -26,16 +25,16 @@ import { on, emit } from '../events.js';
 
 const _plugins = [];
 
-/** 註冊一個檢視模式插件(由各 mode-*.js 於 import 時自行呼叫)。 */
+/** 註冊一個檢視模式插件(由各 mode-*.js 於 import 時自行呼叫)。*/
 export function registerViewMode(p){
   if(!p || !p.id || _plugins.some(x => x.id === p.id)) return;
   _plugins.push(p);
 }
 
-/** @returns {Array} 已註冊插件(唯讀用途)。 */
+/** @returns {Array} 已註冊插件(唯讀用途)。*/
 export function getViewModes(){ return _plugins.slice(); }
 
-/** @returns {string} 目前活躍模式 id;無 overlay/ERP 時 = '3d'。 */
+/** @returns {string} 目前活躍模式 id;無 overlay/ERP 時 = '3d'。*/
 export function getViewMode(){
   for(const p of _plugins){
     if(p.id !== '3d' && p.isActive && p.isActive()) return p.id;
@@ -63,12 +62,12 @@ export function setViewMode(id){
   emit('view-changed');
 }
 
-/** 切換某模式(同一顆鈕再按一次 = 回 3D)。 */
+/** 切換某模式(同一顆鈕再按一次 = 回 3D)。*/
 export function toggleViewMode(id){
   setViewMode(getViewMode() === id ? '3d' : id);
 }
 
-/** 依 ownButton 插件生成按鈕(#viewmode-btns),高亮隨 getViewMode()。 */
+/** 依 ownButton 插件生成按鈕(#viewmode-btns),高亮隨 getViewMode()。*/
 function buildButtons(){
   const host = document.getElementById('viewmode-btns');
   if(!host) return;
@@ -84,7 +83,7 @@ function buildButtons(){
   refreshButtons();
 }
 
-/** 刷新按鈕高亮(含 registry 生成鈕;既有 btn-erp 的高亮由 erp.js 自管,不動)。 */
+/** 刷新按鈕高亮(含 registry 生成鈕;既有 btn-erp 的高亮由 erp.js 自管,不動)。*/
 function refreshButtons(){
   const cur = getViewMode();
   _plugins.filter(p => p.ownButton).forEach(p => {

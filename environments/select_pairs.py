@@ -41,9 +41,13 @@ import sys
 import numpy as np
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT)
+_SRC = os.path.join(ROOT, "src")
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
+if ROOT not in sys.path:
+    sys.path.append(ROOT)
 
-from config import matrices_root, pair_threshold, regions_root   # noqa: E402
+from roma_geo.config import matrices_root, pair_threshold, regions_root   # noqa: E402
 
 
 def load_house(mdir, house):

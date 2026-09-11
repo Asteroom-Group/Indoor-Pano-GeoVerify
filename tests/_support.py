@@ -21,8 +21,11 @@ import numpy as np
 
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(TESTS_DIR)
+SRC = os.path.join(ROOT, "src")
+if SRC not in sys.path:
+    sys.path.insert(0, SRC)
 if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
+    sys.path.append(ROOT)
 
 # 專案全域採用 `json.load(open(...))` 的寫法（三十餘處），unittest 會為此發出
 # ResourceWarning。CPython 在參考計數歸零時即關檔，實際行為無誤；若不過濾，每次執行
@@ -132,7 +135,7 @@ def cone_matches(n=200, half_angle_deg=15.0, R=None, t=None, W=W_DEF, H=H_DEF,
     """產生方位集中於窄錐的合成匹配，用於楔形（門洞）旗標的測試。
 
     3D 點聚在單一方向的窄錐內，兩側的方位分佈因此都很窄。深度須有足夠變化，
-    否則窄錐加淺深度可由純旋轉解釋，會被判為退化而非門洞。
+    否則窄錐加淺深度可由純旋轉解釋，會被判為退化。
     """
     rng = np.random.default_rng(seed)
     R = rot_matrix([0.0, 1.0, 0.0], 10.0) if R is None else np.asarray(R, dtype=float)

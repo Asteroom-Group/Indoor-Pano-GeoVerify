@@ -1,4 +1,4 @@
-# matrices/ — 連通性矩陣
+# 連通性矩陣
 
 連通性粗篩的輸出。本專案據此決定哪些配對送進 RoMa 幾何驗證，
 並在標註工具中顯示粗篩的連通機率。
@@ -64,7 +64,7 @@ python config.py
 | `<house>_doormap.npy` | `(N, 8)` | 每張圖的門方位 8-bin aux logits。**現行上游已不再產出**，消費端已移除；舉出僅為舊目錄容錯 |
 
 `<house>` 必須與 `datasets/` 底下的資料夾名逐字一致（例：`DollhouseTask_58553`、
-`DollhouseTask_58472_NoOutdoor`——`_NoOutdoor` 後綴時有時無）。
+`DollhouseTask_58472_NoOutdoor`，其中 `_NoOutdoor` 後綴時有時無）。
 
 ### ch0 的單位
 

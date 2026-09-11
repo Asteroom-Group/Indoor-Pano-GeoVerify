@@ -4,6 +4,27 @@
 
 ## 開始使用
 
+先建立環境。本專案用 uv，虛擬環境裡沒有 pip。Windows：
+
+```powershell
+cd environments
+.\setup_env.ps1
+```
+
+Linux：
+
+```bash
+bash environments/setup_env.sh
+```
+
+相依版本釘在 `environments/requirements-core.txt`。torch 由安裝腳本從 CUDA 13 索引安裝，不寫入打包設定。
+
+把本套件裝進該虛擬環境（在專案根目錄）：
+
+```powershell
+uv pip install -e . --python venv\Scripts\python.exe
+```
+
 單對：
 
 ```python
@@ -13,30 +34,22 @@ res = verify_pair("a.jpg", "b.jpg")
 pub = to_public(res)
 ```
 
+尚未建立環境時，第一次呼叫會指出缺少哪些相依，以及相依版本在 `environments/requirements-core.txt`。
+
 呼叫端指定影像路徑即可。不必先切換工作目錄，也不必設定環境變數。快取目錄可用 `cache_dir=` 傳入。
 
-整間房，逐步呼叫：
+整間房：
 
 ```python
-from config import Settings
-from pipeline import select_pairs, match_pairs, estimate_poses, prepare_house, export_public_houses
+from roma_geo.config import Settings
+from roma_geo.pipeline import run_house
 
 s = Settings(datasets="資料集根目錄", output="產出根目錄", cache="快取目錄")
-select_pairs(settings=s, houses=["Office_A"])
-match_pairs(settings=s, pairs_csv=s.regions_root() + "/_pairs.csv")
-estimate_poses(settings=s, pairs_csv=s.regions_root() + "/_pairs.csv")
-prepare_house(settings=s, houses=["Office_A"])
-export_public_houses(settings=s, houses=["Office_A"])
-```
-
-一次跑完：
-
-```python
-from pipeline import run_house
-
 result = run_house("Office_A", settings=s)
-# result.degradations 列出缺席的可選輸入與採用的降級
 ```
+
+語意矯正由呼叫端開啟：`Settings(..., semantic_correct=True)`。預設關閉。
+矯正只作用於 `az_source` 為 `geo` 的方位：規則要用共視區域判斷門是否包住共視，上游來源的配對沒有共視區域，方位維持原值。
 
 參數與欄位見 [API.md](API.md)。
 

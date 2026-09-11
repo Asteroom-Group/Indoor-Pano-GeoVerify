@@ -122,7 +122,10 @@ class RoMaMatcher:
         _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         if _root not in sys.path:
             sys.path.insert(0, _root)
-        from names import house_of, image_stem
+        try:
+            from roma_geo.names import house_of, image_stem
+        except ImportError:
+            from names import house_of, image_stem
 
         ha, na = house_of(path_a), image_stem(path_a)
         hb, nb = house_of(path_b), image_stem(path_b)
@@ -144,7 +147,7 @@ class RoMaMatcher:
             from core_roma_match.RoMaScan import MatcherFactory
             self.matcher = MatcherFactory.create(model_type=self.model_type, device=self.device, conf_threshold=self.conf_threshold)
 
-    def batch_process(self, tasks, mode="core", exp_name=None):
+    def batch_process(self, tasks, mode="direct", exp_name=None):
         """
         批次處理匹配與評分任務 (向後相容介面)。
         現在統一重定向至階段式邏輯。

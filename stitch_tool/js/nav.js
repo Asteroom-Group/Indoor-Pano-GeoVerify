@@ -1,5 +1,5 @@
 /* =========================================================================
-   nav.js — 導覽狀態與導覽入口
+   nav.js：導覽狀態與導覽入口
    共享可變狀態 nav：curImage / curPair / viewFrom / reciprocalKey / erpTopImg / erpBotImg。
    導覽入口：gotoImage / jumpToPair / gotoCurrentPair / peekToPair / firstPending / walkThroughDoor。
    實際貼圖/相機/標記交給 scene3d.loadImageView；本模組只決定「看哪張圖、哪一對」。
@@ -11,7 +11,7 @@ import { getHouseData, pairStatus, pairKey } from './state.js';
 import { loadImageView, faceAz } from './scene3d.js';
 import { emit } from './events.js';
 
-/** 共享導覽狀態（就地變更）。 */
+/** 共享導覽狀態（就地變更）。*/
 export const nav = {
   curImage:-1,     // 目前球面顯示的圖 index
   curPair:null,    // 正在複核的候選 {i,j,...}

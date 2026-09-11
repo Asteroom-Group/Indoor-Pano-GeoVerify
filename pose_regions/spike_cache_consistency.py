@@ -215,7 +215,7 @@ if __name__ == "__main__":
     ok = spike_three_pairs(lines)
     if not a.skip_scan:
         ok &= scan_all(lines)
-    lines += ["", f"**總判定:{'PASS — cache 座標約定 = 原圖 ERP 像素 (x_a,y_a,x_b,y_b,conf),與 live 重跑同約定' if ok else 'FAIL — 有不一致,見上表'}**"]
+    lines += ["", f"**總判定:{'PASS：cache 座標約定 = 原圖 ERP 像素 (x_a,y_a,x_b,y_b,conf),與 live 重跑同約定' if ok else 'FAIL：有不一致,見上表'}**"]
     out = os.path.join(SCRIPT_DIR, "spike_cache_consistency_report.md")
     with open(out, "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines) + "\n")

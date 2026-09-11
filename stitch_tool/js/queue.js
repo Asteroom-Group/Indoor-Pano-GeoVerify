@@ -1,5 +1,5 @@
 /* =========================================================================
-   queue.js — 候選佇列 + 統計列 + 統計分類過濾
+   queue.js：候選佇列 + 統計列 + 統計分類過濾
    rebuildQueue / updateStats / toggleStatFilter / resetStatFilter。
    訂閱 'house-loaded' / 'state-changed' / 'view-changed' 自動重繪。
    依賴：config / state / nav / events。過濾與顯示邏輯逐字沿用原 app.js。
@@ -10,14 +10,14 @@ import { STATE, getHouseData, pairStatus } from './state.js';
 import { nav, jumpToPair } from './nav.js';
 import { on } from './events.js';
 
-/** 統計分類過濾旗標：'all'|'confirmed'|'rejected'|'eliminated'|'pending'。 */
+/** 統計分類過濾旗標：'all'|'confirmed'|'rejected'|'eliminated'|'pending'。*/
 let filterCategory = 'all';
 
 /**
  * 依排序模式回傳 hd.pairs 的排序副本。'prob'（預設）沿用伺服器已排序的順序（不重排，省事）；
  * 'roma'（UI 文案已改「幾何驗證」，排序鍵沿用 'roma' 字串避免動到舊 state）依 geo_n_inlier
  * （幾何驗證內點數）由高到低，null（不在 _ranking_eval.csv＝未過粗篩/沒跑 RoMa）沉到最後、
- * 組內再依 prob 排（次要排序鍵）。排序鍵取 geo_n_inlier 而非未經幾何驗證的 RoMa 匹配數，
+  * 組內再依 prob 排（次要排序鍵）。排序鍵取 geo_n_inlier，
  * 判別力比較見 pose_regions/covis_ranking_report.md
  * （roma_conf_* 欄位仍保留於資料層，供向後相容/除錯對照）。
  * 不動 hd.pairs 本身（回傳新陣列）。
@@ -50,7 +50,7 @@ function getFilterValue(p, romaMode){
   return (p.geo_inlier_rate != null) ? p.geo_inlier_rate : 0;
 }
 
-/** 重建佇列列表並更新統計。 */
+/** 重建佇列列表並更新統計。*/
 export function rebuildQueue(){
   const hd = getHouseData();
   if(!hd) return;
@@ -113,10 +113,10 @@ export function rebuildQueue(){
   scrollCurrentIntoView();
 }
 
-/** 目前 pair 對應的佇列列（rebuildQueue 內設定）。 */
+/** 目前 pair 對應的佇列列（rebuildQueue 內設定）。*/
 let _currentLi = null;
 
-/** 把目前 pair 的佇列列捲到可見（若不在視窗內）。 */
+/** 把目前 pair 的佇列列捲到可見（若不在視窗內）。*/
 function scrollCurrentIntoView(){
   const li = _currentLi; _currentLi = null;
   if(!li) return;
@@ -159,7 +159,7 @@ export function toggleStatFilter(cat){
   rebuildQueue();
 }
 
-/** 重置過濾為 all 並清按鈕高亮（換房子/reset 時）。 */
+/** 重置過濾為 all 並清按鈕高亮（換房子/reset 時）。*/
 export function resetStatFilter(){
   filterCategory = 'all';
   ['conf', 'rej', 'elim', 'rem'].forEach(key => {
@@ -168,7 +168,7 @@ export function resetStatFilter(){
   });
 }
 
-/** 訂閱事件：房子載入 / 狀態改變 / 視角改變時重建佇列。 */
+/** 訂閱事件：房子載入 / 狀態改變 / 視角改變時重建佇列。*/
 export function initQueue(){
   on('house-loaded', rebuildQueue);
   on('state-changed', rebuildQueue);

@@ -1,7 +1,7 @@
 /* =========================================================================
-   viewmodes/mode-crop.js — 模式 A「透視裁切對」
+   viewmodes/mode-crop.js：模式 A「透視裁切對」
    兩張 gnomonic 並排;可切對望/同向。
-   互動:在 canvas 上拖曳改方位 —— 水平=yaw、垂直=俯仰(2026-07-30 加,上限 ±LAT_MAX);
+   互動:在 canvas 上拖曳改方位。水平=yaw、垂直=俯仰(2026-07-30 加,上限 ±LAT_MAX);
    滾輪改 FOV。
    疊圖:共視區域遮罩(兩側同色 = 同一塊實體空間)
    + 連通道頂帶(只吃方位角);兩者各自有開關,互動重繪時一起重畫。
@@ -34,7 +34,7 @@ let _baseAzA = 0, _baseAzB = 0;
 let _offA = 0, _offB = 0;       // 相對基準的 yaw 偏移
 let _latA = 0, _latB = 0;       // 俯仰(度),>0 抬頭;基準恆為水平線
 let _fovA = FOV_DEFAULT, _fovB = FOV_DEFAULT;
-let _pairKey = '';              // house|i|j — 換對時重置偏移
+let _pairKey = '';              // house|i|j：換對時重置偏移
 let _erpA = null, _erpB = null; // 快取 ImageData,拖曳時即時重繪
 let _pair = null;
 let _raf = 0;
@@ -118,7 +118,7 @@ function buildDom(){
   bindCanvas('crop-canvas-b', 'b');
 }
 
-/** 兩顆疊圖鈕的文字/高亮/停用狀態(無區域資料時遮罩鈕停用)。 */
+/** 兩顆疊圖鈕的文字/高亮/停用狀態(無區域資料時遮罩鈕停用)。*/
 function syncToggleBtns(){
   const hasReg = !!(_sides && (_sides.i.length || _sides.j.length));
   const regBtn = document.getElementById('crop-reg');
@@ -210,7 +210,7 @@ function applyBaseFromPair(){
   _srcHint = passageSourceHint(pair, semantic);
   _baseAzA = azI;
   _baseAzB = _sameDir ? azJ + 180 : azJ;
-  // 通道方位本身與「對望/同向」和拖曳偏移無關 — 同向時 B 背對通道,帶子自然落在視野外
+  // 通道方位本身與「對望/同向」和拖曳偏移無關：同向時 B 背對通道,帶子自然落在視野外
   _azPassA = azI;
   _azPassB = azJ;
   return true;
@@ -314,7 +314,7 @@ function refresh(){
   const fa = hd.images[_pair.i], fb = hd.images[_pair.j];
   const urlOf = f => '/images/' + encodeURIComponent(house) + '/' + encodeURIComponent(f);
   setHint('載入 ERP…');
-  // 區域 JSON 缺(404 / 內點不足)是常態,不擋畫面 — 只關掉遮罩並在 hint 說明
+  // 區域 JSON 缺(404 / 內點不足)是常態,不擋畫面：只關掉遮罩並在 hint 說明
   const regsP = fetchRegions(house, fa, fb).then(rj => {
     if(rj && rj.error){ _sides = null; _regNote = '無共視區域:' + rj.error; return; }
     const s = sidesFromRegions(rj);

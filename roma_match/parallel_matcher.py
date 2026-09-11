@@ -13,7 +13,7 @@ from tqdm import tqdm
 def _timing_append_row(csv_path, fieldnames, row):
     """選配計時鉤子用的附加式 CSV 寫入：UTF-8，檔案不存在或為空時才寫表頭。
 
-    全程以例外包住 —— 計時寫入失敗一律靜默略過，不得影響匹配本身。
+    全程以例外包住。計時寫入失敗一律靜默略過，不得影響匹配本身。
     刻意只用標準函式庫：worker 是 spawn 出來的行程，不應相依本專案的 sys.path 設定。
     """
     try:
@@ -202,7 +202,7 @@ class ParallelScorer:
     通用批次評分引擎：支援階段式執行 (match, inference, score)。
     每個 Worker 獨立處理一個 task，由多 GPU 分攤負載。
     """
-    def __init__(self, workers='auto', mode="core", model_type="roma_v2", conf=0.5, exp_name=None, use_cache=True):
+    def __init__(self, workers='auto', mode="direct", model_type="roma_v2", conf=0.5, exp_name=None, use_cache=True):
         self.num_gpus = torch.cuda.device_count()
         self.n_workers = self.num_gpus if str(workers).lower() == 'auto' else int(workers)
         self.mode = mode

@@ -1,5 +1,5 @@
 /* =========================================================================
-   ui.js — 按鈕綁定 + 快捷鍵 + 門顯示層開關 + 統計過濾 + UI toggle + 動作可用性刷新
+   ui.js：按鈕綁定 + 快捷鍵 + 門顯示層開關 + 統計過濾 + UI toggle + 動作可用性刷新
 
      - 換圖箭頭移出圖面：3D 用動作列導覽組的 btn-prev-img/btn-next-img；ERP 用面板控制列
        erp-prev/next-top/bot（控制列在圖框外，不再需要 pointerdown 防冒泡）。
@@ -25,7 +25,7 @@ import { rebuildQueue, toggleStatFilter } from './queue.js';
 import { on, emit } from './events.js';
 import { getCachedHouseDoors, ensureHouseDoors } from './semantic.js';
 
-/** 依 STATE.ui 勾選門顯示層三個開關 + 語意輔助。 */
+/** 依 STATE.ui 勾選門顯示層三個開關 + 語意輔助。*/
 export function applyUiToggles(){
   const set = (id, v) => { const el = document.getElementById(id); if(el) el.checked = v; };
   set('tg-pairwise', STATE.ui.pairwise);
@@ -36,7 +36,7 @@ export function applyUiToggles(){
 }
 
 /**
- * 語意輔助側欄提示——house 級的「有沒有語意圖」訊息，獨立於目前 pair（不需要選到
+ * 語意輔助側欄提示。house 級的「有沒有語意圖」訊息，獨立於目前 pair（不需要選到
  * 對、不需要在 ERP 才看得到），讓使用者一勾選就知道這房子能不能用。資料未抓過時先顯示
  * 「載入中」，抓完後 ensureHouseDoors 的 onReady 會再呼叫一次本函式补上結果。
  */
@@ -76,7 +76,7 @@ export function syncThresholdUI(){
   if(romaHint) romaHint.style.display = romaMode ? 'block' : 'none';
 }
 
-/** 綁定所有 UI 事件與快捷鍵。 */
+/** 綁定所有 UI 事件與快捷鍵。*/
 export function wireUI(){
   const bind = (id, ev, fn) => { const el = document.getElementById(id); if(el) el[ev] = fn; };
 
@@ -314,7 +314,7 @@ function toggleErpShortcut(){
 /**
  * 回目前對：有 curPair 則跳它，否則進第一個 pending。
  * 若 ERP 面板本來就已經顯示這一對（不論上下/左右順序），保留使用者原本的排列，不呼叫
- * jumpToPair（它一律把 i 排上面、j 排下面）——修正否決/未連接通道等模式退出（Esc／退出鈕／
+ * jumpToPair（它一律把 i 排上面、j 排下面）。修正否決/未連接通道等模式退出（Esc／退出鈕／
  * 回目前對鈕）後，圖片上下被強制重排、看起來像互換了的問題。
  */
 function gotoBack(){

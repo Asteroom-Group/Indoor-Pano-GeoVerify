@@ -1,5 +1,5 @@
 /* =========================================================================
-   compass.js — 羅盤條（底部 360° 尺）：renderCompass / resizeCompass / drawCompass
+   compass.js：羅盤條（底部 360° 尺）：renderCompass / resizeCompass / drawCompass
    drawCompass 每幀重畫刻度（訂閱 'frame'）；resizeCompass 訂閱 'resize'；
    renderCompass(imgIdx) 由 scene3d 於重畫標記時呼叫、並訂閱 'view-changed'。
    依賴：config / geometry / clustering / state / nav / scene3d(getLon,getCamera)。
@@ -14,7 +14,7 @@ import { nav } from './nav.js';
 import { getLon, getCamera } from './scene3d.js';
 import { on } from './events.js';
 
-/** 目前羅盤上顯示的門刻度。 */
+/** 目前羅盤上顯示的門刻度。*/
 let compassDoors = [];
 
 /**
@@ -51,14 +51,14 @@ export function renderCompass(imgIdx){
   resizeCompass();
 }
 
-/** 依容器寬度調整 canvas 尺寸。 */
+/** 依容器寬度調整 canvas 尺寸。*/
 export function resizeCompass(){
   const cv = document.getElementById('compass'); if(!cv) return;
   const w = cv.clientWidth || (cv.parentNode && cv.parentNode.clientWidth) || 0;
   if(w && cv.width !== w){ cv.width = w; cv.height = 46; }
 }
 
-/** 每幀重畫羅盤（FOV 視窗、正中線、門刻度）。 */
+/** 每幀重畫羅盤（FOV 視窗、正中線、門刻度）。*/
 export function drawCompass(){
   const wrap = document.getElementById('compass-wrap');
   if(!wrap || wrap.style.display === 'none') return;
@@ -86,7 +86,7 @@ export function drawCompass(){
   });
 }
 
-/** 訂閱事件：每幀重畫、resize 調整、換視角/狀態時重建刻度。 */
+/** 訂閱事件：每幀重畫、resize 調整、換視角/狀態時重建刻度。*/
 export function initCompass(){
   on('frame', drawCompass);
   on('resize', resizeCompass);

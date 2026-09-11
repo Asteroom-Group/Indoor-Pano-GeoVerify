@@ -32,10 +32,13 @@ import numpy as np
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(SCRIPT_DIR)  # 專案根目錄
+_SRC = os.path.join(ROOT_DIR, "src")
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
 if ROOT_DIR not in sys.path:
-    sys.path.insert(0, ROOT_DIR)
-import upstream_direction                          # noqa: E402（要先補 sys.path）
-from config import datasets_root, matrices_root, regions_root   # noqa: E402
+    sys.path.append(ROOT_DIR)
+from roma_geo import upstream_direction                          # noqa: E402
+from roma_geo.config import datasets_root, matrices_root, regions_root   # noqa: E402
 
 DATA_ROOT = datasets_root()                        # 可用 ROMA_GEO_DATASETS 覆寫，見 config.py
 # 連通性矩陣來源。優先序：--oof_dir > 環境變數 ROMA_GEO_MATRICES > matrices/<版本>/
@@ -81,13 +84,13 @@ def az_from_matrix(M, i, j):
     """方位(度) i->j = atan2(ch1=sin, ch2=cos)。已對 localization CSV 驗證一致。
 
     解碼本身在 `upstream_direction.py`：上游粗篩之後會由子計畫的模型整體取代，
-    屆時方向可能不是 sin/cos 而是影像上的框，換來源時只改那個模組。
+    屆時方向可能是影像上的框，換來源時只改那個模組。
     """
     return upstream_direction.from_sincos(M[i, j, 1], M[i, j, 2])
 
 
 def _csv_num(s, cast=float):
-    """CSV 欄位轉數值；空字串一律轉 None（而非 NaN 或 0）。posed=0 列的 conf_used 等欄位常是
+    """CSV 欄位轉數值；空字串一律轉 None。posed=0 列的 conf_used 等欄位常是
     空字串，用這個 helper 才不會意外炸成 ValueError 或混進 NaN。"""
     s = (s or "").strip()
     return cast(s) if s != "" else None
@@ -327,8 +330,14 @@ def main():
             "n_pairs": len(data["pairs"]),
             "n_gt_connected_pairs": data["n_gt_connected_pairs"],
         })
-        print(f"[ok] {h}: N={data['n_images']} pairs={len(data['pairs'])} "
-              f"gt_conn={data['n_gt_connected_pairs']} -> {out}")
+        tag = "[ok]"
+        extra = ""
+        if data.get("has_connectivity_matrix") is False:
+            tag = "[degraded]"
+            extra = " 連通矩陣缺席，改以影像兩兩配對。"
+        print("%s %s: N=%s pairs=%s gt_conn=%s -> %s%s"
+              % (tag, h, data["n_images"], len(data["pairs"]),
+                 data["n_gt_connected_pairs"], out, extra))
 
     json.dump(index, open(os.path.join(args.out_dir, "_index.json"), "w", encoding="utf-8"),
               ensure_ascii=False, indent=2)

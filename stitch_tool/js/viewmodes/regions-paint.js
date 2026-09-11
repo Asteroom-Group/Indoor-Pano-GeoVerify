@@ -1,5 +1,5 @@
 /* =========================================================================
-   viewmodes/regions-paint.js — 共視區域遮罩:透視畫布繪製 + 兩側取用
+   viewmodes/regions-paint.js：共視區域遮罩:透視畫布繪製 + 兩側取用
    低層模組(由 mode-walk / mode-crop 共用):只 import gnomonic、不碰 DOM。
    2026-07-29 從 mode-walk.js 原樣抽出(commit 84af7ce 的「形狀不隨鏡頭變形」
    近平面裁切管線),行為不得變。
@@ -14,10 +14,10 @@ import { erpPxToDir, dirToCropRaw, clipDirsNear } from './gnomonic.js';
 const DENSIFY_DEG = 2;         // 遮罩邊加密步長(度)
 const DENSIFY_MAX = 64;        // 單邊加密上限
 
-/** 區域配色(walk / crop / regions 三模式同色序 → 跨模式看同一個 R 編號同色)。 */
+/** 區域配色(walk / crop / regions 三模式同色序 → 跨模式看同一個 R 編號同色)。*/
 export const REG_PALETTE = ['#e6194b', '#3cb44b', '#4363d8', '#f58231', '#911eb4', '#42d4f4', '#f032e6', '#bfef45'];
 
-/** ERP 直邊在透視圖上是曲線 → 依弧長加密,每段約 DENSIFY_DEG 度。 */
+/** ERP 直邊在透視圖上是曲線 → 依弧長加密,每段約 DENSIFY_DEG 度。*/
 export function densifyToDirs(poly, W, H){
   const step = W * DENSIFY_DEG / 360;          // 每度對應的 ERP 像素(H/180 同值)
   const out = [];
@@ -33,7 +33,7 @@ export function densifyToDirs(poly, W, H){
   return out;
 }
 
-/** 點是否在 polygon 內(ray casting);x 可超出 [0,W) 的過縫 poly 也適用。 */
+/** 點是否在 polygon 內(ray casting);x 可超出 [0,W) 的過縫 poly 也適用。*/
 export function pointInPoly(x, y, poly){
   let inside = false;
   for(let i = 0, j = poly.length - 1; i < poly.length; j = i++){
@@ -51,7 +51,7 @@ export function pointInPoly(x, y, poly){
  * 共視區遮罩:多邊形在 ERP 上是固定的,畫出來的形狀也必須只隨鏡頭「換位置」不「換形狀」。
  * 作法:加密 → 轉方向空間 → 近平面裁切 → 整條投影(不逐頂點剔除,超界交給 canvas 裁)。
  * 過縫不必分 −W/0/+W 三份:ERP 的 x 平移 W 在方向空間是同一組向量,一次就對。
- * 鏡頭深入區域內部時,裁切後的環本來就會蓋滿全幀 — 不需要(也不該)整格填色的保底。
+ * 鏡頭深入區域內部時,裁切後的環本來就會蓋滿全幀：不需要(也不該)整格填色的保底。
  * @param {Array<{poly:Array,color?:string}>} sidePolys 該側的 region 清單
  * @param {number} W,H   ERP 原圖尺寸
  * @param {number} az,fov 鏡頭朝向 / 視角
@@ -95,7 +95,7 @@ export function paintRegionsOn(ctx, sidePolys, W, H, az, fov, size, lat = 0){
 }
 
 /** 單側區域面積(占全圖比例)。schema wp1-step3-v2 已存 area_frac(凸包面積/WH),
-    直接用;缺欄位(舊版檔)才用 polygon shoelace 現算 — x 已 unwrap,直接算即可。 */
+    直接用;缺欄位(舊版檔)才用 polygon shoelace 現算。x 已 unwrap,直接算即可。*/
 export function areaFracOf(side, W, H){
   const a = side && side.area_frac;
   if(typeof a === 'number' && isFinite(a) && a >= 0) return a;

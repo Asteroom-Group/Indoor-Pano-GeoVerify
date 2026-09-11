@@ -2,7 +2,7 @@
 [腳本用途]
 Kaggle Notebook 儲存格腳本：把本專案從零建起來並執行驗收。
 
-**整份內容直接貼進一個 Notebook 儲存格執行即可**，不需要先 clone —— 取得程式碼是
+**整份內容直接貼進一個 Notebook 儲存格執行即可**，不需要先 clone：取得程式碼是
 本腳本自己的第一項工作。也可以在已有 repo 的情況下用 `%run` 或當一般腳本執行。
 
 依序呼叫本專案自己的腳本：
@@ -110,7 +110,7 @@ def check_gpu():
         print("[warn] 無法執行 nvidia-smi（%s），跳過 GPU 預檢。" % type(e).__name__)
         return
     if not out:
-        print("[warn] nvidia-smi 沒有回報 GPU —— Notebook 可能未開啟加速器。")
+        print("[warn] nvidia-smi 沒有回報 GPU：Notebook 可能未開啟加速器。")
         return
     print("[gpu] %s" % out.replace("\n", " | "))
     for line in out.splitlines():

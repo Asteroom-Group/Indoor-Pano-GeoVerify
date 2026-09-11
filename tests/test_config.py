@@ -137,7 +137,7 @@ class TestEnvNameConsistency(unittest.TestCase):
         self.assertIn(config.ENV_DATASETS, read("pose_regions", "estimate_relative_pose.py"))
 
     def test_datasets_override_reaches_pose_regions(self):
-        """實跑驗證而非只比字串：`find_house_image` 須跟著環境變數走。"""
+        """實跑驗證：`find_house_image` 須跟著環境變數走。"""
         from pose_regions import find_house_image
         with temp_dir() as d:
             house = "DollhouseTask_test"

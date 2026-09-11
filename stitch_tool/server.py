@@ -36,7 +36,7 @@ import gt_hotspot                                 # noqa: E402（同層模組，
 # *_HOTSPOT.json？只在 <house>.json 還沒有 GT 欄位時才有作用：/api/house/<house> 讀取時
 # 會即時算出 GT 補上（不覆寫既有欄位），對外交付檔（本來就不含 GT）正是最需要這條路徑的
 # 情境。邏輯與 prepare_house_data.py 建檔時共用同一份實作，見 gt_hotspot.py。房號對不上
-# 或只對上部分影像都會印在伺服器 log，不會安靜略過——這是實際發生過的使用者誤解來源。
+# 或只對上部分影像都會印在伺服器 log，不會安靜略過。這是實際發生過的使用者誤解來源。
 BUNDLE_ROOT = os.environ.get("STITCH_BUNDLE_ROOT") or os.path.join(ROOT_DIR, "bundles")
 
 os.makedirs(STATE_DIR, exist_ok=True)
@@ -58,7 +58,7 @@ def _images_dir(house):
 # ---- 對外交付檔的相容層 ----
 # 包內的 <house>.json 有兩種來源：流程內部的房子資料，或 export_public.py 產出的
 # **對外交付檔**（下游實際收到的那一份）。後者刻意不含評估欄位，且幾何證據欄位改用
-# 對外名稱。此處在讀取時做名稱對映，讓工具能直接載入未經修改的交付檔——工具跑得起來
+# 對外名稱。此處在讀取時做名稱對映，讓工具能直接載入未經修改的交付檔。工具跑得起來
 # 本身就是「交付內容足夠」的檢驗，跑不起來就當場知道少了什麼。
 #
 # 對映方向為對外名 → 內部名：前端既有程式碼沿用內部名，換方向要動七處 JS，
@@ -158,7 +158,7 @@ class Handler(SimpleHTTPRequestHandler):
 
     def end_headers(self):
         # 本地開發工具：JS/HTML/CSS 一律 no-store。瀏覽器對 ES module 的快取很兇，
-        # 改完程式常常連 Ctrl+F5 都帶不動子模組（歷史痛點，通用規則有記載）——從源頭關掉。
+        # 改完程式常常連 Ctrl+F5 都帶不動子模組（歷史痛點，通用規則有記載）。從源頭關掉。
         p = self.path.split("?", 1)[0].lower()
         if p == "/" or p.endswith((".js", ".html", ".css")):
             self.send_header("Cache-Control", "no-store")

@@ -49,3 +49,8 @@ Desktop.ini
 
 # 房子產出包（pack_bundle.py 產物，含影像；跑一遍生成，不入庫）
 bundles/
+
+# 打包產物（pip install -e . 產生；每次安裝重生，不入庫）
+*.egg-info/
+build/
+dist/

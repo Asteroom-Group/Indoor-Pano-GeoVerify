@@ -10,7 +10,7 @@
 
 品質指標:
   - inlier 率(對極 RANSAC 內點 / 使用點數)
-  - 方位覆蓋度 / 楔形寬度:內點在 A/B 兩側的方位角分佈 — 「涵蓋幾成 10° bin」與
+  - 方位覆蓋度 / 楔形寬度:內點在 A/B 兩側的方位角分佈：「涵蓋幾成 10° bin」與
     「包住 80% 內點的最窄圓弧」。跨房穿門 pair 的 match 本來就集中在門洞楔形,
     要與退化垃圾區分,不能一律當退化丟。
   - rot-only 殘差:內點被純旋轉解釋的中位角誤差(近零基線偵測)
@@ -473,7 +473,7 @@ def write_report(rows, total_s, args, out_path):
         lines.append(
             f"- **分層品質(az 誤差 vs GT,非退化)**:0.65 級中位 {q(err_t65,50)}°/p90 {q(err_t65,90)}°"
             f"(n={len(err_t65)});{args.retry_conf} 撈回級中位 {q(err_t30,50)}°/p90 {q(err_t30,90)}°"
-            f"(n={len(err_t30)})— 撈回級重尾,下游必須以 conf_used 分層 gate")
+            f"(n={len(err_t30)})。撈回級重尾,下游必須以 conf_used 分層 gate")
     else:
         lines.append("- 分層品質(az 誤差 vs GT):" + NO_GT
                      + " 撈回級品質重尾是既有結論,下游仍必須以 `conf_used` 分層 gate。")
@@ -543,8 +543,6 @@ def run_pose_batch(cache_dir, out_dir, datasets_root=None, pairs=None, limit=0, 
     on_missing: skip 略過缺圖；error 則丟出 RomaGeoError。
     回傳寫入 summary 的列數。
     """
-    if ROOT not in sys.path:
-        sys.path.insert(0, ROOT)
     from types import SimpleNamespace
     os.makedirs(out_dir, exist_ok=True)
     if pairs is not None:
@@ -557,7 +555,7 @@ def run_pose_batch(cache_dir, out_dir, datasets_root=None, pairs=None, limit=0, 
             elif os.path.isfile(pr):
                 files.append(pr)
             else:
-                from errors import RomaGeoError
+                from roma_geo.errors import RomaGeoError
                 raise RomaGeoError(
                     "檔案不存在：%s" % p,
                     input_name="匹配快取",
@@ -596,7 +594,7 @@ def run_pose_batch(cache_dir, out_dir, datasets_root=None, pairs=None, limit=0, 
         img_b = find_house_image(house, nb, datasets_root=datasets_root)
         if not (img_a and img_b):
             if on_missing == "error":
-                from errors import RomaGeoError
+                from roma_geo.errors import RomaGeoError
                 raise RomaGeoError(
                     "找不到 %s.jpg / %s.jpg" % (na, nb),
                     input_name="全景影像",

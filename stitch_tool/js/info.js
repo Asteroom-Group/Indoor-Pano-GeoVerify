@@ -1,5 +1,5 @@
 /* =========================================================================
-   info.js — 中央資訊面板 / 狀態列（目前對 / 穿門檢視 / 通道方位角度 / 無配對提示）
+   info.js：中央資訊面板 / 狀態列（目前對 / 穿門檢視 / 通道方位角度 / 無配對提示）
    ERP/3D 無衍生配對時，「目前沒有配對」提示改顯示於此狀態列（#i-pair），
      不再取代面板內容；面板兩張圖照常顯示、可換圖、可放圈。
    訂閱 'view-changed' / 'state-changed' / 'erp-derived' 自動更新。
@@ -14,7 +14,7 @@ import { statusLabel } from './util.js';
 import { passageSourceHint } from './srchint.js';
 import { on } from './events.js';
 
-/** 依目前導覽狀態更新資訊面板文字。 */
+/** 依目前導覽狀態更新資訊面板文字。*/
 export function refreshInfoPair(){
   const el = document.getElementById('i-pair'); if(!el) return;
   const hd = getHouseData();
@@ -54,12 +54,12 @@ export function refreshInfoPair(){
     const azSrcTxt = sh.text
       ? (' · ' + (sh.fallback ? '<span style="color:#e05a3a">⚠ ' + sh.text + '</span>' : sh.text))
       : '';
-    const probTxt = (nav.curPair.prob != null) ? (nav.curPair.prob * 100).toFixed(1) + '%' : '—';
+    const probTxt = (nav.curPair.prob != null) ? (nav.curPair.prob * 100).toFixed(1) + '%' : '。';
     el.innerHTML = '目前對 <b>' + nav.curPair.i + '–' + nav.curPair.j + '</b> · prob ' +
       probTxt + ' · ' + statusLabel(st) + (azTxt ? (' · 通道方位 ' + azTxt + azSrcTxt) : '');
   } else if(nav.reciprocalKey != null){
     el.innerHTML = '穿門檢視 img ' + nav.curImage + '（點藍圈返回；下一對 ' +
-      (nav.curPair ? '<b>' + nav.curPair.i + '–' + nav.curPair.j + '</b>' : '—') + ' 按 Esc 前往）';
+      (nav.curPair ? '<b>' + nav.curPair.i + '–' + nav.curPair.j + '</b>' : '。') + ' 按 Esc 前往）';
   } else if(nav.curPair){
     el.innerHTML = '已確認，下一對 <b>' + nav.curPair.i + '–' + nav.curPair.j + '</b>（點綠圈穿門，或按 Esc 前往）';
   } else if(hd){
@@ -71,7 +71,7 @@ export function refreshInfoPair(){
   }
 }
 
-/** 訂閱事件：視角/狀態/ERP 衍生改變時刷新。 */
+/** 訂閱事件：視角/狀態/ERP 衍生改變時刷新。*/
 export function initInfo(){
   on('view-changed', refreshInfoPair);
   on('state-changed', refreshInfoPair);

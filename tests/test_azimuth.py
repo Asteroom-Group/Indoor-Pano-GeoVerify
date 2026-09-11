@@ -119,7 +119,7 @@ class TestFromBox(unittest.TestCase):
                                ud.from_x(4000, W_DEF), places=9)
 
     def test_box_crossing_seam(self):
-        """x0 > x1 表示框橫跨接縫；中心必須繞過接縫，而非取算術平均。"""
+        """x0 > x1 表示框橫跨接縫；中心必須繞過接縫。"""
         W = 8192
         got = ud.from_box((8000, 0, 200, 100), W)
         # 由定義獨立算：8000 → 8192 → 0 → 200，弧長 392，中心在 8000+196 = 8196 ≡ 4。
@@ -139,7 +139,7 @@ class TestFromBox(unittest.TestCase):
 class TestConventionStringAgreement(unittest.TestCase):
     """house JSON 寫出的 az_convention 須與 `upstream_direction.CONVENTION` 同義。
 
-    寫出處目前直接引用該常數，故此處驗證的是「確實引用了同一個來源」而非字串相等：
+    寫出處目前直接引用該常數，故此處驗證的是「確實引用了同一個來源」：
     若改回自行複製一份字面值，則退回比對分號之前的公式。兩者若分歧，前端的貼圖座標
     與後端的方位角就會整批偏移。
     """

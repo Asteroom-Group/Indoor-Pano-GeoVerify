@@ -3,7 +3,7 @@
 [腳本用途]
 測試模組的單一進入點：一道指令跑完本專案可在當前機器上執行的全部檢查。
 
-分三層，各層的前提條件不同。缺少前提的層級回報「略過」並說明原因，不視為失敗——
+分三層，各層的前提條件不同。缺少前提的層級回報「略過」並說明原因，不視為失敗。
 本模組會交付給環境各異的對象，多數環境不會具備 GPU 或完整資料集。
 
     1  單元測試      無前提。純函式、契約、schema、決定性；數秒完成。
@@ -14,14 +14,14 @@
     venv\\Scripts\\python.exe tests\\run_all.py           # 預設：跑得動的全跑
     venv\\Scripts\\python.exe tests\\run_all.py --fast    # 只跑第 1 層
     venv\\Scripts\\python.exe tests\\run_all.py --full    # 併入環境驗收與跨環境一致性；
-                                                          # 且缺前提時視為失敗而非略過
+                                                          # 且缺前提時視為失敗
     venv\\Scripts\\python.exe tests\\run_all.py -k azimuth   # 只跑檔名含該字串的單元測試
 
 離開碼 0 表示沒有任何一項失敗。
 
 [與 environments/ 的關係]
 `environments/check_env.py`（這台機器跑不跑得動）與 `cross_env_check.py`（整批結論穩
-不穩）驗的是環境而非程式碼，且分別由安裝腳本與 Kaggle 流程直接呼叫，故留在原處；
+不穩）驗的是環境，且分別由安裝腳本與 Kaggle 流程直接呼叫，故留在原處；
 本腳本以 `--full` 一併執行，使單一進入點仍涵蓋得到。
 """
 import argparse

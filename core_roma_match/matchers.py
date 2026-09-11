@@ -69,7 +69,7 @@ class RomaV2Matcher(MatcherBase):
     RoMa v2 實作 (Harder Better Faster Denser)
 
     ─────────────────────────────────────────────────────────────────────────
-    【實驗結論 2026-04-29 — 雙向匹配合併 (Bidirectional Match & Merge)】
+    【實驗結論 2026-04-29：雙向匹配合併 (Bidirectional Match & Merge)】
 
     RoMa V2 的匹配具有不對稱性：match(A, B) 與 match(B, A) 會產生不同的匹配點集合。
     原因：官方 Multiview ViT 使用 alternating attention mode，
@@ -100,8 +100,8 @@ class RomaV2Matcher(MatcherBase):
             device:          推論裝置
             conf_threshold:  信心度門檻
             batch_bidir:     是否使用 batch=2 打包加速雙向匹配。
-                             True  — 將 (A,B) 和 (B,A) 打包成 batch=2 一次 forward（VRAM 需求翻倍）
-                             False — 串行跑兩次 forward（VRAM 友善，速度稍慢）[預設]
+                             True：將 (A,B) 和 (B,A) 打包成 batch=2 一次 forward（VRAM 需求翻倍）
+                             False：串行跑兩次 forward（VRAM 友善，速度稍慢）[預設]
         """
         super().__init__(device, conf_threshold)
         self.batch_bidir = batch_bidir
@@ -120,7 +120,7 @@ class RomaV2Matcher(MatcherBase):
                 self.model.W_hr = 800
                 self.model.bidirectional = True      # 獲取雙向匹配並估計雙向協方差矩陣
                 self.model.balanced_sampling = True  # 確保空間中匹配點的多樣性分佈
-                # 拿掉 threshold 設定，讓 model.sample 回傳連續的信心度 (0~1)，而非被硬切成 1.0 的二元值
+                # 拿掉 threshold 設定，讓 model.sample 回傳連續的信心度 (0~1)
                 self.model.threshold = None
 
         except ImportError:
@@ -136,13 +136,13 @@ class RomaV2Matcher(MatcherBase):
         統一後處理：MAGSAC 幾何過濾 (可選) + 1-to-1 約束過濾。
 
         Args:
-            m_a:        np.ndarray, shape (N, 2) — A 圖匹配點像素座標
-            m_b:        np.ndarray, shape (N, 2) — B 圖匹配點像素座標
-            m_conf:     np.ndarray, shape (N,)   — 信心度
+            m_a:        np.ndarray, shape (N, 2)：A 圖匹配點像素座標
+            m_b:        np.ndarray, shape (N, 2)：B 圖匹配點像素座標
+            m_conf:     np.ndarray, shape (N,)：信心度
             use_magsac: bool, 是否啟用基於針孔相機的幾何過濾 (對 ERP 全景圖應設為 False)
 
         Returns:
-            list[tuple] — [(xA, yA, xB, yB, conf), ...], 嚴格 1-to-1
+            list[tuple]：[(xA, yA, xB, yB, conf), ...], 嚴格 1-to-1
         """
         if len(m_a) == 0:
             return []
@@ -205,15 +205,15 @@ class RomaV2Matcher(MatcherBase):
         若 VRAM 不足請使用 _sequential_forward_and_sample()。
 
         Args:
-            tensors_A:   list[Tensor], 每個 shape (1, 3, H, W) — A 圖 raw tensors
-            tensors_B:   list[Tensor], 每個 shape (1, 3, H, W) — B 圖 raw tensors
-            orig_sizes:  list[(wa, ha, wb, hb)] — 原始像素尺寸
-            threshold:   float — 信心度門檻
-            sc:          int   — sample_count
-            use_magsac:  bool  — 是否使用幾何過濾
+            tensors_A:   list[Tensor], 每個 shape (1, 3, H, W)：A 圖 raw tensors
+            tensors_B:   list[Tensor], 每個 shape (1, 3, H, W)：B 圖 raw tensors
+            orig_sizes:  list[(wa, ha, wb, hb)]：原始像素尺寸
+            threshold:   float：信心度門檻
+            sc:          int：sample_count
+            use_magsac:  bool：是否使用幾何過濾
 
         Returns:
-            list[(matches, info)] — 長度 = N
+            list[(matches, info)]：長度 = N
         """
         import torch.nn.functional as TF
         from romav2.romav2 import _map_confidence
@@ -368,15 +368,15 @@ class RomaV2Matcher(MatcherBase):
         再合併雙向結果。VRAM 需求與單向相同，適合記憶體不足的 GPU。
 
         Args:
-            tensors_A:   list[Tensor], 每個 shape (1, 3, H, W) — A 圖 raw tensors
-            tensors_B:   list[Tensor], 每個 shape (1, 3, H, W) — B 圖 raw tensors
-            orig_sizes:  list[(wa, ha, wb, hb)] — 原始像素尺寸
-            threshold:   float — 信心度門檻
-            sc:          int   — sample_count
-            use_magsac:  bool  — 是否使用幾何過濾
+            tensors_A:   list[Tensor], 每個 shape (1, 3, H, W)：A 圖 raw tensors
+            tensors_B:   list[Tensor], 每個 shape (1, 3, H, W)：B 圖 raw tensors
+            orig_sizes:  list[(wa, ha, wb, hb)]：原始像素尺寸
+            threshold:   float：信心度門檻
+            sc:          int：sample_count
+            use_magsac:  bool：是否使用幾何過濾
 
         Returns:
-            list[(matches, info)] — 長度 = N
+            list[(matches, info)]：長度 = N
         """
         import torch.nn.functional as TF
         from romav2.romav2 import _map_confidence
@@ -440,7 +440,7 @@ class RomaV2Matcher(MatcherBase):
                 all_m_b_list.append(kptsB_fwd[mask_fwd].cpu().numpy())
                 all_conf_list.append(conf_fwd[mask_fwd])
 
-            # ── 反向 forward: (B, A) — 真正交換輸入順序 ──
+            # ── 反向 forward: (B, A)：真正交換輸入順序 ──
             with torch.inference_mode():
                 raw_rev = self.model(t_b_lr, t_a_lr, img_A_hr=t_b_hr, img_B_hr=t_a_hr)
 
@@ -651,5 +651,5 @@ class MatcherFactory:
             matcher_cls = MatcherFactory._registry[model_type]
             MatcherFactory._instances[key] = matcher_cls(target_device, conf_threshold, **kwargs)
 
-        # 不再修改快取實例的 conf_threshold — 由呼叫端透過 match() 參數傳入
+        # 不再修改快取實例的 conf_threshold：由呼叫端透過 match() 參數傳入
         return MatcherFactory._instances[key]

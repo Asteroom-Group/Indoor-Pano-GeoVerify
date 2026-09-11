@@ -6,7 +6,7 @@
     roma_geo.to_public()          單對結果 → 對外欄位子集
     export_public.house_to_public()   整間房的連接圖 → 對外欄位子集
 
-兩者都以白名單裁切，因此新增內部欄位不會自動外洩；真正的風險在反方向——
+兩者都以白名單裁切，因此新增內部欄位不會自動外洩；真正的風險在反方向。
 schema 改動時把下游依賴的欄位裁掉，或是側別、旗標的語意悄悄反轉。本檔對兩個方向
 都設斷言，並檢查兩條路徑對「一個共視區域包含什麼」的定義是否一致。
 
@@ -211,7 +211,8 @@ class TestHouseToPublic(unittest.TestCase):
         self.pub = export_public.house_to_public(sample_house())
 
     def test_house_level_fields_kept(self):
-        for k in ("house", "n_images", "width", "height", "images", "az_convention"):
+        for k in ("house", "n_images", "width", "height", "images", "az_convention",
+                  "schema_version"):
             self.assertIn(k, self.pub)
 
     def test_doors_not_exported(self):
@@ -225,9 +226,11 @@ class TestHouseToPublic(unittest.TestCase):
 
     def test_pair_fields_are_whitelisted(self):
         expected = {"i", "j", "prob", "az_ij", "az_ji", "az_source",
-                    "has_geometry", "n_inlier", "inlier_rate", "conf_used"}
+                    "has_geometry", "n_inlier", "inlier_rate", "conf_used",
+                    "semantic_corrected"}
         for p in self.pub["pairs"]:
             self.assertEqual(set(p), expected)
+            self.assertIs(p["semantic_corrected"], False)
 
     def test_internal_pair_fields_dropped(self):
         for p in self.pub["pairs"]:
@@ -245,7 +248,7 @@ class TestHouseToPublic(unittest.TestCase):
         self.assertEqual(export_public.leaked_fields(bad), {"gt_connected"})
 
     def test_has_geometry_is_boolean(self):
-        """內部存 0/1，對外必須是布林——下游若做嚴格型別檢查，整數會被判為格式錯誤。"""
+        """內部存 0/1，對外必須是布林。下游若做嚴格型別檢查，整數會被判為格式錯誤。"""
         vals = [p["has_geometry"] for p in self.pub["pairs"]]
         self.assertEqual(vals, [True, False])
         for v in vals:
@@ -341,7 +344,7 @@ class TestAttachRegions(unittest.TestCase):
         self.assertEqual(r["a"]["area_frac"], self.SIDE_A["area_frac"])
 
     def test_order_marker_is_not_emitted(self):
-        """側別已正規化，不再輸出 regions_order —— 留著會誘使下游再判斷一次。"""
+        """側別已正規化，不再輸出 regions_order：留著會誘使下游再判斷一次。"""
         pub, _ = self._run(["%s_b_a.json" % self.HOUSE])
         self.assertNotIn("regions_order", pub["pairs"][0])
 

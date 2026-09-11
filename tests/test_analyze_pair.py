@@ -2,7 +2,7 @@
 `analyze_pair` 的契約測試：schema 完整性、自適應 conf 階梯、旗標定義、決定性。
 
 `analyze_pair` 是幾何驗證層的單一進入點，其回傳值即 per-pair JSON 的主體，下游按
-schema 讀取。本檔驗證的是**契約**而非數值精度：欄位齊全、型別可序列化、旗標符合
+schema 讀取。本檔驗證的是**契約**：欄位齊全、型別可序列化、旗標符合
 文件定義、相同輸入得到相同輸出。位姿數值本身的正確性在 `test_pose_estimation.py`。
 
 全部以合成匹配進行，不需要 GPU、資料集或快取。
@@ -141,7 +141,7 @@ class TestAdaptiveConfidence(unittest.TestCase):
         """⚠ `n.conf` 記的是 `conf_used` 那一層的點數，`low_matches` 看的是 `conf_min` 層。
 
         兩個欄位用不同門檻，因此撈回級會出現「low_matches 為真但 n.conf 很大」的組合，
-        並非矛盾。下游要判斷證據強度應該看 `conf_used` 與 `n.inlier`，不要看 `n.conf`。
+        這是預期行為。下游要判斷證據強度應該看 `conf_used` 與 `n.inlier`，不要看 `n.conf`。
         """
         m, _, _ = self._tiered(20, 200)
         res = run(m, iters=500)

@@ -7,7 +7,7 @@ ERP 上:同一 region 兩側同色半透明遮罩 + 邊框 + 編號;另標 az_ab
 (位姿平移方向 = 通道方位的正確估計)與 GT hotspot 方位(有的話,虛線)。
 A 上、B 下堆疊 + 資訊列(conf_used / inlier 率 / 旗標 / 區域數)。
 
-過縫處理:polygon x 可能超出 [0, W)(JSON 約定,保多邊形連續)——繪製時同一多邊形
+過縫處理:polygon x 可能超出 [0, W)(JSON 約定,保多邊形連續)。繪製時同一多邊形
 平移 -W/0/+W 各畫一次,超界部分自然裁掉。前端請用同樣手法。
 
 按工作計畫備註「overlay 不全量產出」:
@@ -87,7 +87,7 @@ def _az_line(img, az_deg, W, s, color, label, dashed=False):
 
 
 def render_pair(json_path, out_dir=OUT_DIR, target_w=2048, draw_az=True):
-    """draw_az=False:只畫共視區域遮罩,不畫 az/GT 方位線(deck 素材用 — 線條對非本組讀者不直觀)。"""
+    """draw_az=False:只畫共視區域遮罩,不畫 az/GT 方位線(deck 素材用。線條對非本組讀者不直觀)。"""
     d = json.load(open(json_path, encoding="utf-8"))
     house, na, nb = d["house"], d["img_a"], d["img_b"]
     pa, pb = find_house_image(house, na), find_house_image(house, nb)

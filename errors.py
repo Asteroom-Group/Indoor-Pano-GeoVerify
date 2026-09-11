@@ -1,16 +1,8 @@
-"""可判讀的失敗：指出是哪一項輸入、哪一個條件不成立。"""
+"""相容層。新程式請用 from roma_geo.errors import RomaGeoError。"""
+import os
+import sys
 
-
-class RomaGeoError(Exception):
-    """流程失敗。`input_name` 是缺席或不合格的輸入，`condition` 是未滿足的條件。"""
-
-    def __init__(self, message, input_name=None, condition=None):
-        self.input_name = input_name
-        self.condition = condition
-        parts = []
-        if input_name:
-            parts.append("輸入「%s」" % input_name)
-        if condition:
-            parts.append("條件不成立：%s" % condition)
-        parts.append(message)
-        super().__init__("；".join(parts))
+_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "src")
+if _src not in sys.path:
+    sys.path.insert(0, _src)
+from roma_geo.errors import RomaGeoError  # noqa: F401

@@ -28,7 +28,7 @@
 ..\venv\Scripts\python.exe tests\run_all.py --full            # 併入環境驗收與跨環境一致性
 ```
 
-`--full` 另有一項差別：缺少前提時視為失敗而非略過。發布前要求所有層級都實際跑過時使用。
+`--full` 另有一項差別：缺少前提時視為失敗。發布前要求所有層級都實際跑過時使用。
 
 ## 第 1 層：單元測試
 
@@ -51,6 +51,12 @@
 | `test_cache_naming.py` | 快取檔名約定、資料集探索、多樓層 GT 的載入順序 |
 | `test_stitch_bundle.py` | 工具載入對外交付檔的相容層：欄位對映、無真值標示、共視區域的側別判定 |
 | `test_pipeline.py` | 步驟獨立呼叫、可選輸入缺席時的降級標記、未見過的房子、設定由呼叫端指定 |
+| `test_semantic_correction.py` | 語意門矯正規則、矯正不改寫相對位姿、交付檔版本欄 |
+| `test_package_isolation.py` | 匯入本套件不蓋住使用端的 config／pipeline |
+| `test_az_source_guard.py` | az_source 缺席只在連通矩陣缺席時容許 |
+| `test_match_mode_defaults.py` | 各進入點匹配模式預設均為 direct |
+| `test_import_from_root.py` | 專案根目錄未改 sys.path 時仍能 `import roma_geo` 取得對外 API |
+| `test_missing_torch.py` | 缺少 torch 時 verify_pair 等進入點指出缺少什麼與安裝依據 |
 
 期望值一律由**規約或獨立算法**推得，不從受測程式碼反推。合成資料以指定的 R、t 正向
 投影出兩側觀測，受測程式碼須解回同一組 R、t；`wedge_width` 另以不同的列舉方式暴力
@@ -61,7 +67,7 @@
 
 ## 第 2 層：交付物檢查
 
-驗證的是資料而非程式碼。用途有二：批次跑完後確認產出可交付；收到別處（其他機器、
+驗證的是資料。用途有二：批次跑完後確認產出可交付；收到別處（其他機器、
 其他版本、上游）產生的檔案時，先確認格式相符再接。
 
 ```powershell
@@ -93,7 +99,7 @@
 ## 與 environments/ 的關係
 
 `environments/check_env.py` 驗的是「這台機器跑不跑得動」，`cross_env_check.py` 驗的是
-「整批結論穩不穩」，兩者的對象是環境而非程式碼，且分別由安裝腳本與 Kaggle 流程直接
+「整批結論穩不穩」，兩者的對象是環境，且分別由安裝腳本與 Kaggle 流程直接
 呼叫，故留在原處。`run_all.py --full` 會一併執行，使單一進入點仍涵蓋得到。
 
 ## 相依套件

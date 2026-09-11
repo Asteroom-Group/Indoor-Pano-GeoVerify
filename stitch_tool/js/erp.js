@@ -1,5 +1,5 @@
 /* =========================================================================
-   erp.js — ERP 對比視圖（上下/左右兩張平面全景並排，標門、可拖曳、可換圖）
+   erp.js：ERP 對比視圖（上下/左右兩張平面全景並排，標門、可拖曳、可換圖）
    結構解耦：ERP 與 nav.curPair 徹底解耦。
      - nav.erpTopImg/erpBotImg 為 ERP 顯示唯一真相，永遠有效（pairing.ensureErpPanes 保證）。
      - 「目前配對」為衍生值（pairing.derivePairForPanes）：
@@ -49,22 +49,22 @@ let _derived = { top:-1, bot:-1, kind:'none', pair:null };
 /**
  * 目前 pair 的語意校正結果快照（getPairOverride() 回傳值），供 info.js 顯示來源標籤。
  * 每次 renderERP 開頭重設為 null，只有語意輔助開啟且 pair 未確認時才會由 applySemanticOverride 填入
- * ——所以永遠對應「目前」pair，不會有切換 pair 後殘留舊資料的問題。
+ *：所以永遠對應「目前」pair，不會有切換 pair 後殘留舊資料的問題。
  */
 let _semanticInfo = null;
-/** @returns {object|null} 目前 pair 的語意校正結果（未開啟輔助 / 已確認 / 無 pair 時為 null）。 */
+/** @returns {object|null} 目前 pair 的語意校正結果（未開啟輔助 / 已確認 / 無 pair 時為 null）。*/
 export function getSemanticInfo(){ return _semanticInfo; }
 let _semanticLoggedKey = '';   // 避免同一 pair 重覆 render 時 console 洗版（見 applySemanticOverride）
 
 /**
  * unconn 放圈推薦面板狀態。
- *   active   — 面板是否啟用
- *   srcImg   — 放橘圈的圖（此側）
- *   srcWhich — 該圖所在面板 'top'|'bot'
- *   az       — 橘圈方位
- *   list     — recommendForCircle 排序候選陣列
- *   idx      — 目前瀏覽到第幾個候選
- *   previewOther — 目前為預覽而在對側面板暫畫的方位（琥珀預覽圈），null=無
+ *   active：面板是否啟用
+ *   srcImg：放橘圈的圖（此側）
+ *   srcWhich：該圖所在面板 'top'|'bot'
+ *   az：橘圈方位
+ *   list：recommendForCircle 排序候選陣列
+ *   idx：目前瀏覽到第幾個候選
+ *   previewOther：目前為預覽而在對側面板暫畫的方位（琥珀預覽圈），null=無
  */
 let _reco = { active:false, srcImg:-1, srcWhich:'top', az:0, list:[], idx:0, previewOther:null };
 
@@ -104,13 +104,13 @@ export function isErpOn(){ return erpMode; }
 export function getErpAzI(){ return erpAzI; }
 /** @returns {number|null} 目前 j 圖拖曳方位 */
 export function getErpAzJ(){ return erpAzJ; }
-/** @returns {{top:number,bot:number,kind:string,pair:object|null}} 目前面板衍生結果（供其它模組查詢，如可用性刷新）。 */
+/** @returns {{top:number,bot:number,kind:string,pair:object|null}} 目前面板衍生結果（供其它模組查詢，如可用性刷新）。*/
 export function getErpDerived(){ return _derived; }
 
 // =========================================================================
 //  TOGGLE
 // =========================================================================
-/** 切換 ERP 對比模式。關閉時清除「自動帶入」旗標。 */
+/** 切換 ERP 對比模式。關閉時清除「自動帶入」旗標。*/
 export function toggleErp(){
   erpMode = !erpMode;
   if(erpMode){
@@ -134,7 +134,7 @@ export function toggleErp(){
   emit('view-changed');                  // 刷新動作列可用性（Y/N/箭頭語意等）
 }
 
-/** 切換 ERP 上下 / 左右排列。 */
+/** 切換 ERP 上下 / 左右排列。*/
 export function toggleErpLayout(){
   erpHoriz = !erpHoriz;
   const el = document.getElementById('erp-mode');
@@ -146,7 +146,7 @@ export function toggleErpLayout(){
   if(erpMode){ setTimeout(renderERP, 20); }
 }
 
-/** @returns {boolean} ERP 是否為左右排列（橫排）。供路線圖標籤用。 */
+/** @returns {boolean} ERP 是否為左右排列（橫排）。供路線圖標籤用。*/
 export function isErpHoriz(){ return erpHoriz; }
 
 // =========================================================================
@@ -197,7 +197,7 @@ export function exitErpToImage(which){
 // =========================================================================
 //  RENDER（無條件執行；ERP 與 curPair 解耦）
 // =========================================================================
-/** 內部旗標：避免 renderERP -> emit('erp-derived') -> 其它訂閱者回頭呼叫 renderERP 造成遞迴。 */
+/** 內部旗標：避免 renderERP -> emit('erp-derived') -> 其它訂閱者回頭呼叫 renderERP 造成遞迴。*/
 let _renderingErp = false;
 
 /**
@@ -225,7 +225,7 @@ export function renderERP(){
     nav.curPair = d.pair;                // 衍生結果即 curPair（找不到 pair 時 null）
 
     // 3) 主標記拖曳方位：pair -> 用 az_ij/az_ji（若已確認取確認角，人工 ROI 校正優先於語意輔助
-    //    ——這條不變）；none -> 無主標記。語意輔助開啟時，未確認的 pair 再讓語意門校正
+    //：這條不變）；none -> 無主標記。語意輔助開啟時，未確認的 pair 再讓語意門校正
     //    對兩側各自獨立覆寫（見 applySemanticOverride）。
     if(d.pair){
       const cc = STATE.confirmed.find(x => pairKey(x.i, x.j) === pairKey(d.pair.i, d.pair.j));
@@ -252,10 +252,10 @@ export function renderERP(){
 }
 
 /**
- * 語意輔助——對未確認的目前 pair，兩側各自獨立判斷是否用門語意圖校正通道方位。
+ * 語意輔助。對未確認的目前 pair，兩側各自獨立判斷是否用門語意圖校正通道方位。
  * 資料（house 門清單 / 該對共視區域）可能還沒抓過：getPairOverride 這時回 null，本次
  * render 先顯示原始 az_ab；資料回來後的 onReady 回呼會在「仍是同一 pair」時重新 renderERP
- * 一次，讓覆寫生效——與 updateErpRegionOverlay 的 fetch-then-rerender 手法一致。
+ * 一次，讓覆寫生效。與 updateErpRegionOverlay 的 fetch-then-rerender 手法一致。
  * @param {{i:number,j:number,az_ij:number,az_ji:number}} pair
  */
 function applySemanticOverride(pair){
@@ -293,7 +293,7 @@ function applySemanticOverride(pair){
   }
 }
 
-/** 設定某面板控制列標籤（img N · 檔名前8 · 狀態徽章）。內容為 innerHTML。 */
+/** 設定某面板控制列標籤（img N · 檔名前8 · 狀態徽章）。內容為 innerHTML。*/
 function setPaneLabel(which, html){
   const el = document.getElementById(which === 'top' ? 'erp-label-top' : 'erp-label-bot');
   if(el) el.innerHTML = html;
@@ -399,7 +399,7 @@ export function setupErpPane(which, imgIdx){
 
 /**
  * 該圖要畫的參考門（排除本對的門，本對另用可拖曳主標記）。
- * 去掉對 nav.curPair 的依賴 —— pairAz 由 _derived（面板衍生對）決定，
+ * 去掉對 nav.curPair 的依賴：pairAz 由 _derived（面板衍生對）決定，
  *   衍生為 none 時 pairAz=null，對應排除邏輯自動跳過。
  * @param {number} imgIdx
  * @returns {Array<object>}
@@ -515,7 +515,7 @@ function clearErpRegCanvases(){
   });
 }
 
-/** 在單一 overlay 上畫該側 region（ERP 平面座標，過縫 ±W）。 */
+/** 在單一 overlay 上畫該側 region（ERP 平面座標，過縫 ±W）。*/
 function paintErpRegionsOn(ov, items, srcW, srcH){
   if(!ov || !items || !items.length || !srcW || !srcH) return;
   let cv = ov.querySelector('.erp-reg-cv');
@@ -556,7 +556,7 @@ function paintErpRegionsOn(ov, items, srcW, srcH){
   });
 }
 
-/** 依目前面板圖載入並疊區域遮罩。 */
+/** 依目前面板圖載入並疊區域遮罩。*/
 function updateErpRegionOverlay(){
   if(!_erpRegOn || !erpMode){
     clearErpRegCanvases();
@@ -572,7 +572,7 @@ function updateErpRegionOverlay(){
   const key = house + '|' + top + '|' + bot;
   const tk = ++_erpRegToken;
 
-  /** pack.i = top 面板、pack.j = bot 面板（依 fetch(top,bot) 的 swap 已對齊）。 */
+  /** pack.i = top 面板、pack.j = bot 面板（依 fetch(top,bot) 的 swap 已對齊）。*/
   const apply = (pack) => {
     if(tk !== _erpRegToken || !_erpRegOn) return;
     paintErpRegionsOn(document.getElementById('erp-ov-top'), pack.i, pack.Wi, pack.Hi);
@@ -875,7 +875,7 @@ export function changeErpPaneImage(which, dir){
   let curI = nav.erpTopImg, curJ = nav.erpBotImg;
   let target = (which === 'top') ? (curI + dir + N) % N : (curJ + dir + N) % N;
   const other = (which === 'top') ? curJ : curI;
-  // 撞到同一張圖時，往同方向再跳一格（略過那張圖），而非卡住不動。
+  // 撞到同一張圖時，往同方向再跳一格（略過那張圖）。
   if(target === other){
     target = (target + dir + N) % N;
     if(target === other){ toast('圖片數量太少，無法切換到不同的另一張圖'); return; }
@@ -975,7 +975,7 @@ export function openRecoPanel(srcImg, srcWhich, az){
   showRecoCandidate();
 }
 
-/** 關閉推薦面板並清掉對側預覽圈。供 modes 離開 unconn 時呼叫。 */
+/** 關閉推薦面板並清掉對側預覽圈。供 modes 離開 unconn 時呼叫。*/
 export function closeRecoPanel(){
   const wasActive = _reco.active;
   _reco = { active:false, srcImg:-1, srcWhich:'top', az:0, list:[], idx:0, previewOther:null, showCandidates:false };
@@ -984,16 +984,16 @@ export function closeRecoPanel(){
   if(wasActive && erpMode){ renderERP(); }     // 清掉對側預覽圈
 }
 
-/** @returns {boolean} 推薦面板是否啟用。 */
+/** @returns {boolean} 推薦面板是否啟用。*/
 export function isRecoActive(){ return _reco.active; }
-/** @returns {{which:string,az:number}|null} 對側面板目前的預覽圈（drawErpMarkers 讀取畫琥珀預覽）。 */
+/** @returns {{which:string,az:number}|null} 對側面板目前的預覽圈（drawErpMarkers 讀取畫琥珀預覽）。*/
 export function getRecoPreview(){
   if(!_reco.active || _reco.previewOther == null) return null;
   const otherWhich = (_reco.srcWhich === 'top') ? 'bot' : 'top';
   return { which:otherWhich, az:_reco.previewOther };
 }
 
-/** 顯示目前索引的候選：切對側面板到候選對面圖、畫預覽圈、更新面板內容。 */
+/** 顯示目前索引的候選：切對側面板到候選對面圖、畫預覽圈、更新面板內容。*/
 function showRecoCandidate(){
   const body = document.getElementById('reco-panel-body');
   const foot = document.getElementById('reco-panel-foot');
@@ -1049,7 +1049,7 @@ function showRecoCandidate(){
       '<div class="rp-target">img ' + c.otherImg + '</div>' +
       '<div class="rp-prob">' + (c.prob * 100).toFixed(0) + '%</div>' +
       '<div class="rp-sub">' + oname + '<br>Δaz ' + c.dAz.toFixed(0) + '° · 對面方位 ' +
-        (c.oppAz != null ? c.oppAz.toFixed(0) + '°' : '—') + '</div>' +
+        (c.oppAz != null ? c.oppAz.toFixed(0) + '°' : '。') + '</div>' +
       '<div class="rp-nav">' +
         '<button class="sp-btn ghost" id="reco-prev">‹ 上一個</button>' +
         '<button class="sp-btn ghost" id="reco-next">下一個 ›</button>' +
@@ -1064,7 +1064,7 @@ function showRecoCandidate(){
   if(erpMode) setTimeout(renderERP, 30); else renderERP();
 }
 
-/** 瀏覽上一個/下一個候選。 */
+/** 瀏覽上一個/下一個候選。*/
 function stepReco(dir){
   const n = _reco.list.length;
   const ni = _reco.idx + dir;
@@ -1074,7 +1074,7 @@ function stepReco(dir){
   showRecoCandidate();
 }
 
-/** 重新計算目前圈的推薦（否決/連通後剩餘候選刷新）。保持面板開啟。 */
+/** 重新計算目前圈的推薦（否決/連通後剩餘候選刷新）。保持面板開啟。*/
 function refreshReco(){
   const hd = getHouseData(); if(!hd || !_reco.active) return;
   _reco.list = recommendForCircle(_reco.srcImg, _reco.az, hd, STATE, pairStatus);
@@ -1082,7 +1082,7 @@ function refreshReco(){
   showRecoCandidate();
 }
 
-/** 「就是這個(連通)」：確認目前候選；成功後移除用掉的橘圈、刷新推薦（剩餘候選）。 */
+/** 「就是這個(連通)」：確認目前候選；成功後移除用掉的橘圈、刷新推薦（剩餘候選）。*/
 function recoConnect(){
   if(!_reco.active || _reco.idx >= _reco.list.length){ return; }
   const c = _reco.list[_reco.idx];
@@ -1092,7 +1092,7 @@ function recoConnect(){
   closeRecoPanel();
 }
 
-/** 「否決此候選」：rejectPairs 單筆，自動跳下一個候選。 */
+/** 「否決此候選」：rejectPairs 單筆，自動跳下一個候選。*/
 function recoReject(){
   if(!_reco.active || _reco.idx >= _reco.list.length){ return; }
   const c = _reco.list[_reco.idx];
@@ -1100,7 +1100,7 @@ function recoReject(){
   refreshReco();                  // 剩餘候選刷新（idx 不變 -> 自動落到下一個）
 }
 
-/** 綁定推薦面板底部/關閉鈕（boot 一次）。 */
+/** 綁定推薦面板底部/關閉鈕（boot 一次）。*/
 export function initRecoPanel(){
   const bind = (id, fn) => { const el = document.getElementById(id); if(el) el.onclick = fn; };
   bind('reco-connect', recoConnect);
@@ -1108,10 +1108,10 @@ export function initRecoPanel(){
   bind('reco-panel-close', closeRecoPanel);
 }
 
-/** 重置 ERP 拖曳方位（reset 房屋時）。 */
+/** 重置 ERP 拖曳方位（reset 房屋時）。*/
 export function resetErpAz(){ erpAzI = null; erpAzJ = null; }
 
-/** 訂閱事件：resize / 視角改變時若在 ERP 則重繪；reset 房屋時清方位。 */
+/** 訂閱事件：resize / 視角改變時若在 ERP 則重繪；reset 房屋時清方位。*/
 export function initErp(){
   on('resize', () => { if(erpMode) renderERP(); });
   on('view-changed', () => { if(erpMode) renderERP(); });

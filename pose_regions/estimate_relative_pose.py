@@ -15,7 +15,7 @@
 
 用法:
   # 單對直接跑(不必匯出整棟):
-  python estimate_relative_pose.py --match --img_a a.jpg --img_b b.jpg --mode core --conf 0.65 --out pose_out
+  python estimate_relative_pose.py --match --img_a a.jpg --img_b b.jpg --mode direct --conf 0.65 --out pose_out
   # 用已匯出的 CSV:
   python estimate_relative_pose.py --csv a_to_b.csv --img_a a.jpg --img_b b.jpg --out pose_out
   # 用快取 npz(座標=原圖像素,約定驗證見 README / spike_cache_consistency.py):
@@ -55,7 +55,7 @@ def sampson_residual(E, da, db):
 
 def _stratified_samples(rng, k, pool, az, nbins=12):
     """方位分桶抽樣:每列 8 槽輪流取「不同方位桶」的點(桶內隨機),提升 minimal sample
-    的空間分散度/條件數。只在「有點的桶」之間輪替 — 門洞 pair 支撐窄是常態,不強迫散開。
+    的空間分散度/條件數。只在「有點的桶」之間輪替。門洞 pair 支撐窄是常態,不強迫散開。
     同列抽到重複點的稀有情況退回均勻抽樣。"""
     b = ((az[pool] + 180.0) // (360.0 / nbins)).astype(int) % nbins
     occ = np.unique(b)
@@ -372,7 +372,8 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--csv"); ap.add_argument("--img_a"); ap.add_argument("--img_b")
     ap.add_argument("--match", action="store_true", help="只對這一對直接跑 RoMa(免匯出整棟,需 GPU venv)")
-    ap.add_argument("--mode", default="core", choices=["core", "cubemap", "direct"], help="--match 用的 RoMa 模式")
+    ap.add_argument("--mode", default="direct", choices=["core", "cubemap", "direct"],
+                    help="--match 用的 RoMa 模式。預設 direct，與 verify_pair 及基準產出相同")
     ap.add_argument("--cache_npz", help="讀 roma_match/cache 的 npz(免 GPU;--img_a/--img_b 可省略,會自動從 datasets/ 找)")
     ap.add_argument("--out", default="pose_out")
     ap.add_argument("--conf", type=float, default=None, help="confidence 門檻(--match/--cache_npz 預設 0.65)")

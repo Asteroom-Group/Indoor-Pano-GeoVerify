@@ -1,5 +1,5 @@
 /* =========================================================================
-   viewmodes/gnomonic.js — ERP ⇄ 透視(gnomonic)投影共用工具(mode-crop / mode-morph 用)
+   viewmodes/gnomonic.js：ERP ⇄ 透視(gnomonic)投影共用工具(mode-crop / mode-morph 用)
    低層模組:不 import 任何其它模組、不碰 DOM(除了建立離屏 canvas)。
 
    座標約定完全依 SPEC.md:
@@ -10,7 +10,7 @@
 
 const TAU = Math.PI * 2;
 
-/** az(度) → 水平單位方向向量 [x,y,z](v=0.5)。 */
+/** az(度) → 水平單位方向向量 [x,y,z](v=0.5)。*/
 export function azToDir(azDeg){
   const u = ((azDeg % 360) + 540) % 360 / 360;   // ((az+180) mod 360)/360,容忍負角
   return [Math.cos(TAU * u), 0, Math.sin(TAU * u)];
@@ -19,7 +19,7 @@ export function azToDir(azDeg){
 /**
  * 相機基底:forward / right / up。latDeg>0 = 抬頭往上看(俯仰,無 roll)。
  * right 恆保持水平(不 roll),up = right × forward。
- * **latDeg=0 走特例回傳字面 [0,1,0]** —— 用叉積算會得到 0.9999999999999999 之類的值,
+ * **latDeg=0 走特例回傳字面 [0,1,0]**：用叉積算會得到 0.9999999999999999 之類的值,
  * 進而讓 nearest 取樣偶爾取到相鄰像素;特例可保證與加入俯仰前的輸出逐位相同。
  */
 export function cameraBasis(azDeg, latDeg = 0){
@@ -36,7 +36,7 @@ export function cameraBasis(azDeg, latDeg = 0){
 }
 
 /**
- * 載入 ERP 圖並縮樣成 ImageData(等比,寬 maxW)。同 URL 會重複下載 — 呼叫端自行快取。
+ * 載入 ERP 圖並縮樣成 ImageData(等比,寬 maxW)。同 URL 會重複下載：呼叫端自行快取。
  * @returns {Promise<{data:Uint8ClampedArray,width:number,height:number}>}
  */
 export function loadErpData(url, maxW = 2048){
@@ -122,7 +122,7 @@ export function erpPxToCrop(x, y, W, H, azDeg, fovDeg, size, latDeg = 0){
 
 /**
  * ERP 像素 → 3D 單位方向向量(座標約定同 renderGnomonic)。
- * 多邊形要先轉方向空間才能做近平面裁切 — 逐頂點 erpPxToCrop 會把出界頂點整顆丟掉,
+ * 多邊形要先轉方向空間才能做近平面裁切：逐頂點 erpPxToCrop 會把出界頂點整顆丟掉,
  * 剩下的頂點重新閉合會讓形狀隨鏡頭變形(看起來像凸包被重算)。
  * @param {number} x,y ERP 像素(原圖座標;x 可超出 [0,W),ERP 對 x 週期性等價)
  * @param {number} W,H ERP 原圖尺寸
@@ -203,7 +203,7 @@ export function cropToErpPx(px, py, W, H, azDeg, fovDeg, size, latDeg = 0){
   return [u * W, v * H];
 }
 
-/** ERP ImageData 共用快取(最多 8 張,先進先出;mode-crop / mode-morph 共用)。 */
+/** ERP ImageData 共用快取(最多 8 張,先進先出;mode-crop / mode-morph 共用)。*/
 const _erpCache = new Map();
 export function getErpCached(url, maxW = 2048){
   if(_erpCache.has(url)) return _erpCache.get(url);
@@ -213,7 +213,7 @@ export function getErpCached(url, maxW = 2048){
   return p;
 }
 
-/** 一組方位角(度)的圓形平均;空陣列回 null。 */
+/** 一組方位角(度)的圓形平均;空陣列回 null。*/
 export function circMeanDeg(azList){
   if(!azList || !azList.length) return null;
   let sx = 0, sy = 0;

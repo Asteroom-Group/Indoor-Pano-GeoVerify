@@ -1,5 +1,5 @@
 /* =========================================================================
-   main.js — 組裝與啟動（boot）
+   main.js：組裝與啟動（boot）
    1) 初始化 three.js 場景與各 UI 訂閱者（minimap/compass/queue/info/erp/scene3d）。
    2) 綁定 UI 與快捷鍵。
    3) 載入房子清單、選房子（讀 house data + state），emit 'house-loaded' 觸發所有重繪。
@@ -52,7 +52,7 @@ function loadHousesList(preferHouse){
 /** 「＋加房」（面向未知資料）：資料夾選擇器 → 逐檔上傳到 bundle 根 → 刷新清單並選中新房。
     瀏覽器拿不到磁碟路徑，故上傳檔案內容；資料夾內若有 HOTSPOT 檔（不限層級，例如混在
     images/ 裡也找得到）且房子資料本身還沒有 GT，伺服器讀取時會即時算出 GT 對照；
-    房號對不上（常見誤帶了別棟房子的標註）會印在伺服器 log，不會安靜地不顯示。 */
+    房號對不上（常見誤帶了別棟房子的標註）會印在伺服器 log，不會安靜地不顯示。*/
 function wireAddHouse(){
   const btn = document.getElementById('btn-add-house');
   const inp = document.getElementById('add-house-input');
@@ -117,7 +117,7 @@ function selectHouse(name){
   }).catch(e => toast('讀取房子資料失敗: ' + e));
 }
 
-/** 啟動。 */
+/** 啟動。*/
 (function boot(){
   if(typeof THREE === 'undefined'){
     const el = document.getElementById('i-name');

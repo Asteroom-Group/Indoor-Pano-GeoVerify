@@ -1,5 +1,5 @@
 /* =========================================================================
-   modes.js — 互斥模式狀態機 + 模式旗標 UI + erpAutoEntered 邏輯
+   modes.js：互斥模式狀態機 + 模式旗標 UI + erpAutoEntered 邏輯
    把原本四個互斥布林（unconn/reject/noRoi/allConn）收斂成單一字串
      mode: 'none' | 'unconn' | 'reject' | 'noRoi' | 'allConn'
    並建立唯一的 setMode() 入口，統一處理：
@@ -13,19 +13,19 @@ import { clearAllUnconn } from './actions.js';
 import { closeBatchReject } from './batch-panel.js';
 import { closeRecoPanel } from './erp.js';
 
-/** 目前模式（就地變更）。 */
+/** 目前模式（就地變更）。*/
 let mode = 'none';
-/** ERP 是否為「因模式切換而自動帶入」（決定關模式時是否自動切回 3D）。 */
+/** ERP 是否為「因模式切換而自動帶入」（決定關模式時是否自動切回 3D）。*/
 let erpAutoEntered = false;
 
 /** @returns {string} 目前模式 */
 export function getMode(){ return mode; }
 /** @returns {boolean} ERP 是否為模式自動帶入 */
 export function isErpAutoEntered(){ return erpAutoEntered; }
-/** ERP 被關閉時清除自動帶入旗標（由 erp.toggleErp 於關閉時呼叫）。 */
+/** ERP 被關閉時清除自動帶入旗標（由 erp.toggleErp 於關閉時呼叫）。*/
 export function clearErpAutoEntered(){ erpAutoEntered = false; }
 
-/** 需要在 3D 時自動帶入 ERP 對比視圖的模式（unconn 也自動進 ERP）。 */
+/** 需要在 3D 時自動帶入 ERP 對比視圖的模式（unconn 也自動進 ERP）。*/
 function needsErp(m){ return m === 'unconn' || m === 'reject' || m === 'noRoi' || m === 'allConn'; }
 
 /**
@@ -65,13 +65,13 @@ export function setMode(next){
   updateErpBackButtons();
 }
 
-/** 切換某模式（相同則關閉為 none）。用於按鈕/快捷鍵。 */
+/** 切換某模式（相同則關閉為 none）。用於按鈕/快捷鍵。*/
 export function toggleMode(m){ setMode(mode === m ? 'none' : m); }
 
-/** 直接清為 none（Esc / 動作完成後）。 */
+/** 直接清為 none（Esc / 動作完成後）。*/
 export function clearMode(){ setMode('none'); }
 
-/** 各模式的橫幅設定：名稱、背景、文字色，及 3D/ERP 兩種操作提示。 */
+/** 各模式的橫幅設定：名稱、背景、文字色，及 3D/ERP 兩種操作提示。*/
 const MODE_BANNER = {
   unconn: { name:'未連接通道模式', bg:'var(--orange)', fg:'#111',
             hint3d:'點球面放橘圈標出「有門但還沒連」（右鍵點橘圈可刪除）',

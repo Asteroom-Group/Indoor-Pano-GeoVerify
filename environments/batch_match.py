@@ -11,8 +11,8 @@
 配對來源優先序：`--pairs` > `_pairs.csv` > 從 `_summary.csv` 快照一份。
 
 `_pairs.csv` 有兩種來源：
-  1. `environments/select_pairs.py` —— 從連通性矩陣按門檻挑出（換上游模型走這條）
-  2. 從既有 `_summary.csv` 快照（粗篩存活者）—— 與既有結果同一族群，
+  1. `environments/select_pairs.py`：從連通性矩陣按門檻挑出（換上游模型走這條）
+  2. 從既有 `_summary.csv` 快照（粗篩存活者）。與既有結果同一族群，
      重跑後才能逐對比較，驗證遷移正確性時用這條。
 
 **多 GPU**：偵測到多張 GPU 時走 `roma_match.parallel_matcher.ParallelScorer`，
@@ -38,9 +38,13 @@ import sys
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT)
+_SRC = os.path.join(ROOT, "src")
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
+if ROOT not in sys.path:
+    sys.path.append(ROOT)
 
-from config import regions_root                   # noqa: E402（要先補 sys.path）
+from roma_geo.config import regions_root                   # noqa: E402
 
 REGIONS_DIR = regions_root()                    # 可用 ROMA_GEO_OUTPUT 覆寫，見 config.py
 SUMMARY = os.path.join(REGIONS_DIR, "_summary.csv")

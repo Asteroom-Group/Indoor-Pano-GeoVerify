@@ -1,7 +1,7 @@
 /* =========================================================================
-   roma.js — RoMa 即時比對（點按鈕 -> 對目前 ERP 上下/左右兩面板圖跑 RoMa -> 畫匹配線）
+   roma.js：RoMa 即時比對（點按鈕 -> 對目前 ERP 上下/左右兩面板圖跑 RoMa -> 畫匹配線）
    只依賴 erp.js 的 isErpOn()（單向依賴，仿 ui.js 既有模式，不讓 erp.js 反過來 import 這裡）。
-   在 #erp-mode 之上疊一層獨立的 SVG（#erp-match-svg）畫跨面板匹配線 —— 不能放進單一面板的
+   在 #erp-mode 之上疊一層獨立的 SVG（#erp-match-svg）畫跨面板匹配線。不能放進單一面板的
    .erp-ov，因為那只涵蓋自己那一格，畫不出連到對面面板的線。
    依賴：api / state / nav / erp(isErpOn only) / util / events。
    ========================================================================= */
@@ -15,16 +15,16 @@ import { on } from './events.js';
 
 /**
  * 視覺化參數（參考 case_analyse/generate_roma_match_vis.py 的離線繪圖手法搬到即時 SVG 版）：
- *   - 按空間格點分色：同一叢集的匹配點/連線用同一色，一眼看出對應區域，而非單一固定色。
+ *   - 按空間格點分色：同一叢集的匹配點/連線用同一色，一眼看出對應區域。
  *   - 分格挑選連線：每格最多挑 PER_CELL 條，確保線分散在整張圖，不會全擠在信心度最高的單一角落。
- *   - 信心度正規化：用「這批匹配點自己的」min/max 正規化，同時驅動透明度與線寬，而非固定門檻，
+ *   - 信心度正規化：用「這批匹配點自己的」min/max 正規化，同時驅動透明度與線寬，
  *     信心分布很窄時（RoMa 常見）也能看出相對強弱。
  */
 const GRID_COLS = 8, GRID_ROWS = 4;   // 分格格點數（列x欄），越細分色越多但單格線數上限仍是 PER_CELL
 const PER_CELL = 3;                    // 每格最多貢獻幾條線
 const MAX_LINES = 100;                 // 全部連線數上限（分格挑選後再依信心裁到這個數字）
 
-/** 分類色盤（8 色固定順序，深色背景可讀性已驗證），依格點編號循環指派。 */
+/** 分類色盤（8 色固定順序，深色背景可讀性已驗證），依格點編號循環指派。*/
 const CELL_COLORS = [
   '#3987e5', '#199e70', '#c98500', '#008300',
   '#9085e9', '#e66767', '#d55181', '#d95926',
@@ -34,10 +34,10 @@ let _active = false;      // overlay 是否顯示中
 let _loading = false;
 let _data = null;         // { matches, w, h, topIdx, botIdx } | null
 
-/** @returns {boolean} overlay 目前是否顯示。 */
+/** @returns {boolean} overlay 目前是否顯示。*/
 export function isRomaActive(){ return _active; }
 
-/** 按鈕點擊：目前顯示中且仍對應同一對圖 -> 關閉；否則對目前面板配對重新抓取並畫線。 */
+/** 按鈕點擊：目前顯示中且仍對應同一對圖 -> 關閉；否則對目前面板配對重新抓取並畫線。*/
 export function toggleRomaMatch(){
   if(_loading) return;
   const stillFresh = _active && _data && _data.topIdx === nav.erpTopImg && _data.botIdx === nav.erpBotImg;
@@ -45,7 +45,7 @@ export function toggleRomaMatch(){
   runRomaMatch();
 }
 
-/** 對目前 ERP 上/下（或左/右）面板的兩張圖跑 RoMa 比對並畫線。 */
+/** 對目前 ERP 上/下（或左/右）面板的兩張圖跑 RoMa 比對並畫線。*/
 function runRomaMatch(){
   const hd = getHouseData();
   const house = getHouseName();
@@ -90,7 +90,7 @@ function runRomaMatch(){
   });
 }
 
-/** 清除 overlay 與快取的匹配資料。 */
+/** 清除 overlay 與快取的匹配資料。*/
 export function clearRomaOverlay(){
   _active = false;
   _data = null;
@@ -125,7 +125,7 @@ function drawRomaOverlay(){
 
   const W = _data.w || 1, H = _data.h || 1;
   // 原圖像素座標 -> 該面板 .erp-inner 的螢幕座標 -> 相對 svg 自身（inset:0 於 #erp-mode）的座標。
-  // 與 erp.js 的 xOf(az) 同一套「比例換算」邏輯，只是這裡用像素比例而非方位比例。
+  // 與 erp.js 的 xOf(az) 同一套「比例換算」邏輯，這裡用像素比例。
   const toTopXY = (x, y) => [
     rTop.left - svgRect.left + (x / W) * rTop.width,
     rTop.top - svgRect.top + (y / H) * rTop.height,
@@ -143,7 +143,7 @@ function drawRomaOverlay(){
     return;
   }
 
-  // 信心度正規化（用這批匹配點自己的 min/max，而非固定門檻 —— RoMa 的信心值常常擠在一個
+  // 信心度正規化（用這批匹配點自己的 min/max）。RoMa 的信心值常常擠在一個
   // 窄範圍內，固定門檻會讓大多數線看起來一樣淡）。
   const confs = matches.map(m => m[4]);
   const minC = Math.min.apply(null, confs), maxC = Math.max.apply(null, confs);
@@ -239,7 +239,7 @@ function onNavChange(){
   if(_active) drawRomaOverlay();
 }
 
-/** 綁定按鈕點擊與重繪訂閱（boot 一次）。 */
+/** 綁定按鈕點擊與重繪訂閱（boot 一次）。*/
 export function initRoma(){
   const btn = document.getElementById('btn-roma-match');
   if(btn) btn.onclick = toggleRomaMatch;

@@ -9,11 +9,11 @@ from PIL import Image
 
 from _support import ROOT, env_override, quiet, synth_matches, temp_dir  # noqa: F401
 
-from config import Settings
-from errors import RomaGeoError
-from names import house_of
+from roma_geo.config import Settings
+from roma_geo.errors import RomaGeoError
+from roma_geo.names import house_of
 from pose_regions.estimate_relative_pose import CACHE_SUFFIX, parse_cache_name
-import pipeline
+from roma_geo import pipeline
 
 
 HOUSE = "Office_A"

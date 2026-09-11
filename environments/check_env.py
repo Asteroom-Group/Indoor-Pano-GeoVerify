@@ -66,7 +66,7 @@ def main():
     try:
         import torch
     except ImportError:
-        print("  [FATAL   ] torch 未安裝 —— 先跑 setup_env.ps1")
+        print("  [FATAL   ] torch 未安裝。先跑 setup_env.ps1")
         return 1
 
     same_ver &= row("torch", torch.__version__, TARGET["torch"])
@@ -109,7 +109,7 @@ def main():
         print(f"  [{OK:8}] wheel 未直接含 {sm}，但 {covering[-1]} 的 cubin 向上相容（同 major，minor 較低）")
     else:
         # 只作預告：真正的判準是下面那次 CUDA kernel 實跑，涵蓋不到的話它會失敗。
-        print(f"  [WARN    ] wheel 不涵蓋 {sm} —— 預期下方 CUDA kernel 實跑會失敗")
+        print(f"  [WARN    ] wheel 不涵蓋 {sm}：預期下方 CUDA kernel 實跑會失敗")
 
     try:
         drv = subprocess.run(

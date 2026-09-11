@@ -23,7 +23,7 @@ python stitch_tool/server.py --bundle bundles/demo    # http://localhost:8010
 
 ### 直接載入對外交付檔
 
-包內的房子資料也可以換成 `export_public.py` 產出的**對外交付檔**——下游實際收到的那一份：
+包內的房子資料也可以換成 `export_public.py` 產出的**對外交付檔**。下游實際收到的那一份：
 
 ```bash
 python export_public.py                                       # 產生交付檔
@@ -40,7 +40,7 @@ python stitch_tool/server.py --bundle bundles/public_demo
 - 佇列依連通機率由高到低。目前候選會把你放進 **i 圖**，並在預測門位放 **琥珀色圈**、自動轉過去面對它。
 - **Y 連通**：圈變 **綠**（永久保留）。點綠圈即可**穿門**跳到對方圖，對方圖的反向門顯示為 **藍圈**，可再跳回。
 - **N 否決（批量否決流程，新）**：按 N 進入否決模式並自動切入 ERP。點任一圈圈後，畫面右側浮出
-  「**同方向候選**」清單——把該圈方位所在聚類(±7°)裡所有待處理配對列出（每列 `i–j · prob% · az°`，
+  「**同方向候選**」清單。把該圈方位所在聚類(±7°)裡所有待處理配對列出（每列 `i–j · prob% · az°`，
   預設全勾），頂部可「全選／全不選」，底部按「**否決所選(N筆)**」一次否決（單次存檔、單次重繪、一則
   總數提示）。面板關閉後仍留在否決模式，可繼續點下一個圈。只有一筆時也走同一面板（一致）。
 - **拖曳圈圈**：把門位校正到最準的方位（水平＋垂直），確認時存校正後角度。
@@ -49,13 +49,13 @@ python stitch_tool/server.py --bundle bundles/public_demo
   「候選 k/N：img X · prob% · Δaz°」，並自動把**對面面板**切到候選那張圖、在對面對應方位畫一個**琥珀虛線預覽圈**
   幫你直接看圖判斷。用「上一個／下一個」瀏覽（對面面板連動換圖與預覽）；按「**就是這個(連通)**」即建立綠色
   確認邊（此側用你放的橘圈方位、對側優先用你放的橘圈否則用候選對面方位），按「**否決此候選**」則否決並自動跳
-  下一個。看完 / 0 筆時提示「無更多推薦，可手動換對面圖」——回到**手動雙圈**流程：上下兩面板各放一個橘圈對準
+  下一個。看完 / 0 筆時提示「無更多推薦，可手動換對面圖」。回到**手動雙圈**流程：上下兩面板各放一個橘圈對準
   通道，按動作列「**連接**」鈕建立綠色確認邊。**孤立照片**（模型完全沒給任何 pair 的圖）也能這樣人工連起來。
   右鍵點橘圈可刪除；**退出模式時未被連接的橘圈會全部清除**、推薦面板一併關閉。（模式期間「回 3D」兩顆鈕暫時隱藏，退出後恢復。）
 - **A 此圖全連接**：把目前圖所有剩餘候選一次淘汰。
 - 確認某門後，其他「同一圖、同聚類(±7°)」的候選會自動淘汰；但若附近有你放的橘圈則保留。
 - 已**否決/淘汰**的配對從佇列點回去時，3D 與 ERP 都會畫一個**紅色**圈（與橘色「未連接」語意分開）；按 Y 可重新確認連通。
-- **右下路線圖（力導向佈局，新）**：節點=圖、綠邊=已確認。佈局改用**力導向**——已確認邊當彈簧拉近相連圖、
+- **右下路線圖（力導向佈局，新）**：節點=圖、綠邊=已確認。佈局改用**力導向**。已確認邊當彈簧拉近相連圖、
   節點間庫倫斥力避免重疊、**孤立圖被推到外圈**（一眼看出誰還沒連，正是收尾工作流的重點）。著色：有確認邊=綠、
   孤立=灰、目前圖高亮（3D=琥珀；ERP 上圖=藍、下圖=橘）。佈局**確定性**（圓形初始＋固定迭代，無隨機），
   且僅在確認邊變動時重算、換圖時只重繪，不會亂跳。**點節點直接跳到該圖**（3D 模式跳單一檢視器；ERP 模式顯示
@@ -64,7 +64,7 @@ python stitch_tool/server.py --bundle bundles/public_demo
   圖、每個節點標 img 編號、hover 顯檔名、**點節點跳圖**（3D 模式跳 3D；ERP 模式**左鍵=設為上/左圖、右鍵=設為
   下/右圖**，modal 內有提示）。底部一排**未連接圖片快速入口**（孤立節點做成 chip，點擊直接前往）方便收尾孤立照片。
   Esc 或點背景關閉。
-- **ERP 回 3D**：ERP 模式中，動作列的單顆「ERP 對比」鈕換成**兩顆**——「回上圖 3D／回下圖 3D」
+- **ERP 回 3D**：ERP 模式中，動作列的單顆「ERP 對比」鈕換成**兩顆**。「回上圖 3D／回下圖 3D」
   （左右排列時為「回左圖／回右圖」），點了就離開 ERP 回到該面板那張圖的 3D 檢視。E 鍵仍可切換 ERP。
 - 進度自動存到伺服器 `state/<房子>.json`，換房子/重開會自動載回。快捷鍵 Y/N/U/R/A/E、Esc 前往下一對。
 
@@ -103,7 +103,7 @@ python stitch_tool/server.py --bundle bundles/public_demo
 - **機率**（預設）：伺服器已依連通機率排好序，前端不重排。
 - **幾何驗證**（2026-08-05 起，取代原「RoMa 分數」）：依 `geo_n_inlier`（幾何驗證內點數）
   降冪排序、次鍵為機率；門檻拉條比對 `geo_inlier_rate`（0~1，天然吻合拉條刻度）。
-  取幾何驗證內點數而非未經驗證的 RoMa 匹配數，判別力比較見 `pose_regions/covis_ranking_report.md`。
+  取幾何驗證內點數，判別力比較見 `pose_regions/covis_ranking_report.md`。
 - **資料源**：`prepare_house_data.py` join `Output/roma_regions/_ranking_eval.csv`（已入 git），
   附加 `geo_n_inlier`／`geo_inlier_rate`／`geo_n_regions`／`geo_conf_used`／`geo_posed`。
   join key 為 (house, {img_a,img_b} 去副檔名集合)，pair 無序比對。**三層語意**：
@@ -121,42 +121,42 @@ python stitch_tool/server.py --bundle bundles/public_demo
   已註解，零檔案刪除）。
 
 ## 檔案結構
-- `prepare_house_data.py` — 由 oof 矩陣＋HOTSPOT 產生 `data/<house>.json`（機率排序的 pairs、
+- `prepare_house_data.py`：由 oof 矩陣＋HOTSPOT 產生 `data/<house>.json`（機率排序的 pairs、
   az_ij/az_ji［預設 join 幾何驗證 az_ab/az_ba，見上方「幾何/資料原理」］、`geo_*` 幾何驗證排序
   欄位［見上方「佇列排序」］、GT對照）。
-- `server.py` — 本機伺服器（房子清單／房子資料／ERP 影像／進度存讀）。
-- `index.html` — three.js 前端外殼（DOM 與樣式）；以 `<script type="module" src="js/main.js">` 載入模組化前端，three.js r128 仍由 CDN classic script 提供全域 `THREE`。
-- `SPEC.md` — 前端規格。
-- `data/` — 房子資料檔。`state/` — 人工標註進度。
+- `server.py`：本機伺服器（房子清單／房子資料／ERP 影像／進度存讀）。
+- `index.html`：three.js 前端外殼（DOM 與樣式）；以 `<script type="module" src="js/main.js">` 載入模組化前端，three.js r128 仍由 CDN classic script 提供全域 `THREE`。
+- `SPEC.md`：前端規格。
+- `data/`：房子資料檔。`state/`：人工標註進度。
 
 ### 前端模組 `js/`（ES modules，事件驅動）
 單體 `app.js` 已拆為下列模組。低層（config/events/geometry/clustering/state/api/util）不依賴高層；跨層互動一律透過事件匯流排或由 `main.js` 組裝，避免循環依賴。
-- `config.js` — 常數（球體/標記尺寸、顏色、聚類角度 CLUSTER_DELTA、UI 預設）。
-- `events.js` — 極簡 pub/sub 事件匯流排（`on`/`emit`）。事件：`house-loaded`／`state-changed`／`view-changed`／`frame`／`resize`／`rebuild-markers`／`reject-confirmed`／`reset-filter`／`apply-ui-toggles`／`erp-reset-az`／`erp-derived`（ERP 面板衍生完成→刷新動作可用性與狀態列）／`apply-minimap-vis`（ERP 開關時切換單/雙路線圖）。動作只 emit，UI 元件訂閱重繪。
-- `geometry.js` — 方位↔球面幾何純函式（`azToPos`/`posToAz`/`azToLon`/`angDiff`，逐字照抄 SPEC）。
-- `clustering.js` — 門聚類純函式（`doorCandidates`/`circMean`/`clusterDoors`），3D 與 ERP 共用。
-- `layout.js` — 路線圖**力導向佈局**純函式（`forceLayout(N,edges,W,H,iter,init)→positions`、`isIsolated`）。確定性、不觸碰 DOM，小圖／彈窗／ERP 雙圖共用同一份 cache（`minimap.js` 內正規化後投影到各 canvas）。可 node 測試。
-- `recommend.js` — 未連接通道**放圈推薦**純函式（`recommendForCircle(imgIdx,az,hd,STATE,statusFn,windowDeg)→依 prob 降序候選`、`RECO_WINDOW=25`）。只依角度窗＋prob，排除非 pending。可 node 測試。
-- `state.js` — 標註狀態 `STATE`、house 資料、狀態判定（`pairKey`/`pairStatus`…）、debounce 存檔。schema 與 server API 不變。
-- `api.js` — 伺服器 API 封裝（`fetchHouses`/`fetchHouseData`/`fetchState`/`saveState`）。
-- `nav.js` — 導覽狀態（`nav.curImage`/`curPair`/`viewFrom`/`reciprocalKey`/`erpTopImg`/`erpBotImg`）與導覽入口（`gotoCurrentPair`/`jumpToPair`/`peekToPair`/`walkThroughDoor`…）。
-- `scene3d.js` — three.js 場景/相機/raycast/pointer 事件/材質快取/標記建立/`buildMarkersForImage`/`buildDoorLayer`/`loadImageView`。
-- `modes.js` — 互斥模式狀態機 `mode:'none'|'unconn'|'reject'|'noRoi'|'allConn'` + 模式旗標 UI + `erpAutoEntered` 自動進/出 ERP 邏輯。
-- `dispatch.js` — 唯一圈圈點擊分派入口 `handleCircleClick(targetInfo)`，3D 與 ERP 共用。否決模式點圈→開批量否決面板；未連接模式與導覽照舊。
-- `actions.js` — 標註動作（Y/N/A、否決、無 ROI 淘汰、全連接、重新否決、reset 房屋）。含批量否決 helper `rejectPairs(list)`（單次存檔＋單次重繪＋總數提示，含把已確認者改否決）與推薦連通 helper `confirmRecommendedCandidate(...)`。單發 `rejectMarkerPair` 保留為內部 helper。
-- `erp.js` — ERP 對比視圖全部（上下/左右並排、標門、拖曳校正、換圖）＋**未連接推薦面板**（`openRecoPanel`/`recommendForCircle` 呈現、對面預覽圈、連通/否決/手動後備、`initRecoPanel` 綁定）。
+- `config.js`：常數（球體/標記尺寸、顏色、聚類角度 CLUSTER_DELTA、UI 預設）。
+- `events.js`：極簡 pub/sub 事件匯流排（`on`/`emit`）。事件：`house-loaded`／`state-changed`／`view-changed`／`frame`／`resize`／`rebuild-markers`／`reject-confirmed`／`reset-filter`／`apply-ui-toggles`／`erp-reset-az`／`erp-derived`（ERP 面板衍生完成→刷新動作可用性與狀態列）／`apply-minimap-vis`（ERP 開關時切換單/雙路線圖）。動作只 emit，UI 元件訂閱重繪。
+- `geometry.js`：方位↔球面幾何純函式（`azToPos`/`posToAz`/`azToLon`/`angDiff`，逐字照抄 SPEC）。
+- `clustering.js`：門聚類純函式（`doorCandidates`/`circMean`/`clusterDoors`），3D 與 ERP 共用。
+- `layout.js`：路線圖**力導向佈局**純函式（`forceLayout(N,edges,W,H,iter,init)→positions`、`isIsolated`）。確定性、不觸碰 DOM，小圖／彈窗／ERP 雙圖共用同一份 cache（`minimap.js` 內正規化後投影到各 canvas）。可 node 測試。
+- `recommend.js`：未連接通道**放圈推薦**純函式（`recommendForCircle(imgIdx,az,hd,STATE,statusFn,windowDeg)→依 prob 降序候選`、`RECO_WINDOW=25`）。只依角度窗＋prob，排除非 pending。可 node 測試。
+- `state.js`：標註狀態 `STATE`、house 資料、狀態判定（`pairKey`/`pairStatus`…）、debounce 存檔。schema 與 server API 不變。
+- `api.js`：伺服器 API 封裝（`fetchHouses`/`fetchHouseData`/`fetchState`/`saveState`）。
+- `nav.js`：導覽狀態（`nav.curImage`/`curPair`/`viewFrom`/`reciprocalKey`/`erpTopImg`/`erpBotImg`）與導覽入口（`gotoCurrentPair`/`jumpToPair`/`peekToPair`/`walkThroughDoor`…）。
+- `scene3d.js`：three.js 場景/相機/raycast/pointer 事件/材質快取/標記建立/`buildMarkersForImage`/`buildDoorLayer`/`loadImageView`。
+- `modes.js`：互斥模式狀態機 `mode:'none'|'unconn'|'reject'|'noRoi'|'allConn'` + 模式旗標 UI + `erpAutoEntered` 自動進/出 ERP 邏輯。
+- `dispatch.js`：唯一圈圈點擊分派入口 `handleCircleClick(targetInfo)`，3D 與 ERP 共用。否決模式點圈→開批量否決面板；未連接模式與導覽照舊。
+- `actions.js`：標註動作（Y/N/A、否決、無 ROI 淘汰、全連接、重新否決、reset 房屋）。含批量否決 helper `rejectPairs(list)`（單次存檔＋單次重繪＋總數提示，含把已確認者改否決）與推薦連通 helper `confirmRecommendedCandidate(...)`。單發 `rejectMarkerPair` 保留為內部 helper。
+- `erp.js`：ERP 對比視圖全部（上下/左右並排、標門、拖曳校正、換圖）＋**未連接推薦面板**（`openRecoPanel`/`recommendForCircle` 呈現、對面預覽圈、連通/否決/手動後備、`initRecoPanel` 綁定）。
   **本對主標記**：每張 ERP 圖 **頂帶＋底帶**（DOM，與 marker.js 同視覺：白＋深底、
   ±15°、「往 img N」）；**僅水平拖曳**改 az。hover／拖曳時該圖內 **垂直虛線**連頂↔底
   （非跨圖）。**區域遮罩**改為 ERP 內開關（`btn-erp-regions`），canvas 疊在目前對比圖上，
   不再是獨立 viewmode（`mode-regions.js` 檔保留、index 已停用註冊）。
-- `roma.js` — RoMa 即時比對（點按鈕對目前 ERP 兩張圖跑 RoMa、畫匹配線 overlay）。
+- `roma.js`：RoMa 即時比對（點按鈕對目前 ERP 兩張圖跑 RoMa、畫匹配線 overlay）。
   **2026-08-05 停用**（共識區域取代 raw RoMa 顯示；`index.html` 的按鈕／
   `roma-conf-input`、`main.js` 的 `initRoma()` 呼叫已移除/註解，檔案與後端 `/api/roma_match`、
   離線 cache 保留不動，見「佇列排序」段落）。
-- `batch-panel.js` — **批量否決浮動面板**：`collectClusterPending(imgIdx,az)` 取同聚類全部 pending、`openBatchReject`/`initBatchPanel` 呈現與綁定，勾選後走 `actions.rejectPairs`。
-- `minimap.js`／`compass.js`／`queue.js` — 路線圖（力導向＋放大彈窗，`openMapModal`）／羅盤條／候選佇列與統計（皆訂閱事件自動重繪）。
-- `info.js` — 中央資訊面板。`ui.js` — 按鈕綁定與快捷鍵，含集中式 `refreshActionAvailability()`（依模式/ERP/衍生配對統一設定 Y/N 停用與原因，訂閱 `view-changed`/`state-changed`/`erp-derived`）。`util.js` — toast/loading/小工具。
-- `main.js` — 組裝與啟動（boot）：初始化場景與訂閱者（含 `initBatchPanel`／`initRecoPanel` 綁定兩個浮動面板按鈕）、綁定 UI、載入房子。
+- `batch-panel.js`：**批量否決浮動面板**：`collectClusterPending(imgIdx,az)` 取同聚類全部 pending、`openBatchReject`/`initBatchPanel` 呈現與綁定，勾選後走 `actions.rejectPairs`。
+- `minimap.js`／`compass.js`／`queue.js`：路線圖（力導向＋放大彈窗，`openMapModal`）／羅盤條／候選佇列與統計（皆訂閱事件自動重繪）。
+- `info.js`：中央資訊面板。`ui.js`：按鈕綁定與快捷鍵，含集中式 `refreshActionAvailability()`（依模式/ERP/衍生配對統一設定 Y/N 停用與原因，訂閱 `view-changed`/`state-changed`/`erp-derived`）。`util.js`：toast/loading/小工具。
+- `main.js`：組裝與啟動（boot）：初始化場景與訂閱者（含 `initBatchPanel`／`initRecoPanel` 綁定兩個浮動面板按鈕）、綁定 UI、載入房子。
 
 換模型：`prepare_house_data.py --oof_dir .../oof_matrices/<其他exp>` 即可指向別的實驗輸出。
 
@@ -164,21 +164,21 @@ python stitch_tool/server.py --bundle bundles/public_demo
 
 「檢視模式」＝主畫面呈現方式，與標註互動模式（modes.js）互相獨立。架構：
 
-- `js/viewmodes/registry.js` — 註冊表：`registerViewMode(plugin)`／`setViewMode(id)`／互斥切換；
+- `js/viewmodes/registry.js`：註冊表：`registerViewMode(plugin)`／`setViewMode(id)`／互斥切換；
   `ownButton:true` 的插件按鈕由 registry 自動生成在 `#viewmode-btns`。
   互斥規則：進入任一模式先退出其它；**ERP 被外部開啟（標註模式自動帶入/舊按鈕/E 鍵）時，
-  其它 overlay 模式自動讓路** — 既有標註流程完全不變。
-- `js/viewmodes/index.js` — **唯一的增/停用修改點：一行 import＝一個模式**；
+  其它 overlay 模式自動讓路**：既有標註流程完全不變。
+- `js/viewmodes/index.js`：**唯一的增/停用修改點：一行 import＝一個模式**；
   註解該行＝停用該模式（按鈕一併消失），其餘模式不受影響。
 - 插件檔（每模式一檔）：
-  - `mode-3d.js`／`mode-erp.js` — 既有 3D 球面與 2D ERP 包裝（委派 `toggleErp`，行為不變、沿用舊按鈕）。
-  - `mode-crop.js` — **模式 A 透視裁切對**：沿 az_ij/az_ji 做 gnomonic 90° 投影，兩張 pinhole 並排
+  - `mode-3d.js`／`mode-erp.js`：既有 3D 球面與 2D ERP 包裝（委派 `toggleErp`，行為不變、沿用舊按鈕）。
+  - `mode-crop.js`：**模式 A 透視裁切對**：沿 az_ij/az_ji 做 gnomonic 90° 投影，兩張 pinhole 並排
     （從 A 看向 B／從 B 看向 A）＋中間連接帶。解決「門後有門」ERP 誤讀。
-  - `mode-morph.js` — **模式 C 動態 morph**：`/api/roma_match`（conf 0.3，命中離線 cache 秒回）取稀疏
+  - `mode-morph.js`：**模式 C 動態 morph**：`/api/roma_match`（conf 0.3，命中離線 cache 秒回）取稀疏
     匹配 → 投到兩張裁切圖 → IDW 網格位移場 → 三角網格 warp ＋ 交叉淡化來回播放，右下顯示即時 FPS
     （實測 draw 成本 1.85ms/幀 ≈ 540fps 裕度，vsync 鎖 60）。真連通像「走過去」，假連通扭曲穿幫；
     標籤同時顯示 GT 連通與否，方便真/假對照示範。
-- `mode-walk.js` — **走一遍**：時間軸
+- `mode-walk.js`：**走一遍**：時間軸
   `holdDoor(朝通道) → turnA(轉主區) → holdStart → fade(300ms 直跳) → holdIn`；
   固定 FOV 48；`END_WITH_LOOKBACK=false` 常數可恢復舊回看（非 UI）。
 - 共用 helper（非插件）：`gnomonic.js`（ERP⇄透視投影、ERP ImageData 快取、圓形平均）、
@@ -195,6 +195,6 @@ python stitch_tool/server.py --bundle bundles/public_demo
   再按一次關閉。不再跳到另一個全螢幕 viewmode。
 - 實作在 `erp.js`（`toggleErpRegions`／`.erp-reg-cv`）；`mode-regions.js` 檔保留備查、
   `viewmodes/index.js` 已註解停用註冊。
-- `GET /api/regions/<house>?a=&b=` — 讀 `Output/roma_regions/…`，`swap:true` 時對調 a/b。
+- `GET /api/regions/<house>?a=&b=`：讀 `Output/roma_regions/…`，`swap:true` 時對調 a/b。
 - 過縫：polygon x 可超出 [0,W)，繪製時 −W/0/+W 各畫一次。
 - server.py 對 js/html/css 送 `Cache-Control: no-store`。

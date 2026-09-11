@@ -37,9 +37,12 @@ EVAL_DIR = os.path.join(ROOT_DIR, "semantic_doors")
 DATA_DIR = os.path.join(SCRIPT_DIR, "data")                          # prepare_house_data.py 產物
 OUT_DIR = os.path.join(SCRIPT_DIR, "semantic")                       # 本腳本產物
 CACHE = os.path.join(EVAL_DIR, "_door_cache.json")
+_SRC = os.path.join(ROOT_DIR, "src")
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
 if ROOT_DIR not in sys.path:
-    sys.path.insert(0, ROOT_DIR)
-from config import semantic_root                                     # noqa: E402（要先補 sys.path）
+    sys.path.append(ROOT_DIR)
+from roma_geo.config import semantic_root                                     # noqa: E402
 
 SEM_DIR = semantic_root()                                            # <tid>/<image>_mask.png；見 config.py
 

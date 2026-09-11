@@ -1,5 +1,5 @@
 /* =========================================================================
-   viewmodes/marker.js — 連通道「頂帶」標示(方位角-only)
+   viewmodes/marker.js：連通道「頂帶」標示(方位角-only)
    低層模組:只 import gnomonic(投影約定單一來源)、不碰 DOM(只吃 ctx)。
 
    設計約束:
@@ -7,8 +7,7 @@
      ② 不可有方向性箭頭(會被讀成「往那邊走」) → 不畫箭頭
      ③ 不可與共識區域遮罩相似 → 不做大面積半透明填色、不用 REG_PALETTE 色盤;
         改用中性白 + 深色底襯(亮圖上也看得見)
-     ④ 未來通道方位可能來自上游模型,標示必須「只靠一個方位角」就能畫 —
-        所以本模組的介面只吃 az(+ 投影參數),沒有垂直範圍、沒有 polygon、
+     ④ 未來通道方位可能來自上游模型,標示必須「只靠一個方位角」就能畫。所以本模組的介面只吃 az(+ 投影參數),沒有垂直範圍、沒有 polygon、
         沒有 ROI 框。舊的 ROI「框」需要垂直範圍,方位角給不出來,故改頂帶。
 
    視覺語言:畫布最上緣一條窄橫帶,中心對齊通道方位、角寬 ±HALF_DEG,
@@ -20,21 +19,21 @@ import { azToDir, dirToCropRaw } from './gnomonic.js';
 const HALF_DEG = 15;                 // 帶子角半寬(度);呼叫端可用 opts.halfDeg 覆寫
 const BAND_FRAC = 0.055;             // 帶高 = 畫布高 × 此值(規格 4–6%)
 const BAND_MIN_PX = 20;
-const INK = '#ffffff';               // 中性白 — 與區域色盤刻意無交集
+const INK = '#ffffff';               // 中性白。與區域色盤刻意無交集
 const BACK = 'rgba(8,12,18,.72)';    // 深色底襯
 const LABEL = '通道';
 
-/** az → 該畫布的水平位置;背面回 null。viewLat = 鏡頭俯仰(帶子仍畫在畫布頂緣)。 */
+/** az → 該畫布的水平位置;背面回 null。viewLat = 鏡頭俯仰(帶子仍畫在畫布頂緣)。*/
 function projX(azDeg, viewAz, fovDeg, size, viewLat = 0){
   const p = dirToCropRaw(azToDir(azDeg), viewAz, fovDeg, size, viewLat);   // 標的本身在水平線上
   return p ? p[0] : null;
 }
 
-/** ERP 的 u 座標約定(同 SPEC.md / gnomonic.js):u = ((az+180) mod 360)/360。 */
+/** ERP 的 u 座標約定(同 SPEC.md / gnomonic.js):u = ((az+180) mod 360)/360。*/
 function erpU(azDeg){ return (((azDeg % 360) + 540) % 360) / 360; }
 
 /**
- * 實際畫一條帶(座標已算好)。xC 落在畫布外時不畫標籤 —
+ * 實際畫一條帶(座標已算好)。xC 落在畫布外時不畫標籤。
  * 過縫拆成兩半時,只有含中心的那半該掛字。
  */
 function paintBand(ctx, xL, xC, xR, W, H){
@@ -70,7 +69,7 @@ function paintBand(ctx, xL, xC, xR, W, H){
  * ERP 畫布版(regions 模式):帶子畫在該圖頂緣 u(az)±Δ。
  * 過縫平移 −W/0/+W 各畫一次(與 mode-regions drawSide 同約定)。
  * @param {CanvasRenderingContext2D} ctx
- * @param {number} azDeg 通道方位角 — **唯一的資料輸入**
+ * @param {number} azDeg 通道方位角：**唯一的資料輸入**
  * @param {number} W,H   畫布尺寸(投影參數)
  * @param {{halfDeg?:number}} [opts]
  * @returns {boolean} 是否畫出
@@ -95,7 +94,7 @@ export function drawPassageBandErp(ctx, azDeg, W, H, opts){
  * 帶寬同樣以 az±Δ 投影(gnomonic 非線性,故逐點取樣取極值再夾進畫布)。
  * 方位落在視野外 → 不畫(回 false)。
  * @param {CanvasRenderingContext2D} ctx
- * @param {number} azDeg   通道方位角 — **唯一的資料輸入**
+ * @param {number} azDeg   通道方位角：**唯一的資料輸入**
  * @param {number} viewAz  鏡頭朝向(投影參數)
  * @param {number} fovDeg  視角(投影參數)
  * @param {number} size    畫布邊長(投影參數)

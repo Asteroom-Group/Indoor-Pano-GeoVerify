@@ -7,7 +7,7 @@
 用途有二。其一，批次跑完後確認產出可交付；其二，收到別處（其他機器、其他版本、
 上游）產生的檔案時，先確認格式相符再接。
 
-檢查五類產物，各自在來源不存在時回報「略過」而非失敗——外部環境本來就不會五類齊備：
+檢查五類產物，各自在來源不存在時回報「略過」。外部環境本來就不會五類齊備：
 
     per-pair JSON      共視區域與位姿，schema wp1-step3-v2
     _summary.csv       逐對指標總表，欄位須與批次程式宣告的一致
@@ -245,7 +245,11 @@ def check_house_json(data_dir):
             if not (0 <= p.get("i", -1) < n_img and 0 <= p.get("j", -1) < n_img):
                 problems.append("%s: pair 索引超出影像範圍" % house)
             src = p.get("az_source")
-            if src is not None and src not in ("geo", "coarse"):
+            degraded = d.get("has_connectivity_matrix") is False
+            if src is None:
+                if not degraded:
+                    problems.append("%s: az_source 缺席，且此房不是連通矩陣缺席的降級" % house)
+            elif src not in ("geo", "coarse"):
                 problems.append("%s: az_source 非 geo/coarse（%s）" % (house, src))
             if p.get("az_source") == "geo":
                 n_geo += 1
@@ -292,6 +296,18 @@ def check_public_houses(pub_dir):
                 problems.append("%s: pair 含契約外欄位 %s" % (house, sorted(extra)))
             if "has_geometry" in p and not isinstance(p["has_geometry"], bool):
                 problems.append("%s: has_geometry 非布林" % house)
+            if d.get("schema_version") == export_public.HOUSE_SCHEMA_VERSION:
+                if "semantic_corrected" not in p:
+                    problems.append("%s: house-v2 缺 semantic_corrected" % house)
+                elif not isinstance(p["semantic_corrected"], bool):
+                    problems.append("%s: semantic_corrected 非布林" % house)
+                if p.get("has_geometry"):
+                    if "R" not in p or "t" not in p:
+                        problems.append("%s: 有位姿卻缺 R/t" % house)
+                elif "R" in p or "t" in p:
+                    problems.append("%s: 無位姿卻帶 R/t" % house)
+                if "az_ij" not in p or "az_ji" not in p:
+                    problems.append("%s: 通道方位缺席" % house)
             if not (0 <= p.get("i", -1) < n_img and 0 <= p.get("j", -1) < n_img):
                 problems.append("%s: pair 索引超出影像範圍" % house)
             if "regions_order" in p:

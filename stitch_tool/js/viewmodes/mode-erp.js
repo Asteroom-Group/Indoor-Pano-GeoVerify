@@ -1,5 +1,5 @@
 /* =========================================================================
-   viewmodes/mode-erp.js — 既有 2D ERP 對比模式包成插件(行為不變)。
+   viewmodes/mode-erp.js：既有 2D ERP 對比模式包成插件(行為不變)。
    實作完全委派 erp.js 的 toggleErp()/isErpOn():
      - 既有入口全部保留:btn-erp 按鈕、E 快捷鍵、標註模式自動帶入(modes.js)。
      - registry 只在需要互斥時透過本插件開/關 ERP;ERP 被外部開啟時,registry 的
