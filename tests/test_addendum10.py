@@ -474,52 +474,35 @@ class TestAPAssertionsDistinguish(unittest.TestCase):
 
 
 class TestASSearchPathDocs(unittest.TestCase):
-    def test_docs_mention_root_and_src_insert(self):
+    """README、API.md、pipeline 模組說明不得再承諾會改搜尋路徑。
+
+    實際行為由 TestATImportBoundary 與 test_package_isolation 實測。
+    """
+
+    def _docs(self):
         readme = open(os.path.join(PROJECT_ROOT, "README.md"), encoding="utf-8").read()
         api = open(os.path.join(PROJECT_ROOT, "API.md"), encoding="utf-8").read()
         pipe = open(os.path.join(PROJECT_ROOT, "src", "roma_geo", "pipeline.py"),
                     encoding="utf-8").read().split('"""')[1]
-        for text in (readme, api, pipe):
+        return readme, api, pipe
+
+    def test_docs_promise_untouched_caller_search_path(self):
+        for text in self._docs():
+            self.assertIn("不修改", text)
             self.assertIn("專案根目錄", text)
             self.assertIn("src", text)
-            self.assertIn("最前", text)
-            self.assertIn("末端", text)
-            self.assertIn("不修改", text)
+            self.assertIn("檔案路徑", text)
 
-    def test_select_pairs_puts_src_first_and_appends_env_and_root(self):
-        with temp_dir() as d:
-            ds = os.path.join(d, "datasets")
-            make_image_house(ds, stems=("lobby", "hall"))
-            s = settings_for(d)
-            mdir = s.matrices_root()
-            os.makedirs(mdir, exist_ok=True)
-            np.save(os.path.join(mdir, HOUSE + ".npy"),
-                    np.zeros((2, 2, 3), dtype=np.float32))
-            write_json(os.path.join(mdir, HOUSE + "_images.json"),
-                       ["lobby.jpg", "hall.jpg"])
-            code = (
-                "import os, sys, json\n"
-                "sys.path.insert(0, %r)\n"
-                "from roma_geo.config import Settings\n"
-                "from roma_geo import pipeline\n"
-                "s = Settings(datasets=%r, matrices=%r, output=%r, cache=%r)\n"
-                "pipeline.select_pairs(settings=s, houses=[%r])\n"
-                "paths = [os.path.normcase(os.path.abspath(p)) for p in sys.path if p]\n"
-                "print(json.dumps(paths))\n"
-            ) % (
-                os.path.join(PROJECT_ROOT, "src"),
-                s.datasets_root(), s.matrices_root(), s.output_root(), s.cache_root(),
-                HOUSE,
-            )
-            env = os.environ.copy()
-            env.pop("PYTHONPATH", None)
-            r = subprocess.run([sys.executable, "-c", code], env=env,
-                               capture_output=True, text=True)
-            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-            paths = json.loads(r.stdout.strip().splitlines()[-1])
-            src = os.path.normcase(os.path.abspath(os.path.join(PROJECT_ROOT, "src")))
-            envdir = os.path.normcase(os.path.abspath(os.path.join(PROJECT_ROOT, "environments")))
-            root = os.path.normcase(os.path.abspath(PROJECT_ROOT))
-            self.assertEqual(paths[0], src)
-            self.assertIn(envdir, paths)
-            self.assertIn(root, paths)
+    def test_docs_drop_obsolete_insert_and_append_promises(self):
+        for text in self._docs():
+            self.assertNotIn("最前", text)
+            self.assertNotIn("末端", text)
+
+    def test_steps_load_project_scripts_by_file_path(self):
+        before = list(sys.path)
+        mod = pipeline._import_project("environments", "select_pairs")
+        self.assertEqual(sys.path, before)
+        self.assertTrue(mod.__name__.startswith("roma_geo._project."), mod.__name__)
+        self.assertEqual(
+            os.path.normcase(os.path.abspath(mod.__file__)),
+            os.path.normcase(os.path.join(PROJECT_ROOT, "environments", "select_pairs.py")))

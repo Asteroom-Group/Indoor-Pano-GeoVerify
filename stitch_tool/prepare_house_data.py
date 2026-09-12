@@ -28,17 +28,18 @@ import json
 import glob
 import math
 import argparse
+import importlib.util
 import numpy as np
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(SCRIPT_DIR)  # 專案根目錄
-_SRC = os.path.join(ROOT_DIR, "src")
-if _SRC not in sys.path:
-    sys.path.insert(0, _SRC)
-if ROOT_DIR not in sys.path:
-    sys.path.append(ROOT_DIR)
+# 套件未安裝時（直跑本腳本）補上 src，僅為了找到 roma_geo。能匯入就完全不動搜尋
+# 路徑：本檔也會被流程步驟以檔案路徑載入，那時不該動到呼叫端的搜尋路徑。
+if importlib.util.find_spec("roma_geo") is None:
+    sys.path.append(os.path.join(ROOT_DIR, "src"))
 from roma_geo import upstream_direction                          # noqa: E402
 from roma_geo.config import datasets_root, matrices_root, regions_root   # noqa: E402
+from roma_geo.project_modules import load_project_module         # noqa: E402
 
 DATA_ROOT = datasets_root()                        # 可用 ROMA_GEO_DATASETS 覆寫，見 config.py
 # 連通性矩陣來源。優先序：--oof_dir > 環境變數 ROMA_GEO_MATRICES > matrices/<版本>/
@@ -60,15 +61,19 @@ DEFAULT_ROMA_SCORES = os.path.join(ROOT_DIR, "roma_match", "roma_scores.npz")
 DEFAULT_RANKING_EVAL = os.path.join(regions_root(), "_ranking_eval.csv")
 DEFAULT_SUMMARY_CSV = os.path.join(regions_root(), "_summary.csv")
 
-if ROOT_DIR not in sys.path:
-    sys.path.append(ROOT_DIR)
 try:
     from roma_match.roma_score_cache import RomaScoreCache
 except ImportError:
     RomaScoreCache = None  # optional: RoMa-score sorting is skipped, everything else still works
 
-from house_dirs import resolve_task_dir
-from gt_hotspot import find_hotspot_files, load_gt, gt_pair_fields
+# 同目錄模組以檔案路徑載入。本檔會被流程步驟以檔案路徑載入，那時 stitch_tool 不在
+# 搜尋路徑上，裸名 `import house_dirs` 找不到；也不該為此把本目錄加進搜尋路徑，
+# 那會讓這些泛用檔名變成呼叫端的頂層模組。
+resolve_task_dir = load_project_module(SCRIPT_DIR, "house_dirs").resolve_task_dir
+_gt_hotspot = load_project_module(SCRIPT_DIR, "gt_hotspot")
+find_hotspot_files = _gt_hotspot.find_hotspot_files
+load_gt = _gt_hotspot.load_gt
+gt_pair_fields = _gt_hotspot.gt_pair_fields
 
 def read_image_size(path: str):
     """只讀 header 拿寬高，避免載入整張大圖。"""

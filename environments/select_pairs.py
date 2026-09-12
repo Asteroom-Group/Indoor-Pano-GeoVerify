@@ -33,6 +33,7 @@ max/min/upper。
 """
 import argparse
 import csv
+import importlib.util
 import json
 import os
 import sys
@@ -40,11 +41,10 @@ import sys
 import numpy as np
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_SRC = os.path.join(ROOT, "src")
-if _SRC not in sys.path:
-    sys.path.insert(0, _SRC)
-if ROOT not in sys.path:
-    sys.path.append(ROOT)
+# 套件未安裝時（直跑本腳本）補上 src，僅為了找到 roma_geo。能匯入就完全不動搜尋
+# 路徑：本檔也會被流程步驟以檔案路徑載入，那時不該動到呼叫端的搜尋路徑。
+if importlib.util.find_spec("roma_geo") is None:
+    sys.path.append(os.path.join(ROOT, "src"))
 
 from roma_geo.config import matrices_root, pair_threshold, regions_root   # noqa: E402
 from roma_geo.errors import RomaGeoError  # noqa: E402

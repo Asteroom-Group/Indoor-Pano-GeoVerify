@@ -39,7 +39,7 @@ pub = to_public(res)
 尚未建立環境時，第一次呼叫會指出缺少哪些相依，以及相依版本在 `environments/requirements-core.txt`。
 
 呼叫端指定影像路徑即可。不必先切換工作目錄，也不必設定環境變數。快取目錄可用 `cache_dir=` 傳入。
-匯入 `roma_geo` 不修改模組搜尋路徑。呼叫整房流程步驟時，會把用到的 `stitch_tool` 與 `environments` 加到搜尋路徑末端；挑配對與組房腳本會把專案根目錄加到末端，並把 `src` 插到最前。
+匯入 `roma_geo` 不修改模組搜尋路徑，呼叫整房流程步驟也不修改：專案根目錄、`src`、`stitch_tool`、`environments` 都不會進到呼叫端的搜尋路徑。步驟用到的專案內腳本以檔案路徑載入，模組名帶 `roma_geo._project.` 前綴，因此呼叫端自己的 `config`、`pipeline` 等同名模組不會被搶走。
 
 整間房：
 

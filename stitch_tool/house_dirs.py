@@ -8,13 +8,15 @@ datasets/ 底下的房屋資料夾可能被同名巢狀重複任意層，例如�
 resolve_task_dir() 由淺到深持續往下找同名子資料夾，直到找到含有全景影像的那一層，
 或超過 max_depth 才放棄回傳 None。
 """
+import importlib.util
 import os
 import sys
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_SRC = os.path.join(_ROOT, "src")
-if _SRC not in sys.path:
-    sys.path.insert(0, _SRC)
+# 套件未安裝時（直跑腳本、或標註工具把本目錄放進搜尋路徑）補上 src，僅為了找到
+# roma_geo。能匯入就完全不動搜尋路徑，以免搶掉呼叫端的同名模組。
+if importlib.util.find_spec("roma_geo") is None:
+    sys.path.append(os.path.join(_ROOT, "src"))
 
 from roma_geo.names import dir_has_images, is_image_filename  # noqa: E402
 

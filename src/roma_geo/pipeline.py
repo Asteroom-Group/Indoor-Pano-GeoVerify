@@ -1,46 +1,38 @@
 """逐步呼叫的處理流程。每一步吃明確的輸入路徑，不依賴工作目錄或環境變數。
 
-匯入本套件不修改搜尋路徑。呼叫本模組的流程步驟時，會把用到的 stitch_tool 與
-environments 加到搜尋路徑末端；挑配對與組房腳本會把專案根目錄加到末端，並把 src
-插到最前。
+匯入本套件不修改搜尋路徑，呼叫本模組的流程步驟也不修改：專案根目錄、src、
+stitch_tool、environments 都不會進到呼叫端的搜尋路徑。步驟用到的專案內腳本以
+檔案路徑載入（見 project_modules），因此呼叫端的 config、pipeline 等同名模組
+不會被搶走。
 """
 import csv
 import os
-import sys
 import tempfile
 
 from .config import PROJECT_ROOT, Settings
 from .errors import RomaGeoError
 from .names import dest_in_dir, require_pair_names, require_path_component
+from .project_modules import load_project_module
 
 STEP_PAIRS_FILENAME = "_step_pairs.csv"
 BATCH_PAIRS_FILENAME = "_pairs.csv"
 
 
 def _import_project(rel, name):
-    """從專案原始碼樹載入模組。該目錄不在套件清單內，非編輯模式安裝會失敗。
+    """從專案原始碼樹載入腳本。該目錄不在套件清單內，非編輯模式安裝會失敗。
 
-    加到 path 末端，不插入最前，以免蓋住使用端的模組。
+    以檔案路徑載入且模組名帶前綴：不動呼叫端的搜尋路徑，也不佔用裸檔名。
     """
     directory = os.path.join(PROJECT_ROOT, rel) if rel else PROJECT_ROOT
-    if not os.path.isdir(directory):
+    module = load_project_module(directory, name)
+    if module is None:
         raise RomaGeoError(
-            "找不到模組 %s（目錄 %s 不存在）。整房流程步驟需要專案原始碼樹，請以編輯模式安裝（uv pip install -e .）"
-            % (name, directory),
+            "找不到模組 %s（%s 不存在）。整房流程步驟需要專案原始碼樹，請以編輯模式安裝（uv pip install -e .）"
+            % (name, os.path.join(directory, name + ".py")),
             input_name="安裝方式",
             condition="非編輯模式安裝不含 %s" % rel,
         )
-    if directory not in sys.path:
-        sys.path.append(directory)
-    try:
-        return __import__(name)
-    except ModuleNotFoundError as e:
-        raise RomaGeoError(
-            "找不到模組 %s。整房流程步驟需要專案原始碼樹，請以編輯模式安裝（uv pip install -e .）"
-            % name,
-            input_name="安裝方式",
-            condition="非編輯模式安裝不含 %s" % rel,
-        ) from e
+    return module
 
 
 class Degradation:

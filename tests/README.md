@@ -52,7 +52,7 @@
 | `test_stitch_bundle.py` | 工具載入對外交付檔的相容層：欄位對映、無真值標示、共視區域的側別判定 |
 | `test_pipeline.py` | 步驟獨立呼叫、可選輸入缺席時的降級標記、未見過的房子、設定由呼叫端指定 |
 | `test_semantic_correction.py` | 語意門矯正規則、矯正不改寫相對位姿、交付檔版本欄 |
-| `test_package_isolation.py` | 匯入本套件不蓋住使用端的 config／pipeline |
+| `test_package_isolation.py` | 匯入本套件不蓋住使用端的 config／pipeline，也不加任何目錄到搜尋路徑 |
 | `test_az_source_guard.py` | az_source 缺席只在連通矩陣缺席時容許 |
 | `test_match_mode_defaults.py` | 各進入點匹配模式預設均為 direct |
 | `test_import_from_root.py` | 專案根目錄未改 sys.path 時仍能 `import roma_geo` 取得對外 API |
@@ -60,7 +60,7 @@
 | `test_addendum5.py` | 追加5：模組搜尋路徑、產出路徑、部分匹配失敗、降級方位契約、區域開關、快取檔名、彙總累積、輸出精度 |
 | `test_addendum6.py` | 追加6：降級保留全部配對、無方位為空值、有矩陣時配對集合不變 |
 | `test_addendum7.py` | 追加7：彙總寫入原子性、配對清單為本次範圍、受限來源、路徑優先序、失敗契約 |
-| `test_addendum8.py` | 追加8：交付檔名稱驗證與原子寫入、配對清單覆寫、安裝路徑、失敗契約、測試自備資料集 |
+| `test_addendum8.py` | 追加8：交付檔名稱驗證與原子寫入、配對清單覆寫、安裝路徑、匯入邊界、失敗契約、測試自備資料集 |
 | `test_addendum9.py` | 追加9：名稱守衛在過濾之後、本次清單與批次來源分開、檢查工具路徑與略過、逐對產物降級 |
 | `test_addendum10.py` | 追加10：相對位姿逐對判定、測試自備名稱樣本、搜尋路徑敘述 |
 

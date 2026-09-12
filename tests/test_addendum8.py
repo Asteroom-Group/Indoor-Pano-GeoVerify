@@ -439,8 +439,133 @@ class TestAJTestsSupplyDatasetsDir(unittest.TestCase):
             self.assertEqual(r.status, cd.OK, r.problems)
 
 
-class TestDeferredItemsUntouched(unittest.TestCase):
-    def test_house_dirs_inserts_src_at_front(self):
+#: 呼叫端行程的探針：跑一個流程步驟，回報搜尋路徑清單、哪些泛用檔名被當成
+#: 頂層模組載入、以及使用端自己的 config 是否還在。
+#: 路徑比的是完整清單不是集合：目錄已在 path 上再被插到最前，集合差集看不出來。
+_BOUNDARY_PROBE = r'''
+import json, os, sys
+
+GENERIC = ("config", "names", "errors", "pipeline", "export_public",
+           "house_dirs", "gt_hotspot", "select_pairs", "prepare_house_data")
+
+
+def search_path():
+    return [os.path.normcase(os.path.abspath(p)) for p in sys.path if p]
+
+
+from roma_geo.config import Settings
+from roma_geo import pipeline
+
+src = os.path.normcase(os.path.abspath(%(src)r))
+# 先讓 src 出現在清單中段，模擬「目錄已在 path 上」；若步驟把它插到最前，清單會變。
+if src in search_path():
+    sys.path = [p for p in sys.path
+                if os.path.normcase(os.path.abspath(p or ".")) != src]
+sys.path.append(%(src)r)
+before = search_path()
+settings = Settings(**%(kwargs)r)
+%(call)s
+after = search_path()
+loaded = dict((n, getattr(sys.modules[n], "__file__", "") or "")
+              for n in GENERIC if n in sys.modules)
+sys.modules.pop("config", None)
+import config
+try:
+    import house_dirs
+    house_dirs_file = getattr(house_dirs, "__file__", "") or ""
+except ImportError:
+    house_dirs_file = ""
+print("PROBE " + json.dumps({
+    "before": before,
+    "after": after,
+    "loaded": loaded,
+    "marker": getattr(config, "marker", "STOLEN"),
+    "config_file": getattr(config, "__file__", "") or "",
+    "house_dirs_file": house_dirs_file,
+}))
+'''
+
+
+class TestATImportBoundary(unittest.TestCase):
+    """流程步驟以檔案路徑載入專案腳本：呼叫端的搜尋路徑與泛用模組名都不受影響。"""
+
+    def _user_workdir(self, d):
+        """使用端工作目錄：自己的 config.py 與 pipeline.py，加上一組指向本目錄的設定。"""
+        open(os.path.join(d, "config.py"), "w", encoding="utf-8").write(
+            "marker = 'user-config'\n")
+        open(os.path.join(d, "pipeline.py"), "w", encoding="utf-8").write(
+            "marker = 'user-pipeline'\n")
+        return dict(
+            datasets=os.path.join(d, "datasets"), matrices=os.path.join(d, "matrices"),
+            output=os.path.join(d, "out"), cache=os.path.join(d, "cache"),
+            house_data=os.path.join(d, "house_data"), semantic=os.path.join(d, "semantic"),
+            public_houses=os.path.join(d, "public"), connections=os.path.join(d, "connections"),
+        )
+
+    def _probe(self, d, kwargs, call):
+        import subprocess
+        import sys
+        env = os.environ.copy()
+        env.pop("PYTHONPATH", None)
+        for name in [k for k in env if k.startswith("ROMA_GEO_")]:
+            env.pop(name)
+        r = subprocess.run(
+            [sys.executable, "-c", _BOUNDARY_PROBE % {
+                "kwargs": kwargs, "call": call,
+                "src": os.path.join(PROJECT_ROOT, "src"),
+            }],
+            cwd=d, env=env, capture_output=True, text=True,
+        )
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        lines = [ln for ln in r.stdout.splitlines() if ln.startswith("PROBE ")]
+        self.assertTrue(lines, r.stdout + r.stderr)
+        return json.loads(lines[-1][len("PROBE "):])
+
+    def _assert_inside_project(self, path, message):
+        root = os.path.normcase(os.path.realpath(PROJECT_ROOT))
+        actual = os.path.normcase(os.path.realpath(path or "."))
+        self.assertFalse(actual == root or actual.startswith(root + os.sep), message)
+
+    def _assert_boundary(self, info, d):
+        self.assertEqual(info["after"], info["before"], info)
+        for name, path in info["loaded"].items():
+            self._assert_inside_project(path, "%s 變成本專案的 %s" % (name, path))
+        self.assertEqual(info["marker"], "user-config")
+        self.assertEqual(os.path.normcase(os.path.realpath(info["config_file"])),
+                         os.path.normcase(os.path.realpath(os.path.join(d, "config.py"))))
+
+    def test_select_pairs_keeps_caller_search_path_and_modules(self):
+        with temp_dir() as d:
+            kwargs = self._user_workdir(d)
+            mdir = Settings(**kwargs).matrices_root()
+            os.makedirs(mdir, exist_ok=True)
+            import numpy as np
+            np.save(os.path.join(mdir, HOUSE + ".npy"), np.zeros((2, 2, 3), dtype=np.float32))
+            write_json(os.path.join(mdir, HOUSE + "_images.json"), ["lobby.jpg", "hall.jpg"])
+            info = self._probe(
+                d, kwargs,
+                "pipeline.select_pairs(settings=settings, houses=[%r])" % HOUSE)
+            self._assert_boundary(info, d)
+
+    def test_prepare_house_keeps_caller_search_path_and_modules(self):
+        with temp_dir() as d:
+            kwargs = self._user_workdir(d)
+            make_image_house(os.path.join(d, "datasets"), stems=("lobby", "hall"))
+            info = self._probe(
+                d, kwargs,
+                "pipeline.prepare_house(settings=settings, houses=[%r])" % HOUSE)
+            self._assert_boundary(info, d)
+            if info["house_dirs_file"]:
+                self._assert_inside_project(
+                    info["house_dirs_file"],
+                    "import house_dirs 拿到本專案的 %s" % info["house_dirs_file"])
+
+    def test_house_dirs_import_does_not_insert_src_at_front(self):
+        """標註工具把 stitch_tool 放進搜尋路徑時，house_dirs 自己不再插入 src。
+
+        套件已可匯入（先 import roma_geo，再把 src 移出搜尋路徑），此時 house_dirs
+        不需要也不應該再動搜尋路徑。
+        """
         import subprocess
         import sys
         import textwrap
@@ -450,20 +575,30 @@ class TestDeferredItemsUntouched(unittest.TestCase):
             import os, sys
             tool = %r
             src = %r
+            import roma_geo
             sys.path = [p for p in sys.path
                         if os.path.normcase(os.path.abspath(p or "."))
                         != os.path.normcase(os.path.abspath(src))]
             sys.path.insert(0, tool)
+            before = list(sys.path)
             import house_dirs
             print(os.path.normcase(os.path.abspath(sys.path[0])))
+            print("SAME" if sys.path == before else "CHANGED")
+            print(house_dirs.resolve_task_dir.__name__)
         """ % (tool, src))
         env = os.environ.copy()
         env.pop("PYTHONPATH", None)
-        r = subprocess.run([sys.executable, "-c", code], env=env,
-                           capture_output=True, text=True)
+        with temp_dir() as d:
+            r = subprocess.run([sys.executable, "-c", code], cwd=d, env=env,
+                               capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        self.assertEqual(r.stdout.strip(), os.path.normcase(os.path.abspath(src)))
+        out = r.stdout.splitlines()
+        self.assertEqual(out[0], os.path.normcase(os.path.abspath(tool)))
+        self.assertEqual(out[1], "SAME")
+        self.assertEqual(out[2], "resolve_task_dir")
 
+
+class TestDeferredItemsUntouched(unittest.TestCase):
     def test_select_pairs_cli_refuses_existing_without_force(self):
         import subprocess
         import sys

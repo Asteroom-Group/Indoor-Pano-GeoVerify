@@ -232,7 +232,7 @@ python roma_geo.py a.jpg b.jpg --public --out result.json
 ## 2. 逐步呼叫
 
 每一個處理步驟都是函式，輸入與輸出由參數給定。不依賴前一步在全域狀態或固定位置留下的隱含資料。
-匯入 `roma_geo` 不修改模組搜尋路徑。呼叫流程步驟時，會把用到的 `stitch_tool` 與 `environments` 加到搜尋路徑末端；挑配對與組房腳本會把專案根目錄加到末端，並把 `src` 插到最前。
+匯入 `roma_geo` 不修改模組搜尋路徑，呼叫流程步驟也不修改：專案根目錄、`src`、`stitch_tool`、`environments` 都不會進到呼叫端的搜尋路徑。步驟用到的專案內腳本以檔案路徑載入，模組名帶 `roma_geo._project.` 前綴，因此呼叫端自己的 `config`、`pipeline` 等同名模組不會被搶走。
 
 ```python
 from roma_geo.config import Settings

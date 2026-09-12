@@ -1,4 +1,5 @@
-"""匯入本套件不得蓋住使用端自己的 config / pipeline。"""
+"""匯入本套件不得蓋住使用端自己的 config / pipeline，也不得改動搜尋路徑。"""
+import json
 import os
 import sys
 import unittest
@@ -41,6 +42,26 @@ class TestImportDoesNotStealNames(unittest.TestCase):
         if sys.path:
             self.assertNotEqual(os.path.normcase(os.path.abspath(sys.path[0])),
                                 os.path.normcase(root))
+
+    def test_import_leaves_search_path_unchanged(self):
+        """匯入本套件一個目錄都不加：src 也不加（連帶匯入的子模組亦然）。"""
+        import subprocess
+        import textwrap
+        from _support import temp_dir
+        code = textwrap.dedent("""
+            import json, sys
+            before = list(sys.path)
+            import roma_geo
+            from roma_geo import pipeline
+            print(json.dumps([p for p in sys.path if p not in before]))
+        """)
+        env = os.environ.copy()
+        env.pop("PYTHONPATH", None)
+        with temp_dir() as d:
+            r = subprocess.run([sys.executable, "-c", code], cwd=d, env=env,
+                               capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(json.loads(r.stdout.strip().splitlines()[-1]), [])
 
     def test_root_shim_leaves_user_config(self):
         """載入專案根目錄相容層之後，使用端的 config 仍是自己的。"""

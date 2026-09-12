@@ -41,14 +41,15 @@ GT 欄位(供驗收交叉比對,非計算輸入):
   venv/Scripts/python.exe pose_regions/batch_pose_from_cache.py --limit 20 # 冒煙
   --resume 會跳過已存在的 JSON(重讀其內容補 summary 列),中斷可續跑。
 """
-import argparse, csv, json, os, sys, tempfile, time
+import argparse, csv, importlib.util, json, os, sys, tempfile, time
 import numpy as np
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(SCRIPT_DIR)
-_SRC = os.path.join(ROOT, "src")
-if _SRC not in sys.path:
-    sys.path.insert(0, _SRC)
+# 套件未安裝時(直跑本腳本)補上 src,僅為了讓下面的 roma_geo 延遲匯入找得到套件。
+# 能匯入就完全不動搜尋路徑:本模組會被 roma_geo 匯入,不該因此改變呼叫端的搜尋路徑。
+if importlib.util.find_spec("roma_geo") is None:
+    sys.path.append(os.path.join(ROOT, "src"))
 
 # 模組化(2026-07-23):匯入零副作用(chdir 移入 main());套件(from pose_regions import …)
 # 與腳本直跑(python pose_regions/batch_pose_from_cache.py)雙模式匯入。
