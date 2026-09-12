@@ -80,7 +80,7 @@ class TestVDegradedKeepsAllPairs(unittest.TestCase):
                     self.assertNotIn("az_source", p)
                 else:
                     self.assertEqual(p["az_source"], "geo")
-            r = cd.check_public_houses(s.public_dir())
+            r = cd.check_public_houses(s.public_dir(), datasets_dir=s.datasets_root())
             self.assertEqual(r.status, cd.OK, r.problems)
 
     def test_second_export_has_the_same_pair_set(self):
@@ -131,7 +131,9 @@ class TestVPublicAzimuthGuard(unittest.TestCase):
     def _check(self, payload):
         with temp_dir() as d:
             write_json(os.path.join(d, "H.json"), payload)
-            return cd.check_public_houses(d)
+            ds = os.path.join(d, "datasets")
+            os.makedirs(ds, exist_ok=True)
+            return cd.check_public_houses(d, datasets_dir=ds)
 
     def test_degraded_null_azimuth_passes(self):
         r = self._check(_public_payload(False, None, None))

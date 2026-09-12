@@ -21,7 +21,9 @@ class TestDefaults(unittest.TestCase):
 
     ENV_ALL = {"ROMA_GEO_DATASETS": None, "ROMA_GEO_MATRICES": None,
                "ROMA_GEO_OUTPUT": None, "ROMA_GEO_CACHE": None,
-               "ROMA_GEO_PAIR_THRESHOLD": None}
+               "ROMA_GEO_PAIR_THRESHOLD": None,
+               "ROMA_GEO_CONNECTIONS": None, "ROMA_GEO_HOUSE_DATA": None,
+               "ROMA_GEO_SEMANTIC_OUT": None, "ROMA_GEO_PUBLIC_HOUSES": None}
 
     def test_project_root_is_repo_root(self):
         self.assertEqual(os.path.normcase(config.PROJECT_ROOT), os.path.normcase(ROOT))

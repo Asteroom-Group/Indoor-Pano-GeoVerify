@@ -24,7 +24,6 @@
     - ch1/ch2：M[i,j] 存「在 i 圖看向 j」的方位（a=i 時取 yaw_a，否則 yaw_b）。
 """
 import argparse
-import glob
 import json
 import math
 import os
@@ -32,15 +31,21 @@ import os
 import numpy as np
 
 from .config import PROJECT_ROOT
+from .errors import RomaGeoError
+from .names import glob_in_dir, require_path_component
 
 HERE = PROJECT_ROOT
-DEFAULT_INPUT = os.environ.get(
-    "ROMA_GEO_CONNECTIONS",
-    os.path.normpath(os.path.join(HERE, "..", "candidate_connections_validation")),
-)
+DEFAULT_INPUT_FALLBACK = os.path.normpath(
+    os.path.join(HERE, "..", "candidate_connections_validation"))
 DEFAULT_OUT = os.path.join(HERE, "matrices", "candidate_val")
 
+
+def default_input_dir():
+    """上游連通 JSON 目錄。讀取當下的環境變數，不在匯入時固定。"""
+    return os.environ.get("ROMA_GEO_CONNECTIONS") or DEFAULT_INPUT_FALLBACK
+
 PROB_EPS = 1e-6  # 夾住 0/1 避免 logit 爆 inf
+TOO_FEW_IMAGES = "至少需要兩張影像才能組成連通矩陣"
 
 
 def prob_to_logit(p: float) -> float:
@@ -48,13 +53,60 @@ def prob_to_logit(p: float) -> float:
     return math.log(p / (1.0 - p))
 
 
-def build_matrix(cl: dict):
+def build_matrix(cl: dict, input_name="上游連通 JSON"):
     """上游單一 house 的 JSON dict → (M(N,N,3), images[N])。回傳也附一份 pair 明細供自檢。"""
-    pairs = cl["pairs"]
-    # 影像集合＝所有 pair 出現過的 pano，排序求得決定性順序（下游以檔名對應，順序不影響正確性）。
+    if not isinstance(cl, dict):
+        raise RomaGeoError(
+            "頂層型別為 %s" % type(cl).__name__,
+            input_name=input_name,
+            condition="頂層須為物件",
+        )
+    pairs = cl.get("pairs")
+    if not isinstance(pairs, list):
+        raise RomaGeoError(
+            "pairs 型別為 %s" % type(pairs).__name__,
+            input_name=input_name,
+            condition="pairs 須為陣列",
+        )
+    for i, p in enumerate(pairs):
+        if not isinstance(p, dict):
+            raise RomaGeoError(
+                "pairs[%d] 型別為 %s" % (i, type(p).__name__),
+                input_name=input_name,
+                condition="每一項配對須為物件",
+            )
+        for key in ("pano_a", "pano_b"):
+            val = p.get(key)
+            if not isinstance(val, str) or not val:
+                raise RomaGeoError(
+                    "%s=%r" % (key, val),
+                    input_name=input_name,
+                    condition="影像名須為非空字串",
+                )
+            require_path_component(val, input_name=input_name)
+        if "probability" not in p:
+            raise RomaGeoError(
+                "pairs[%d] 缺少 probability" % i,
+                input_name=input_name,
+                condition="必要欄位缺席",
+            )
+        try:
+            float(p["probability"])
+        except (TypeError, ValueError) as e:
+            raise RomaGeoError(
+                "probability=%r" % (p["probability"],),
+                input_name=input_name,
+                condition="pairs[%d] 的 probability 須為數值" % i,
+            ) from e
     names = sorted({p["pano_a"] for p in pairs} | {p["pano_b"] for p in pairs})
     idx = {n: k for k, n in enumerate(names)}
     N = len(names)
+    if N < 2:
+        raise RomaGeoError(
+            "影像數 %d" % N,
+            input_name=input_name,
+            condition=TOO_FEW_IMAGES,
+        )
     M = np.zeros((N, N, 3), dtype=np.float32)
 
     for p in pairs:
@@ -93,30 +145,74 @@ def selfcheck(cl: dict, M: np.ndarray, names) -> dict:
 
 def convert_connections(input_dir, out_dir):
     """上游連通 JSON 目錄 → 連通矩陣目錄。回傳寫出的房子名清單。"""
-    from .errors import RomaGeoError
-    files = sorted(glob.glob(os.path.join(input_dir, "*.json")))
+    files = sorted(glob_in_dir(input_dir, "*.json"))
     if not files:
         raise RomaGeoError(
             "底下沒有 *.json",
             input_name="上游連通輸出",
             condition="目錄 %s 沒有 JSON" % input_dir,
         )
-    os.makedirs(out_dir, exist_ok=True)
 
+    prepared = []
+    skipped = 0
+    for f in files:
+        base = os.path.basename(f)
+        try:
+            with open(f, encoding="utf-8") as fh:
+                cl = json.load(fh)
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
+            raise RomaGeoError(
+                "%s：%s" % (type(e).__name__, e),
+                input_name="上游連通 JSON %s" % base,
+                condition="無法解析為 JSON",
+            ) from e
+        house = cl.get("house_id") or os.path.splitext(base)[0]
+        require_path_component(house, input_name="上游連通 JSON %s" % base)
+        try:
+            M, names, N = build_matrix(cl, input_name="上游連通 JSON %s" % base)
+        except RomaGeoError as e:
+            if e.condition == TOO_FEW_IMAGES:
+                print("[skip] %s: 影像數不足，不寫矩陣" % house)
+                skipped += 1
+                continue
+            raise
+        except KeyError as e:
+            raise RomaGeoError(
+                "缺少必要欄位 %s" % e,
+                input_name="上游連通 JSON %s" % base,
+                condition="必要欄位缺席",
+            ) from e
+        prepared.append((base, house, cl, M, names, N))
+
+    if not prepared:
+        raise RomaGeoError(
+            "全部 %d 份影像數不足，無法組成連通矩陣" % skipped if skipped else "底下沒有可轉的 JSON",
+            input_name="上游連通輸出",
+            condition=TOO_FEW_IMAGES if skipped else "目錄 %s 沒有可匯出的 JSON" % input_dir,
+        )
+
+    seen = {}
+    for base, house, _cl, _M, _names, _N in prepared:
+        if house in seen:
+            raise RomaGeoError(
+                "識別名稱 %s 同時出現在 %s 與 %s" % (house, seen[house], base),
+                input_name="上游連通 JSON %s" % base,
+                condition="同一批來源的識別名稱重複",
+            )
+        seen[house] = base
+
+    os.makedirs(out_dir, exist_ok=True)
     worst = {"max_prob_err": 0.0, "max_az_err_deg": 0.0}
     houses = []
-    for f in files:
-        cl = json.load(open(f, encoding="utf-8"))
-        house = cl.get("house_id") or os.path.splitext(os.path.basename(f))[0]
-        M, names, N = build_matrix(cl)
+    for _base, house, cl, M, names, N in prepared:
         n_pairs = len(cl["pairs"])
         complete = (N * (N - 1) // 2 == n_pairs)
         chk = selfcheck(cl, M, names)
         worst = {k: max(worst[k], chk[k]) for k in worst}
 
         np.save(os.path.join(out_dir, f"{house}.npy"), M)
-        json.dump(names, open(os.path.join(out_dir, f"{house}_images.json"), "w",
-                              encoding="utf-8"), ensure_ascii=False)
+        from .export_public import _atomic_write_json
+        _atomic_write_json(os.path.join(out_dir, "%s_images.json" % house), names)
         flag = "" if complete else f"  非完整圖(N*(N-1)/2={N*(N-1)//2}≠{n_pairs})"
         print(f"[ok] {house}: N={N} pairs={n_pairs} "
               f"maxΔprob={chk['max_prob_err']:.2e} maxΔaz={chk['max_az_err_deg']:.2e}°{flag}")
@@ -129,12 +225,11 @@ def convert_connections(input_dir, out_dir):
 
 def main():
     ap = argparse.ArgumentParser(description="candidate-connections JSON → matrices/<版本>/")
-    ap.add_argument("--input_dir", default=DEFAULT_INPUT,
+    ap.add_argument("--input_dir", default=default_input_dir(),
                     help="上游輸出的 JSON 目錄（預設 env ROMA_GEO_CONNECTIONS 或 ../candidate_connections_validation）")
     ap.add_argument("--out_dir", default=DEFAULT_OUT,
                     help="矩陣輸出目錄（一個版本一個目錄；預設 matrices/candidate_val）")
     args = ap.parse_args()
-    from .errors import RomaGeoError
     try:
         convert_connections(args.input_dir, args.out_dir)
     except RomaGeoError as e:

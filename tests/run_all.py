@@ -87,11 +87,11 @@ def filter_suite(suite, pattern):
 
 
 # ---------- 2 交付物檢查 ----------
-def run_deliverables(scan_all=False):
+def run_deliverables(scan_all=False, datasets_dir=None):
     rule("2 交付物檢查（需要磁碟上已有產出）")
     import check_deliverables as cd
     t0 = time.perf_counter()
-    results = cd.run_checks(limit=0 if scan_all else 200)
+    results = cd.run_checks(limit=0 if scan_all else 200, datasets_dir=datasets_dir)
     n_fail = cd.report(results)
     dt = time.perf_counter() - t0
     n_skip = sum(1 for r in results if r.status == cd.SKIP)
@@ -173,12 +173,13 @@ def main(argv=None):
                     help="交付物檢查改為全量（預設每類抽驗 200 份）")
     ap.add_argument("-k", dest="pattern", default=None, help="只跑名稱含此字串的單元測試")
     ap.add_argument("-v", "--verbose", action="store_true", help="逐項列出單元測試")
+    ap.add_argument("--datasets", default=None, help="資料集根目錄（交付物檢查判定受限來源）")
     a = ap.parse_args(argv)
 
     t_start = time.perf_counter()
     sections = [run_unit_tests(a.pattern, a.verbose)]
     if not a.fast:
-        sections.append(run_deliverables(a.deliverables_all))
+        sections.append(run_deliverables(a.deliverables_all, datasets_dir=a.datasets))
         sections.append(run_smoke(strict=a.full))
         if a.full:
             sections.append(run_env_script("環境驗收", os.path.join("environments", "check_env.py"),

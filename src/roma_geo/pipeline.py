@@ -1,19 +1,46 @@
-"""逐步呼叫的處理流程。每一步吃明確的輸入路徑，不依賴工作目錄或環境變數。"""
+"""逐步呼叫的處理流程。每一步吃明確的輸入路徑，不依賴工作目錄或環境變數。
+
+匯入本套件不修改搜尋路徑。呼叫本模組的流程步驟時，會把用到的 stitch_tool 與
+environments 加到搜尋路徑末端；挑配對與組房腳本會把專案根目錄加到末端，並把 src
+插到最前。
+"""
 import csv
-import json
 import os
 import sys
 import tempfile
 
 from .config import PROJECT_ROOT, Settings
 from .errors import RomaGeoError
+from .names import dest_in_dir, require_pair_names, require_path_component
+
+STEP_PAIRS_FILENAME = "_step_pairs.csv"
+BATCH_PAIRS_FILENAME = "_pairs.csv"
 
 
-def _ensure_stitch_path():
-    """把標註工具目錄加到 path 末端，不插入最前，以免蓋住使用端的模組。"""
-    tool = os.path.join(PROJECT_ROOT, "stitch_tool")
-    if tool not in sys.path:
-        sys.path.append(tool)
+def _import_project(rel, name):
+    """從專案原始碼樹載入模組。該目錄不在套件清單內，非編輯模式安裝會失敗。
+
+    加到 path 末端，不插入最前，以免蓋住使用端的模組。
+    """
+    directory = os.path.join(PROJECT_ROOT, rel) if rel else PROJECT_ROOT
+    if not os.path.isdir(directory):
+        raise RomaGeoError(
+            "找不到模組 %s（目錄 %s 不存在）。整房流程步驟需要專案原始碼樹，請以編輯模式安裝（uv pip install -e .）"
+            % (name, directory),
+            input_name="安裝方式",
+            condition="非編輯模式安裝不含 %s" % rel,
+        )
+    if directory not in sys.path:
+        sys.path.append(directory)
+    try:
+        return __import__(name)
+    except ModuleNotFoundError as e:
+        raise RomaGeoError(
+            "找不到模組 %s。整房流程步驟需要專案原始碼樹，請以編輯模式安裝（uv pip install -e .）"
+            % name,
+            input_name="安裝方式",
+            condition="非編輯模式安裝不含 %s" % rel,
+        ) from e
 
 
 class Degradation:
@@ -48,43 +75,30 @@ class PipelineResult:
         self.degradations = degradations
 
 
-def _add_path(rel):
-    p = os.path.join(PROJECT_ROOT, rel) if rel else PROJECT_ROOT
-    if p not in sys.path:
-        sys.path.append(p)
-
-
 def _read_pairs_csv(path):
     with open(path, encoding="utf-8", newline="") as f:
-        return [(r["house"], r["img_a"], r["img_b"]) for r in csv.DictReader(f)]
+        rows = list(csv.DictReader(f))
+    return [_pair_csv_names(r, input_name="配對清單 %s" % path)[:3] for r in rows]
+
+
+def _pair_csv_names(row, input_name="配對清單"):
+    missing = [k for k in ("house", "img_a", "img_b") if not row.get(k)]
+    if missing:
+        raise RomaGeoError(
+            "缺少欄位 %s" % ", ".join(missing),
+            input_name=input_name,
+            condition="欄位須為 house, img_a, img_b",
+        )
+    house, img_a, img_b = row["house"], row["img_a"], row["img_b"]
+    require_pair_names(house, img_a, img_b, input_name=input_name)
+    return house, img_a, img_b
 
 
 _PAIRS_COLS = ["house", "img_a", "img_b", "score"]
 
 
 def _write_pairs_csv(path, rows):
-    """寫入配對清單。同一路徑多次呼叫時累積，與 _summary.csv 相同。"""
-    by = {}
-    if os.path.isfile(path):
-        with open(path, encoding="utf-8", newline="") as f:
-            reader = csv.DictReader(f)
-            have = list(reader.fieldnames or [])
-            extra = [c for c in have if c not in _PAIRS_COLS]
-            missing = [c for c in _PAIRS_COLS if c not in have]
-            if extra or missing:
-                raise RomaGeoError(
-                    "多了 %s，少了 %s" % (extra or "無", missing or "無"),
-                    input_name="配對清單",
-                    condition="既有檔 %s 的欄位與現行不一致" % path,
-                )
-            for r in reader:
-                key = (r["house"], frozenset({r["img_a"], r["img_b"]}))
-                score = r.get("score")
-                by[key] = (r["house"], r["img_a"], r["img_b"],
-                           None if score in (None, "") else score)
-    for h, x, y, s in rows:
-        by[(h, frozenset({x, y}))] = (h, x, y, s)
-    merged = sorted(by.values(), key=lambda r: (r[0], r[1], r[2]))
+    """寫入本次配對清單。每次覆寫，只含本次選出的配對。彙總檔才是累積帳本。"""
     directory = os.path.dirname(os.path.abspath(path)) or "."
     os.makedirs(directory, exist_ok=True)
     fd, tmp = tempfile.mkstemp(prefix="._pairs_", suffix=".tmp", dir=directory)
@@ -92,8 +106,21 @@ def _write_pairs_csv(path, rows):
         with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
             w = csv.writer(f)
             w.writerow(_PAIRS_COLS)
-            for h, x, y, s in merged:
-                w.writerow([h, x, y, "" if s is None else round(float(s), 4)])
+            ordered = sorted(rows, key=lambda r: (r[0], r[1], r[2]))
+            for h, x, y, s in ordered:
+                require_pair_names(h, x, y, input_name="房子 %s" % h)
+                if s is None or s == "":
+                    w.writerow([h, x, y, ""])
+                    continue
+                try:
+                    score = round(float(s), 4)
+                except (TypeError, ValueError) as e:
+                    raise RomaGeoError(
+                        "score=%r" % (s,),
+                        input_name="房子 %s" % h,
+                        condition="配對 %s/%s 的分數須為數值" % (x, y),
+                    ) from e
+                w.writerow([h, x, y, score])
         os.replace(tmp, path)
     except Exception:
         try:
@@ -105,9 +132,8 @@ def _write_pairs_csv(path, rows):
 
 
 def _list_images(datasets_root, house):
-    _ensure_stitch_path()
-    from house_dirs import list_house_jpgs
-    return list_house_jpgs(datasets_root, house)
+    hd = _import_project("stitch_tool", "house_dirs")
+    return hd.list_house_jpgs(datasets_root, house)
 
 
 def _uniq_degradations(items):
@@ -158,6 +184,8 @@ def select_pairs(settings, houses, out_csv=None, threshold=None, pool="mean"):
     if not houses:
         raise RomaGeoError("未指定房子", input_name="房子名", condition="houses 為空")
     houses = list(houses)
+    for h in houses:
+        require_path_component(h, input_name="房子 %s" % h)
     mdir = settings.matrices_root()
     ds = settings.datasets_root()
     degradations = []
@@ -173,8 +201,7 @@ def select_pairs(settings, houses, out_csv=None, threshold=None, pool="mean"):
 
     pair_source = "matrix"
     if have_matrix:
-        _add_path("environments")
-        import select_pairs as sp
+        sp = _import_project("environments", "select_pairs")
         try:
             collected = sp.collect(mdir, have_matrix, pool)
         except SystemExit as e:
@@ -215,7 +242,7 @@ def select_pairs(settings, houses, out_csv=None, threshold=None, pool="mean"):
         ))
         pair_source = "images" if not have_matrix else "mixed"
 
-    out_csv = out_csv or os.path.join(settings.regions_root(), "_pairs.csv")
+    out_csv = out_csv or os.path.join(settings.regions_root(), STEP_PAIRS_FILENAME)
     _write_pairs_csv(out_csv, rows)
     return StepResult(
         "select_pairs",
@@ -239,6 +266,8 @@ def match_pairs(settings, pairs_csv, matcher=None, mode="direct"):
             condition="請先呼叫 select_pairs，或傳入既有的 pairs_csv",
         )
     rows = list(csv.DictReader(open(pairs_csv, encoding="utf-8", newline="")))
+    for r in rows:
+        _pair_csv_names(r, input_name="配對清單 %s" % pairs_csv)
     if matcher is None:
         from . import get_matcher
         matcher = get_matcher(cache_dir=settings.cache_root())
@@ -315,9 +344,10 @@ def estimate_poses(settings, pairs=None, pairs_csv=None, resume=False, limit=0):
 
 def evaluate_ranking(settings, summary_csv=None):
     """排序評估。沒有標註真值時略過。"""
-    _ensure_stitch_path()
-    from house_dirs import resolve_task_dir
-    from gt_hotspot import find_hotspot_files
+    hd = _import_project("stitch_tool", "house_dirs")
+    gt = _import_project("stitch_tool", "gt_hotspot")
+    resolve_task_dir = hd.resolve_task_dir
+    find_hotspot_files = gt.find_hotspot_files
     summary_csv = summary_csv or os.path.join(settings.regions_root(), "_summary.csv")
     if not os.path.isfile(summary_csv):
         return StepResult(
@@ -364,10 +394,11 @@ def evaluate_ranking(settings, summary_csv=None):
 
 def prepare_house(settings, houses, oof_dir=None):
     """影像（可加連通矩陣與幾何驗證 CSV）→ 內部房子 JSON。"""
-    _ensure_stitch_path()
-    import prepare_house_data as phd
-    from house_dirs import resolve_task_dir
-    from gt_hotspot import find_hotspot_files
+    phd = _import_project("stitch_tool", "prepare_house_data")
+    hd = _import_project("stitch_tool", "house_dirs")
+    gt = _import_project("stitch_tool", "gt_hotspot")
+    resolve_task_dir = hd.resolve_task_dir
+    find_hotspot_files = gt.find_hotspot_files
 
     oof_dir = oof_dir if oof_dir is not None else settings.matrices_root()
     summary_path = os.path.join(settings.regions_root(), "_summary.csv")
@@ -375,6 +406,8 @@ def prepare_house(settings, houses, oof_dir=None):
     summary_lookup = phd.load_pair_csv(summary_path) if os.path.isfile(summary_path) else None
     ranking_lookup = phd.load_pair_csv(ranking_path) if os.path.isfile(ranking_path) else None
     out_dir = settings.house_data_dir()
+    for h in houses:
+        dest_in_dir(out_dir, h, suffix=".json", input_name="房子 %s" % h)
     os.makedirs(out_dir, exist_ok=True)
     degradations = []
     last_path = None
@@ -402,8 +435,9 @@ def prepare_house(settings, houses, oof_dir=None):
                 input_name="全景影像",
                 condition="房子 %s 沒有連通矩陣，也找不到影像" % h,
             )
-        path = os.path.join(out_dir, h + ".json")
-        json.dump(data, open(path, "w", encoding="utf-8"), ensure_ascii=False)
+        path = dest_in_dir(out_dir, h, suffix=".json", input_name="房子 %s" % h)
+        from .export_public import _atomic_write_json
+        _atomic_write_json(path, data)
         last_path = path
     return StepResult(
         "prepare_house",
@@ -414,6 +448,9 @@ def prepare_house(settings, houses, oof_dir=None):
 
 def prepare_semantic(settings, houses):
     """語意圖 → 語意門 JSON，供後續步驟使用。沒有語意圖時略過。"""
+    out_dir = settings.semantic_out_dir()
+    for h in houses:
+        dest_in_dir(out_dir, h, suffix=".json", input_name="房子 %s" % h)
     if not any(_has_semantic(settings.semantic_root(), h) for h in houses):
         return StepResult(
             "prepare_semantic",
@@ -424,16 +461,15 @@ def prepare_semantic(settings, houses):
             )],
         )
     from .semantic import extract_house_doors
-    out_dir = settings.semantic_out_dir()
     os.makedirs(out_dir, exist_ok=True)
     written = []
     for h in houses:
         doors = extract_house_doors(settings.semantic_root(), h)
         if not doors:
             continue
-        path = os.path.join(out_dir, h + ".json")
-        json.dump({"house": h, "doors": doors}, open(path, "w", encoding="utf-8"),
-                  ensure_ascii=False)
+        path = dest_in_dir(out_dir, h, suffix=".json", input_name="房子 %s" % h)
+        from .export_public import _atomic_write_json
+        _atomic_write_json(path, {"house": h, "doors": doors})
         written.append(path)
     if not written:
         return StepResult(
@@ -468,7 +504,13 @@ def export_public_houses(settings, houses=None, with_regions=True, semantic_corr
     out = {"public_dir": settings.public_dir()}
     if written:
         out["public_json"] = written[0]
-    return StepResult("export_public", outputs=out)
+    degradations = []
+    if getattr(written, "pose_status", "complete") == "absent":
+        degradations.append(Degradation(
+            "pair_jsons", "absent",
+            "相對位姿整批缺席，其餘欄位照常輸出",
+        ))
+    return StepResult("export_public", outputs=out, degradations=degradations)
 
 
 def run_house(house, settings, matcher=None, run_match=True):
@@ -511,5 +553,6 @@ def run_house(house, settings, matcher=None, run_match=True):
 
     r = export_public_houses(settings, houses=[house])
     steps.append(r)
+    degradations.extend(r.degradations)
 
     return PipelineResult(house, steps, _uniq_degradations(degradations))

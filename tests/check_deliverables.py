@@ -24,7 +24,6 @@
 """
 import argparse
 import csv
-import glob
 import json
 import math
 import os
@@ -35,7 +34,8 @@ from _support import ROOT  # noqa: F401（匯入時補 sys.path）
 import export_public
 import roma_geo
 import upstream_direction
-from config import datasets_root, matrices_root, regions_root
+from config import Settings, datasets_root
+from roma_geo.names import glob_in_dir
 from pose_regions.batch_pose_from_cache import SCHEMA_VERSION, SUMMARY_COLS
 
 OK, FAIL, SKIP = "OK", "FAIL", "SKIP"
@@ -78,7 +78,7 @@ def az_formula(s):
 
 # ---------- per-pair JSON ----------
 def check_pair_jsons(regions_dir, limit):
-    files = sorted(f for f in glob.glob(os.path.join(regions_dir, "*.json"))
+    files = sorted(f for f in glob_in_dir(regions_dir, "*.json")
                    if not os.path.basename(f).startswith("_"))
     if not files:
         return Result("per-pair JSON", SKIP, "%s 底下沒有 per-pair JSON" % regions_dir)
@@ -182,7 +182,7 @@ def check_summary_csv(regions_dir):
 
 # ---------- 連通性矩陣 ----------
 def check_matrices(matrices_dir):
-    npys = sorted(glob.glob(os.path.join(matrices_dir, "*.npy")))
+    npys = sorted(glob_in_dir(matrices_dir, "*.npy"))
     npys = [f for f in npys if not f.endswith("_doormap.npy")]
     if not npys:
         return Result("連通性矩陣", SKIP, "%s 底下沒有 .npy" % matrices_dir)
@@ -196,7 +196,11 @@ def check_matrices(matrices_dir):
             problems.append("%s: 缺影像清單 %s_images.json" % (house, house))
             continue
         M = np.load(f)
-        images = _load(imgs_path)
+        try:
+            images = _load(imgs_path)
+        except Exception as e:
+            problems.append("%s: 無法解析影像清單（%s）" % (house, type(e).__name__))
+            continue
         total_n += len(images)
         if M.ndim != 3 or M.shape[2] != 3:
             problems.append("%s: 形狀應為 (N,N,3)，實得 %s" % (house, (M.shape,)))
@@ -222,7 +226,7 @@ def check_matrices(matrices_dir):
 
 # ---------- house JSON ----------
 def check_house_json(data_dir):
-    files = sorted(f for f in glob.glob(os.path.join(data_dir, "*.json"))
+    files = sorted(f for f in glob_in_dir(data_dir, "*.json")
                    if not os.path.basename(f).startswith("_"))
     if not files:
         return Result("house JSON", SKIP, "%s 底下沒有 house JSON" % data_dir)
@@ -230,7 +234,11 @@ def check_house_json(data_dir):
     problems, tot_pairs, n_geo = [], 0, 0
     for f in files:
         house = os.path.splitext(os.path.basename(f))[0]
-        d = _load(f)
+        try:
+            d = _load(f)
+        except Exception as e:
+            problems.append("%s: 無法解析（%s）" % (house, type(e).__name__))
+            continue
         for k in ("house", "n_images", "width", "height", "images", "pairs", "az_convention"):
             if k not in d:
                 problems.append("%s: 缺欄位 %s" % (house, k))
@@ -275,7 +283,7 @@ def check_house_json(data_dir):
 
 # ---------- 對外交付子集 ----------
 def check_public_houses(pub_dir, datasets_dir=None):
-    files = sorted(f for f in glob.glob(os.path.join(pub_dir, "*.json"))
+    files = sorted(f for f in glob_in_dir(pub_dir, "*.json")
                    if not os.path.basename(f).startswith("_"))
     if not files:
         return Result("對外交付子集", SKIP, "%s 底下沒有輸出" % pub_dir)
@@ -285,16 +293,20 @@ def check_public_houses(pub_dir, datasets_dir=None):
     allowed_region = set(roma_geo.PUBLIC_REGION_FIELDS) | {"a", "b"}
     allowed_side = set(roma_geo.PUBLIC_REGION_SIDE_FIELDS)
     problems, tot_pairs, n_regions = [], 0, 0
+    geom_missing, n_geom_rt = [], 0
     ds = datasets_dir if datasets_dir is not None else datasets_root()
-    if not os.path.isdir(ds):
-        problems.append("受限來源未驗到：資料集目錄不存在（%s）" % ds)
+    ds_missing = not os.path.isdir(ds)
     for f in files:
         house = os.path.splitext(os.path.basename(f))[0]
-        d = _load(f)
+        try:
+            d = _load(f)
+        except Exception as e:
+            problems.append("%s: 無法解析（%s）" % (house, type(e).__name__))
+            continue
         leaked = export_public.leaked_fields(d)
         if leaked:
             problems.append("%s: 含內部欄位 %s" % (house, sorted(leaked)))
-        if os.path.isdir(ds):
+        if not ds_missing:
             why = export_public.restricted_reason(house, datasets_dir=ds)
             if why:
                 problems.append("%s: 來自受限來源，不得對外交付（%s）"
@@ -312,10 +324,19 @@ def check_public_houses(pub_dir, datasets_dir=None):
                     problems.append("%s: house-v2 缺 semantic_corrected" % house)
                 elif not isinstance(p["semantic_corrected"], bool):
                     problems.append("%s: semantic_corrected 非布林" % house)
-                if p.get("has_geometry"):
-                    if "R" not in p or "t" not in p:
-                        problems.append("%s: 有位姿卻缺 R/t" % house)
-                elif "R" in p or "t" in p:
+                has = bool(p.get("has_geometry"))
+                has_rt = "R" in p and "t" in p
+                if has and has_rt:
+                    n_geom_rt += 1
+                elif has:
+                    imgs = d.get("images") or []
+                    try:
+                        a = os.path.splitext(imgs[p["i"]])[0]
+                        b = os.path.splitext(imgs[p["j"]])[0]
+                    except (IndexError, KeyError, TypeError):
+                        a, b = str(p.get("i")), str(p.get("j"))
+                    geom_missing.append("%s: 相對位姿缺席（配對 %s/%s）" % (house, a, b))
+                elif has_rt or "R" in p or "t" in p:
                     problems.append("%s: 無位姿卻帶 R/t" % house)
                 if "az_ij" not in p or "az_ji" not in p:
                     problems.append("%s: 通道方位缺席" % house)
@@ -361,16 +382,34 @@ def check_public_houses(pub_dir, datasets_dir=None):
     detail = "%d 房 · %d 對" % (len(files), tot_pairs)
     if n_regions:
         detail += " · 含共視區域 %d 對" % n_regions
-    return Result("對外交付子集", FAIL if problems else OK, detail, problems, len(files))
+    pose_partial = bool(geom_missing) and n_geom_rt > 0
+    pose_absent = bool(geom_missing) and n_geom_rt == 0
+    if pose_partial:
+        problems = ["相對位姿部分缺漏"] + geom_missing[:MAX_DETAIL] + problems
+    if pose_absent:
+        note = "相對位姿整批缺席（%d 對 has_geometry 而無 R/t）" % len(geom_missing)
+        problems = [note] + problems
+        detail += "；%s" % note
+    skip_notes = []
+    if ds_missing:
+        skip_notes.append("受限來源未驗到：資料集目錄不存在（%s）" % ds)
+    if problems:
+        return Result("對外交付子集", FAIL, detail, skip_notes + problems, len(files))
+    if skip_notes:
+        return Result("對外交付子集", SKIP,
+                      "%s；%s" % (detail, "；".join(skip_notes)),
+                      [], len(files))
+    return Result("對外交付子集", OK, detail, [], len(files))
 
 
 # ---------- 匯總 ----------
 def run_checks(limit=200, regions_dir=None, matrices_dir=None,
                house_dir=None, public_dir=None, datasets_dir=None):
-    regions_dir = regions_dir or regions_root()
-    matrices_dir = matrices_dir or matrices_root()
-    house_dir = house_dir or os.path.join(ROOT, "stitch_tool", "data")
-    public_dir = public_dir or os.path.join(ROOT, "Output", "public_houses")
+    s = Settings()
+    regions_dir = regions_dir or s.regions_root()
+    matrices_dir = matrices_dir or s.matrices_root()
+    house_dir = house_dir or s.house_data_dir()
+    public_dir = public_dir or s.public_dir()
     return [check_pair_jsons(regions_dir, limit),
             check_summary_csv(regions_dir),
             check_matrices(matrices_dir),
@@ -387,8 +426,9 @@ def report(results, stream=sys.stdout):
             print("         · …另有 %d 項" % (len(r.problems) - MAX_DETAIL), file=stream)
     n_fail = sum(1 for r in results if r.status == FAIL)
     n_skip = sum(1 for r in results if r.status == SKIP)
-    print("\n%d 項通過 · %d 項失敗 · %d 項略過（來源不存在）"
-          % (len(results) - n_fail - n_skip, n_fail, n_skip), file=stream)
+    skip_note = "（來源不存在）" if n_skip else ""
+    print("\n%d 項通過 · %d 項失敗 · %d 項略過%s"
+          % (len(results) - n_fail - n_skip, n_fail, n_skip, skip_note), file=stream)
     return n_fail
 
 

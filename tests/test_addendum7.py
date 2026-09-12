@@ -61,8 +61,8 @@ class TestX1SummaryAtomicAndSchema(unittest.TestCase):
             self.assertEqual(open(summary, encoding="utf-8").read(), before)
 
 
-class TestX2PairsCsvAccumulates(unittest.TestCase):
-    def test_two_houses_append_to_shared_pairs_csv(self):
+class TestX2PairsCsvThisCallOnly(unittest.TestCase):
+    def test_second_house_overwrites_shared_pairs_csv(self):
         with temp_dir() as d:
             ds = os.path.join(d, "datasets")
             make_image_house(ds, house="H1", stems=("a", "b"))
@@ -75,8 +75,8 @@ class TestX2PairsCsvAccumulates(unittest.TestCase):
             self.assertEqual(path, r2.outputs["pairs_csv"])
             rows = list(csv.DictReader(open(path, encoding="utf-8")))
             houses = {r["house"] for r in rows}
-            self.assertEqual(houses, {"H1", "H2"})
-            self.assertEqual(len(rows), 1 + 3)
+            self.assertEqual(houses, {"H2"})
+            self.assertEqual(len(rows), 3)
 
 
 class TestYRestrictedGuard(unittest.TestCase):
@@ -94,8 +94,8 @@ class TestYRestrictedGuard(unittest.TestCase):
                            "az_source": "coarse", "geo_posed": 0}],
             }
             bad = dict(ok, house="AAA_restricted")
-            json.dump(ok, open(os.path.join(in_dir, "AAA_restricted.json"), "w",
-                               encoding="utf-8"))
+            json.dump(bad, open(os.path.join(in_dir, "AAA_restricted.json"), "w",
+                                encoding="utf-8"))
             json.dump(ok, open(os.path.join(in_dir, "ZZZ_ok.json"), "w",
                                encoding="utf-8"))
             write_json(os.path.join(out_dir, "ZZZ_ok.json"), ok)
@@ -121,8 +121,8 @@ class TestYRestrictedGuard(unittest.TestCase):
                            "semantic_corrected": False}],
             })
             r = cd.check_public_houses(d, datasets_dir=os.path.join(d, "no_such_ds"))
-            self.assertEqual(r.status, cd.FAIL)
-            self.assertTrue(any("未驗到" in p for p in r.problems), r.problems)
+            self.assertEqual(r.status, cd.SKIP)
+            self.assertIn("未驗到", r.detail)
 
 
 class TestZPathPriority(unittest.TestCase):
@@ -186,7 +186,7 @@ class TestAAFailures(unittest.TestCase):
                     pipeline.select_pairs(settings=s, houses=[HOUSE])
             self.assertNotIsInstance(ctx.exception, SystemExit)
 
-    def test_geometry_without_pose_aborts_export(self):
+    def test_geometry_without_pose_degrades_when_regions_empty(self):
         with temp_dir() as d:
             in_dir = os.path.join(d, "in")
             out_dir = os.path.join(d, "out")
@@ -198,12 +198,13 @@ class TestAAFailures(unittest.TestCase):
                 "pairs": [{"i": 0, "j": 1, "az_ij": 10.0, "az_ji": 190.0,
                            "az_source": "geo", "geo_posed": 1}],
             }, open(os.path.join(in_dir, "H.json"), "w", encoding="utf-8"))
-            with self.assertRaises(RomaGeoError) as ctx:
-                with quiet():
-                    export_houses(in_dir, out_dir, regions_dir=os.path.join(d, "regions"),
-                                  with_regions=False)
-            self.assertIn("R/t", str(ctx.exception))
-            self.assertFalse(os.path.isfile(os.path.join(out_dir, "H.json")))
+            with quiet():
+                export_houses(in_dir, out_dir, regions_dir=os.path.join(d, "regions"),
+                              with_regions=False)
+            pub = json.load(open(os.path.join(out_dir, "H.json"), encoding="utf-8"))
+            self.assertTrue(pub["pairs"][0]["has_geometry"])
+            self.assertNotIn("R", pub["pairs"][0])
+            self.assertNotIn("t", pub["pairs"][0])
 
 
 class TestABCacheNameUsesDataset(unittest.TestCase):

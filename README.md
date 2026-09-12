@@ -19,7 +19,9 @@ bash environments/setup_env.sh
 
 相依版本釘在 `environments/requirements-core.txt`。torch 由安裝腳本從 CUDA 13 索引安裝，不寫入打包設定。
 
-把本套件裝進該虛擬環境（在專案根目錄）：
+把本套件裝進該虛擬環境（在專案根目錄）。
+整房流程步驟依賴標註工具與挑配對腳本，須以編輯模式安裝並保留專案原始碼樹。
+非編輯模式安裝時，這些步驟會以 `RomaGeoError` 指出原因。單對驗證只需套件本身。
 
 ```powershell
 uv pip install -e . --python venv\Scripts\python.exe
@@ -37,6 +39,7 @@ pub = to_public(res)
 尚未建立環境時，第一次呼叫會指出缺少哪些相依，以及相依版本在 `environments/requirements-core.txt`。
 
 呼叫端指定影像路徑即可。不必先切換工作目錄，也不必設定環境變數。快取目錄可用 `cache_dir=` 傳入。
+匯入 `roma_geo` 不修改模組搜尋路徑。呼叫整房流程步驟時，會把用到的 `stitch_tool` 與 `environments` 加到搜尋路徑末端；挑配對與組房腳本會把專案根目錄加到末端，並把 `src` 插到最前。
 
 整間房：
 
@@ -55,13 +58,14 @@ result = run_house("Office_A", settings=s)
 
 ## 可選輸入
 
-上游語意圖、上游連通矩陣、標註真值均可缺席。缺席時流程繼續，並在回傳的 `degradations` 寫明缺了哪一項、改用什麼。
+上游語意圖、上游連通矩陣、標註真值、相對位姿的逐對產物均可缺席。缺席時流程繼續，並在回傳的 `degradations` 寫明缺了哪一項、改用什麼。
 
 | 缺席項目 | 降級 | 如何辨識 |
 |---|---|---|
 | 上游連通矩陣 | 該房全部影像兩兩配對 | `degradations` 含 `upstream_connectivity`；房子資料帶 `has_connectivity_matrix=false` |
 | 標註真值 | `gt_*` 為空值；排序評估略過 | `degradations` 含 `ground_truth`；沒有標註時 `gt_connected` 為 `null`，標註存在且該對不在相鄰清單時為 `false` |
 | 上游語意圖 | 語意門步驟略過 | `degradations` 含 `semantic_maps` |
+| 相對位姿的逐對產物 | 其餘欄位照常輸出；有 `has_geometry` 的配對不帶 R/t | `degradations` 含 `pair_jsons`；交付物檢查判失敗（整批缺席）；命令列結束狀態 2 |
 
 方位來源寫在 `az_source`：`geo` 為幾何驗證，`coarse` 為上游連通方向。沒有連通矩陣時仍寫出該房全部配對；取不到方位的配對，方位為空值、來源欄位缺席。連通矩陣是否缺席寫在 `has_connectivity_matrix`。
 
@@ -112,7 +116,7 @@ venv\Scripts\python.exe tests\run_all.py
 ## 路徑與門檻
 
 呼叫端以 `config.Settings(...)` 傳入。未傳入的項目才讀環境變數或專案預設。
-只指定資料集、產出、快取時，內部產出路徑（房子 JSON、語意門、連通矩陣寫入位置）落在產出根目錄底下，不會寫進安裝來源。
+只指定產出根目錄（建構參數或 `ROMA_GEO_OUTPUT`）時，寫入目標（共視區域、對外交付、內部房子 JSON、語意門輸出）落在該目錄底下，不會寫進安裝來源。連通矩陣是輸入，不隨產出根目錄變動。
 
 | 項目 | 環境變數 | 預設 |
 |---|---|---|
@@ -123,6 +127,9 @@ venv\Scripts\python.exe tests\run_all.py
 | 挑配對門檻 | `ROMA_GEO_PAIR_THRESHOLD` | `config.PAIR_THRESHOLD`（現值 0.0） |
 | 產出根目錄 | `ROMA_GEO_OUTPUT` | `Output/` |
 | 匹配快取 | `ROMA_GEO_CACHE` | `roma_match/cache/` |
+| 內部房子 JSON | `ROMA_GEO_HOUSE_DATA` | 已指定產出根目錄時為 `<output>/house_data`，否則 `stitch_tool/data/` |
+| 語意門輸出 | `ROMA_GEO_SEMANTIC_OUT` | 已指定產出根目錄時為 `<output>/semantic`，否則 `stitch_tool/semantic/` |
+| 對外交付目錄 | `ROMA_GEO_PUBLIC_HOUSES` | `<output>/public_houses` |
 
 ```bash
 python config.py

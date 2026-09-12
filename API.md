@@ -4,7 +4,7 @@
 
 ## 開始使用
 
-先依 `README.md` 用 uv 建立環境，再於專案根目錄執行 `uv pip install -e . --python venv\Scripts\python.exe`。相依版本見 `environments/requirements-core.txt`。
+先依 `README.md` 用 uv 建立環境，再於專案根目錄執行 `uv pip install -e . --python venv\Scripts\python.exe`。相依版本見 `environments/requirements-core.txt`。整房流程步驟需要專案原始碼樹，故須編輯模式安裝；非編輯模式安裝時，這些步驟以 `RomaGeoError` 指出原因。單對驗證只需套件本身。
 
 單對：
 
@@ -232,6 +232,7 @@ python roma_geo.py a.jpg b.jpg --public --out result.json
 ## 2. 逐步呼叫
 
 每一個處理步驟都是函式，輸入與輸出由參數給定。不依賴前一步在全域狀態或固定位置留下的隱含資料。
+匯入 `roma_geo` 不修改模組搜尋路徑。呼叫流程步驟時，會把用到的 `stitch_tool` 與 `environments` 加到搜尋路徑末端；挑配對與組房腳本會把專案根目錄加到末端，並把 `src` 插到最前。
 
 ```python
 from roma_geo.config import Settings
@@ -252,7 +253,7 @@ s = Settings(datasets="...", output="...", cache="...", matrices="...")
 | 步驟 | 函式 | 主要輸入 | 主要輸出 |
 |---|---|---|---|
 | 連通輸出轉矩陣 | `ingest_connections` | 上游 JSON 目錄 | 連通矩陣目錄 |
-| 挑配對 | `select_pairs` | 連通矩陣或影像目錄 | `_pairs.csv` |
+| 挑配對 | `select_pairs` | 連通矩陣或影像目錄 | `_step_pairs.csv`（本次範圍） |
 | 匹配 | `match_pairs` | 配對清單、影像、matcher | 匹配快取 npz |
 | 幾何驗證 | `estimate_poses` | 匹配快取、影像 | 逐對 JSON、`_summary.csv` |
 | 排序評估 | `evaluate_ranking` | `_summary.csv`、標註真值 | `_ranking_eval.csv`（無真值則略過） |
@@ -274,16 +275,16 @@ s = Settings(datasets="...", output="...", cache="...", matrices="...")
 | `output` | 產出根目錄 | `ROMA_GEO_OUTPUT` 或專案內 `Output/` |
 | `cache` | 匹配快取 | `ROMA_GEO_CACHE` 或 `roma_match/cache/` |
 | `pair_threshold` | 挑配對門檻 | `ROMA_GEO_PAIR_THRESHOLD` 或 `PAIR_THRESHOLD` |
-| `house_data` | 內部房子 JSON 目錄 | `ROMA_GEO_HOUSE_DATA`，否則有 `output` 時為 `<output>/house_data`，再否則專案內 `stitch_tool/data/` |
+| `house_data` | 內部房子 JSON 目錄 | `ROMA_GEO_HOUSE_DATA`，否則已指定產出根目錄（建構參數或 `ROMA_GEO_OUTPUT`）時為 `<output>/house_data`，再否則專案內 `stitch_tool/data/` |
 | `semantic` | 語意圖根目錄 | `<datasets>/semantic/` |
-| `semantic_out` | 語意門 JSON 目錄 | `ROMA_GEO_SEMANTIC_OUT`，否則有 `output` 時為 `<output>/semantic`，再否則專案內 `stitch_tool/semantic/` |
+| `semantic_out` | 語意門 JSON 目錄 | `ROMA_GEO_SEMANTIC_OUT`，否則已指定產出根目錄（建構參數或 `ROMA_GEO_OUTPUT`）時為 `<output>/semantic`，再否則專案內 `stitch_tool/semantic/` |
 | `public_houses` | 對外交付目錄 | `ROMA_GEO_PUBLIC_HOUSES` 或 `<output>/public_houses` |
 | `connections` | 上游連通 JSON 目錄 | `ROMA_GEO_CONNECTIONS`；未指定則缺席，略過轉矩陣 |
 | `semantic_correct` | 是否對輸出一做語意矯正 | `False` |
 
-優先序一律為：建構參數，其次環境變數，最後預設值。輸入類路徑（資料集、連通矩陣、語意圖、上游連通 JSON）不隨產出根目錄變動。相對路徑以行程工作目錄為基準轉成絕對路徑。語意門目錄未指定時視為缺席，不組相對路徑。
+優先序一律為：建構參數，其次環境變數，最後預設值。輸入類路徑（資料集、連通矩陣、語意圖、上游連通 JSON）不隨產出根目錄變動。相對路徑以行程工作目錄為基準轉成絕對路徑。語意門目錄未指定時視為缺席，不組相對路徑。寫入目標（共視區域、對外交付、內部房子 JSON、語意門輸出）的預設位置跟隨解析後的產出根目錄，不論該值來自建構參數或環境變數。
 
-配對清單 `_pairs.csv` 與彙總檔 `_summary.csv` 寫入同一路徑時皆為累積：後續呼叫合併列，不覆寫其他房子。欄位不符時以 `RomaGeoError` 中止，原檔不變。
+逐步呼叫的本次配對清單預設為 `_step_pairs.csv`：每次覆寫，只含本次選出的配對，是下一步的輸入範圍。批次流程的穩定配對來源是 `_pairs.csv`：由命令列挑配對腳本寫入（既有檔須加 `--force`），`batch_match.py` 見到該檔存在就沿用。兩個預設位置分開，逐步呼叫不會改寫批次來源。彙總檔 `_summary.csv` 是產出帳本：同一路徑多次呼叫時累積，不覆寫其他房子。欄位不符時彙總檔以 `RomaGeoError` 中止，原檔不變。零位元組的既有彙總檔視為沒有既有內容。
 
 ### 2.2 可選輸入缺席時的回傳
 
@@ -295,6 +296,7 @@ s = Settings(datasets="...", output="...", cache="...", matrices="...")
 | `ground_truth` | 沒有 HOTSPOT 標註 |
 | `semantic_maps` | 沒有門語意圖 |
 | `matching` | 匹配步驟有部分配對失敗 |
+| `pair_jsons` | 相對位姿整批缺席（每一對有 has_geometry 的配對都沒有逐對產物）。命令列結束狀態為 2。交付物檢查判失敗。部分缺漏、或產物檔在卻沒有位姿，則中止 |
 
 對應的降級行為見 README「可選輸入」。
 
@@ -334,7 +336,8 @@ HTTP 介面：
 把連通性矩陣（若有）與幾何驗證結果整理成前端可讀的房子 JSON。沒有矩陣時改由影像清單與幾何驗證結果組房。
 
 - 輸入：連通矩陣目錄、ERP 圖、可選的 HOTSPOT 標註、可選的幾何驗證 CSV
-- 輸出：`stitch_tool/data/<house>.json` 與 `_index.json`
+- 輸出：內部房子 JSON（預設 `stitch_tool/data/<house>.json`）與 `_index.json`
+- 命令列在 `roma_scores.npz` 存在時會把 `roma_*` 分數寫進內部 JSON，供標註工具排序。`pipeline.prepare_house` 不讀該檔，對應欄位為空值。對外匯出會裁掉 `roma_*`
 - 矩陣路徑優先序：`--oof_dir` > 環境變數 `ROMA_GEO_MATRICES` > `config.MATRICES_VERSION`
 - 有位姿的 pair 會以幾何驗證的 `az_ab` / `az_ba` 覆寫粗篩方位，並記於 `az_source`
 

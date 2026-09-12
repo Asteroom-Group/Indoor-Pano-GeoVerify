@@ -14,6 +14,10 @@ r"""
 | 挑配對門檻 | `ROMA_GEO_PAIR_THRESHOLD` | `PAIR_THRESHOLD` | `environments/select_pairs.py` |
 | 產出根目錄 | `ROMA_GEO_OUTPUT` | `Output/` | 幾何驗證產物、工具讀區域 |
 | 匹配快取 | `ROMA_GEO_CACHE` | `roma_match/cache/` | 匹配、批次幾何驗證 |
+| 內部房子 JSON | `ROMA_GEO_HOUSE_DATA` | 有產出根目錄時為 `<output>/house_data`，否則 `stitch_tool/data/` | 組房、匯出 |
+| 語意門輸出 | `ROMA_GEO_SEMANTIC_OUT` | 有產出根目錄時為 `<output>/semantic`，否則 `stitch_tool/semantic/` | 語意門步驟 |
+| 對外交付目錄 | `ROMA_GEO_PUBLIC_HOUSES` | `<output>/public_houses` | 對外匯出 |
+| 上游連通 JSON | `ROMA_GEO_CONNECTIONS` | 無（缺席則略過轉矩陣） | 連通輸出轉矩陣 |
 
 [用法]
   from config import datasets_root, semantic_root, regions_root
@@ -144,7 +148,10 @@ def output_root() -> str:
 
 
 def regions_root() -> str:
-    """幾何驗證產物：per-pair JSON + `_summary.csv` / `_ranking_eval.csv` / `_pairs.csv`。"""
+    """幾何驗證產物：per-pair JSON + `_summary.csv` / `_ranking_eval.csv`。
+
+    批次配對來源為同目錄的 `_pairs.csv`。逐步呼叫的本次清單為 `_step_pairs.csv`。
+    """
     return os.path.join(output_root(), "roma_regions")
 
 
@@ -174,6 +181,11 @@ class Settings:
 
     def _abs(self, value):
         return os.path.abspath(os.path.expanduser(value))
+
+    def _specified(self, ctor_value, env_name):
+        if ctor_value:
+            return True
+        return bool(os.environ.get(env_name))
 
     def datasets_root(self):
         return self._abs(self._datasets) if self._datasets else datasets_root()
@@ -215,7 +227,7 @@ class Settings:
         env = os.environ.get(ENV_HOUSE_DATA)
         if env:
             return self._abs(env)
-        if self._output:
+        if self._specified(self._output, ENV_OUTPUT):
             return os.path.join(self.output_root(), "house_data")
         return os.path.join(PROJECT_ROOT, "stitch_tool", "data")
 
@@ -241,7 +253,7 @@ class Settings:
         env = os.environ.get(ENV_SEMANTIC_OUT)
         if env:
             return self._abs(env)
-        if self._output:
+        if self._specified(self._output, ENV_OUTPUT):
             return os.path.join(self.output_root(), "semantic")
         return os.path.join(PROJECT_ROOT, "stitch_tool", "semantic")
 
@@ -258,13 +270,29 @@ def _count(d: str, ext: str) -> str:
 
 
 def describe() -> str:
+    st = Settings()
     src = "環境變數 %s" % ENV_DATASETS if os.environ.get(ENV_DATASETS) else "預設（專案內 datasets/）"
     msrc = ("環境變數 %s" % ENV_MATRICES if os.environ.get(ENV_MATRICES)
             else "預設（matrices/%s）" % MATRICES_VERSION)
-    d, s, m = datasets_root(), semantic_root(), matrices_root()
+    d, sem, m = st.datasets_root(), st.semantic_root(), st.matrices_root()
     n_npy = len([f for f in os.listdir(m) if f.endswith(".npy")]) if os.path.isdir(m) else 0
     variants = [x for x in ("refined", "oof")
                 if os.path.isdir(os.path.join(matrices_version_root(), "%s_matrices" % x))]
+    conn = st.connections_dir()
+    env_lines = []
+    for name, label in (
+            (ENV_DATASETS, "全景資料集"),
+            (ENV_MATRICES, "連通矩陣"),
+            (ENV_PAIR_THRESHOLD, "挑配對門檻"),
+            (ENV_OUTPUT, "產出根目錄"),
+            (ENV_CACHE, "匹配快取"),
+            (ENV_CONNECTIONS, "上游連通 JSON"),
+            (ENV_HOUSE_DATA, "內部房子 JSON"),
+            (ENV_SEMANTIC_OUT, "語意門輸出"),
+            (ENV_PUBLIC, "對外交付目錄"),
+    ):
+        val = os.environ.get(name)
+        env_lines.append("  %s（%s）: %s" % (name, label, val if val else "未設"))
     return (
         "datasets_root : %s\n"
         "  來源        : %s\n"
@@ -284,16 +312,29 @@ def describe() -> str:
         "  存在        : %s（%s 個 .json）\n"
         "cache_root    : %s\n"
         "  來源        : %s\n"
-        "  存在        : %s（%s 個 .npz）"
-        % (d, src, os.path.isdir(d), s, os.path.isdir(s),
+        "  存在        : %s（%s 個 .npz）\n"
+        "house_data_dir: %s\n"
+        "  來源        : %s\n"
+        "semantic_out_dir: %s\n"
+        "  來源        : %s\n"
+        "public_dir    : %s\n"
+        "  來源        : %s\n"
+        "connections_dir: %s\n"
+        "環境變數：\n%s"
+        % (d, src, os.path.isdir(d), sem, os.path.isdir(sem),
            m, msrc, os.path.isdir(m), n_npy,
            variants or "（無子目錄，.npy 直接置於版本目錄）",
            matrices_versions() or "（無）",
-           pair_threshold(), _src(ENV_PAIR_THRESHOLD, "PAIR_THRESHOLD=%s" % PAIR_THRESHOLD),
-           output_root(), _src(ENV_OUTPUT, "預設（專案內 Output/）"),
-           regions_root(), os.path.isdir(regions_root()), _count(regions_root(), ".json"),
-           cache_root(), _src(ENV_CACHE, "預設（roma_match/cache/）"),
-           os.path.isdir(cache_root()), _count(cache_root(), ".npz"))
+           st.pair_threshold(), _src(ENV_PAIR_THRESHOLD, "PAIR_THRESHOLD=%s" % PAIR_THRESHOLD),
+           st.output_root(), _src(ENV_OUTPUT, "預設（專案內 Output/）"),
+           st.regions_root(), os.path.isdir(st.regions_root()), _count(st.regions_root(), ".json"),
+           st.cache_root(), _src(ENV_CACHE, "預設（roma_match/cache/）"),
+           os.path.isdir(st.cache_root()), _count(st.cache_root(), ".npz"),
+           st.house_data_dir(), _src(ENV_HOUSE_DATA, "跟隨產出根目錄或 stitch_tool/data/"),
+           st.semantic_out_dir(), _src(ENV_SEMANTIC_OUT, "跟隨產出根目錄或 stitch_tool/semantic/"),
+           st.public_dir(), _src(ENV_PUBLIC, "跟隨產出根目錄 public_houses"),
+           conn if conn else "缺席",
+           "\n".join(env_lines))
     )
 
 

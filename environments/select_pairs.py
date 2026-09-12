@@ -33,7 +33,6 @@ max/min/upper。
 """
 import argparse
 import csv
-import glob
 import json
 import os
 import sys
@@ -49,6 +48,7 @@ if ROOT not in sys.path:
 
 from roma_geo.config import matrices_root, pair_threshold, regions_root   # noqa: E402
 from roma_geo.errors import RomaGeoError  # noqa: E402
+from roma_geo.names import glob_in_dir  # noqa: E402
 
 
 def load_house(mdir, house):
@@ -87,7 +87,7 @@ def pooled(ch0, how):
 
 def list_houses(mdir):
     out = []
-    for p in sorted(glob.glob(os.path.join(mdir, "*.npy"))):
+    for p in sorted(glob_in_dir(mdir, "*.npy")):
         name = os.path.splitext(os.path.basename(p))[0]
         if name.endswith("_doormap"):
             continue

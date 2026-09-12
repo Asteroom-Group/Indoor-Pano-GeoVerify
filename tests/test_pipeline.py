@@ -27,6 +27,9 @@ ENV_CLEAR = {
     "ROMA_GEO_CACHE": None,
     "ROMA_GEO_PAIR_THRESHOLD": None,
     "ROMA_GEO_CONNECTIONS": None,
+    "ROMA_GEO_HOUSE_DATA": None,
+    "ROMA_GEO_SEMANTIC_OUT": None,
+    "ROMA_GEO_PUBLIC_HOUSES": None,
 }
 
 

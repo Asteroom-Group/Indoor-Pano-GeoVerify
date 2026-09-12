@@ -41,11 +41,14 @@ GT 欄位(供驗收交叉比對,非計算輸入):
   venv/Scripts/python.exe pose_regions/batch_pose_from_cache.py --limit 20 # 冒煙
   --resume 會跳過已存在的 JSON(重讀其內容補 summary 列),中斷可續跑。
 """
-import argparse, csv, glob, json, os, sys, tempfile, time
+import argparse, csv, json, os, sys, tempfile, time
 import numpy as np
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(SCRIPT_DIR)
+_SRC = os.path.join(ROOT, "src")
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
 
 # 模組化(2026-07-23):匯入零副作用(chdir 移入 main());套件(from pose_regions import …)
 # 與腳本直跑(python pose_regions/batch_pose_from_cache.py)雙模式匯入。
@@ -125,7 +128,8 @@ class HouseGT:
         # ⚠ 必須排序:多樓層房子每層一個 HOTSPOT 檔,樓梯配對在相鄰兩層皆有標註且座標不同;
         # 下方 self.room 與 GT 方位為後寫覆蓋前寫,未排序時採用哪一筆取決於檔案系統的
         # 列舉順序(Linux 與 Windows 不一致)。與 prepare_house_data.load_gt 同源同修。
-        _hs_files = sorted(glob.glob(os.path.join(d, "*_HOTSPOT.json")))
+        from roma_geo.names import glob_in_dir
+        _hs_files = sorted(glob_in_dir(d, "*_HOTSPOT.json"))
         for hj in _hs_files:
             try:
                 data = json.load(open(hj, encoding="utf-8"))
@@ -374,7 +378,7 @@ def _csv_fields_or_raise(fields, expected, path):
 def _merge_summary_rows(path, new_rows):
     """以 (house, {img_a, img_b}) 合併既有彙總列。指定配對時累積，不覆寫其他房子。"""
     by = {}
-    if os.path.isfile(path):
+    if os.path.isfile(path) and os.path.getsize(path) > 0:
         with open(path, encoding="utf-8", newline="") as f:
             reader = csv.DictReader(f)
             _csv_fields_or_raise(reader.fieldnames, SUMMARY_COLS, path)
@@ -591,11 +595,12 @@ def run_pose_batch(cache_dir, out_dir, datasets_root=None, pairs=None, limit=0, 
     回傳寫入 summary 的列數。
     """
     from types import SimpleNamespace
-    os.makedirs(out_dir, exist_ok=True)
     jobs = []  # (house, na, nb, npz_path, swapped)
     skipped = []
     if pairs is not None:
+        from roma_geo.names import require_pair_names
         for house, na, nb in pairs:
+            require_pair_names(house, na, nb, input_name="房子 %s" % house)
             p = os.path.join(cache_dir, "%s_%s_%s%s" % (house, na, nb, CACHE_SUFFIX))
             pr = os.path.join(cache_dir, "%s_%s_%s%s" % (house, nb, na, CACHE_SUFFIX))
             if os.path.isfile(p):
@@ -612,7 +617,8 @@ def run_pose_batch(cache_dir, out_dir, datasets_root=None, pairs=None, limit=0, 
                     % (house, na, nb, cache_dir),
                 )
     else:
-        all_npz = sorted(glob.glob(os.path.join(cache_dir, "*.npz")))
+        from roma_geo.names import glob_in_dir
+        all_npz = sorted(glob_in_dir(cache_dir, "*.npz"))
         files = [f for f in all_npz if f.endswith(CACHE_SUFFIX)]
         n_other = len(all_npz) - len(files)
         if n_other:
@@ -629,6 +635,7 @@ def run_pose_batch(cache_dir, out_dir, datasets_root=None, pairs=None, limit=0, 
                 print("  %s：%s" % (name, why))
     if limit:
         jobs = jobs[:limit]
+    os.makedirs(out_dir, exist_ok=True)
     if not jobs and skipped:
         print("[skip] 本批 %d 個快取檔全部略過。" % len(skipped))
     gt = HouseGT()

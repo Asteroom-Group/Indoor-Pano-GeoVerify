@@ -9,6 +9,7 @@
 
 [對外保留]
     房層  house / n_images / width / height / images / az_convention
+          schema_version / has_connectivity_matrix
     每對  i, j                連接圖的兩個端點（index 對應 images）
           prob                上游給的連通機率
           az_ij / az_ji       邊方向（在 i 圖看向 j 的方位角，反向同理）
@@ -18,6 +19,8 @@
           az_wedge_i_deg / az_wedge_j_deg      共視楔形寬：包住 80% 內點的最窄圓弧
                               兩側各一個，側別與 az_ij/az_ji 同樣正規化。窄代表共視證據
                               集中在單一方向，位姿條件較差；判斷可靠度時取兩者較小者
+          R / t               相對位姿。僅在 has_geometry 為真時出現。t 長度為 1，跨對無共用尺度
+          semantic_corrected  輸出一是否被語意門中心改寫
           regions             共視區域（有幾何驗證結果的對才有；`--no_regions` 可關閉）
                               欄位與單對契約相同：n / frac_of_inliers / a、b 兩側的
                               polygon、area_frac、az_range
@@ -26,7 +29,7 @@
     gt_*         真值對照，只供內部評估
     az_coarse_*  幾何覆寫前的上游原值，只供內部比對
     roma_*       匹配聚合分數，內部排序用
-    R、t、inliers[]：本來就不在 house JSON 裡（見 roma_geo.to_public 的同款約定）
+    inliers[]    匹配內點明細，只在逐對內部結果裡
 
 共視區域取自 per-pair 產出，預設併入，與 `roma_geo.to_public()` 的單對契約一致
 （共視區域、通道方位角、可信度）。只有跑出幾何驗證結果的對才有區域，
@@ -41,15 +44,13 @@
 故下游不必也不應再自行判斷側別。
 """
 import argparse
-import glob
 import json
 import os
-import sys
+import tempfile
 
-from .config import PROJECT_ROOT
+from .config import Settings
 from .errors import RomaGeoError
-
-HERE = PROJECT_ROOT
+from .names import dest_in_dir, glob_in_dir
 
 #: 每對保留的欄位：內部名 → 對外名（改名處的理由見模組說明）。
 PAIR_FIELDS = {
@@ -90,23 +91,99 @@ def pair_to_public(p: dict) -> dict:
     return out
 
 
-def _assert_pose_matches_flag(house, pub):
-    """has_geometry 與 R/t 必須同步。不成立時不得寫檔。"""
-    for p in pub.get("pairs") or []:
-        has = bool(p.get("has_geometry"))
-        has_rt = "R" in p and "t" in p
-        if has and not has_rt:
-            raise RomaGeoError(
-                "有位姿卻缺 R/t",
-                input_name="房子 %s" % house,
-                condition="has_geometry 與相對位姿不同步",
-            )
-        if not has and ("R" in p or "t" in p):
-            raise RomaGeoError(
-                "無位姿卻帶 R/t",
-                input_name="房子 %s" % house,
-                condition="has_geometry 與相對位姿不同步",
-            )
+def _atomic_write_json(path, obj):
+    """寫入 JSON。先寫同目錄暫存檔再置換，中斷時目的檔保持原狀。"""
+    directory = os.path.dirname(os.path.abspath(path)) or "."
+    os.makedirs(directory, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix="._pub_", suffix=".tmp", dir=directory)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(obj, fh, ensure_ascii=False)
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def _dest_in_dir(out_dir, house):
+    return dest_in_dir(out_dir, house, suffix=".json", input_name="房子 %s" % house)
+
+
+def _load_json(path, input_name):
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
+        raise RomaGeoError(
+            "%s：%s" % (type(e).__name__, e),
+            input_name=input_name,
+            condition="無法解析為 JSON",
+        ) from e
+
+
+class ExportResult(list):
+    """寫出的路徑清單。`pose_status` 為 complete（相對位姿齊全）或 absent（整批缺席）。"""
+
+    def __init__(self, paths, pose_status="complete"):
+        list.__init__(self, paths)
+        self.pose_status = pose_status
+
+
+def _pair_stems(pub, p):
+    names = pub.get("images") or []
+    try:
+        a = os.path.splitext(names[p["i"]])[0]
+        b = os.path.splitext(names[p["j"]])[0]
+        return a, b
+    except (IndexError, KeyError, TypeError):
+        return str(p.get("i")), str(p.get("j"))
+
+
+def _pose_status_or_raise(prepared, regions_dir):
+    """依每一對自己的產物檔判定。檔在卻沒位姿或部份缺漏則中止；檔都不在才降級。"""
+    missing = []
+    empty_pose = []
+    n_rt = 0
+    for _f, house, pub in prepared:
+        for p in pub.get("pairs") or []:
+            has = bool(p.get("has_geometry"))
+            has_rt = "R" in p and "t" in p
+            if has_rt and not has:
+                raise RomaGeoError(
+                    "無位姿卻帶 R/t",
+                    input_name="房子 %s" % house,
+                    condition="has_geometry 與相對位姿不同步",
+                )
+            if not has:
+                continue
+            a, b = _pair_stems(pub, p)
+            path, _swap = _find_pair_json(regions_dir, house, a, b)
+            if has_rt:
+                n_rt += 1
+            elif path:
+                empty_pose.append((house, a, b))
+            else:
+                missing.append((house, a, b))
+    if empty_pose:
+        house, a, b = empty_pose[0]
+        raise RomaGeoError(
+            "配對 %s/%s 的逐對產物沒有相對位姿" % (a, b),
+            input_name="房子 %s" % house,
+            condition="has_geometry 與相對位姿不同步",
+        )
+    if missing and n_rt:
+        house, a, b = missing[0]
+        raise RomaGeoError(
+            "配對 %s/%s 有 has_geometry 但逐對產物缺席" % (a, b),
+            input_name="房子 %s" % house,
+            condition="相對位姿部分缺漏",
+        )
+    if missing:
+        return "absent"
+    return "complete"
 
 
 def house_to_public(d: dict) -> dict:
@@ -153,7 +230,7 @@ def attach_regions(house: str, pub: dict, regions_dir: str) -> int:
                            (True, os.path.join(regions_dir, f"{house}_{b}_{a}.json"))):
             if not os.path.isfile(path):
                 continue
-            regions = json.load(open(path, encoding="utf-8")).get("regions") or []
+            regions = _load_json(path, "逐對產物 %s" % os.path.basename(path)).get("regions") or []
             if regions:
                 p["regions"] = [region_to_public(swap_sides(r) if swap else r)
                                 for r in regions]
@@ -189,7 +266,7 @@ def attach_pose(house, pub, regions_dir):
         path, swap = _find_pair_json(regions_dir, house, a, b)
         if not path:
             continue
-        pose = json.load(open(path, encoding="utf-8")).get("pose")
+        pose = _load_json(path, "逐對產物 %s" % os.path.basename(path)).get("pose")
         if not pose or pose.get("R") is None or pose.get("t") is None:
             continue
         R, t = pose["R"], pose["t"]
@@ -224,7 +301,7 @@ def restricted_reason(house, datasets_dir=None):
     if not os.path.isdir(base):
         return None
     hits = [os.path.join(base, RESTRICTED_MARKER)]
-    hits += glob.glob(os.path.join(base, "**", RESTRICTED_MARKER), recursive=True)
+    hits += glob_in_dir(base, os.path.join("**", RESTRICTED_MARKER), recursive=True)
     for p in hits:
         if os.path.isfile(p):
             try:
@@ -240,37 +317,59 @@ def export_houses(in_dir, out_dir, regions_dir=None, with_regions=True,
                   semantic_dir=None):
     """把內部房子 JSON 裁成對外交付子集。失敗時丟 RomaGeoError。"""
 
-    files = [f for f in sorted(glob.glob(os.path.join(in_dir, "*.json")))
+    files = [f for f in sorted(glob_in_dir(in_dir, "*.json"))
              if not os.path.basename(f).startswith("_")]
+    loaded = []
+    for f in files:
+        stem = os.path.splitext(os.path.basename(f))[0]
+        try:
+            d = _load_json(f, "房子資料 %s" % os.path.basename(f))
+        except RomaGeoError:
+            if houses is not None and stem not in houses:
+                continue
+            raise
+        house = d.get("house") or stem
+        loaded.append((f, house, d))
+
     if houses is not None:
         want = set(houses)
-        files = [f for f in files if os.path.splitext(os.path.basename(f))[0] in want]
-        missing = want - {os.path.splitext(os.path.basename(f))[0] for f in files}
+        loaded = [(f, h, d) for f, h, d in loaded if h in want]
+        missing = want - {h for _, h, _ in loaded}
         if missing:
+            name = sorted(missing)[0]
             raise RomaGeoError(
-                "找不到 %s.json" % sorted(missing)[0],
-                input_name="房子資料",
-                condition="目錄 %s 沒有該檔" % in_dir,
+                "找不到 house 欄位為 %s 的來源" % name,
+                input_name="房子 %s" % name,
+                condition="比對依據為 JSON 的 house 欄位；目錄 %s" % in_dir,
             )
-    if not files:
+    if not loaded:
         raise RomaGeoError(
             "底下沒有 house JSON",
             input_name="房子資料",
             condition="目錄 %s 沒有可匯出的 JSON" % in_dir,
         )
 
+    seen_files = {}
+    for f, house, _d in loaded:
+        dest_in_dir(out_dir, house, suffix=".json", input_name="房子 %s" % house)
+        if house in seen_files:
+            raise RomaGeoError(
+                "識別名稱 %s 同時出現在 %s 與 %s"
+                % (house, os.path.basename(seen_files[house]), os.path.basename(f)),
+                input_name="房子 %s" % house,
+                condition="同一批來源的識別名稱重複",
+            )
+        seen_files[house] = f
+
     if not regions_dir:
         from .config import regions_root
         regions_dir = regions_root()
 
-    names = []
-    for f in files:
-        d = json.load(open(f, encoding="utf-8"))
-        names.append(d.get("house") or os.path.splitext(os.path.basename(f))[0])
+    names = [h for _f, h, _d in loaded]
     existing = []
     if os.path.isdir(out_dir):
         existing = [os.path.splitext(os.path.basename(p))[0]
-                    for p in glob.glob(os.path.join(out_dir, "*.json"))
+                    for p in glob_in_dir(out_dir, "*.json")
                     if not os.path.basename(p).startswith("_")]
     blocked = []
     seen = set()
@@ -284,7 +383,7 @@ def export_houses(in_dir, out_dir, regions_dir=None, with_regions=True,
     if blocked:
         os.makedirs(out_dir, exist_ok=True)
         for house, _why in blocked:
-            leftover = os.path.join(out_dir, house + ".json")
+            leftover = _dest_in_dir(out_dir, house)
             if os.path.isfile(leftover):
                 os.remove(leftover)
         house, why = blocked[0]
@@ -297,8 +396,7 @@ def export_houses(in_dir, out_dir, regions_dir=None, with_regions=True,
     os.makedirs(out_dir, exist_ok=True)
     prepared = []
     tot_regions = 0
-    for f, house in zip(files, names):
-        d = json.load(open(f, encoding="utf-8"))
+    for f, house, d in loaded:
         pub = house_to_public(d)
         need_regions = with_regions or semantic_correct
         if need_regions:
@@ -320,46 +418,62 @@ def export_houses(in_dir, out_dir, regions_dir=None, with_regions=True,
                 input_name="房子 %s" % house,
                 condition="對外子集混入了內部欄位",
             )
-        _assert_pose_matches_flag(house, pub)
         prepared.append((f, house, pub))
+
+    pose_status = _pose_status_or_raise(prepared, regions_dir)
 
     tot_in = tot_out = tot_pairs = 0
     written = []
     for f, house, pub in prepared:
-        out_path = os.path.join(out_dir, "%s.json" % house)
-        json.dump(pub, open(out_path, "w", encoding="utf-8"), ensure_ascii=False)
+        out_path = _dest_in_dir(out_dir, house)
+        _atomic_write_json(out_path, pub)
         tot_in += os.path.getsize(f)
         tot_out += os.path.getsize(out_path)
         tot_pairs += len(pub["pairs"])
         written.append(out_path)
 
-    print(f"{len(files)} 房 · {tot_pairs} 對 → {out_dir}")
+    print(f"{len(loaded)} 房 · {tot_pairs} 對 → {out_dir}")
     if tot_in:
         print(f"體積 {tot_in/1e6:.2f} MB → {tot_out/1e6:.2f} MB（{tot_out/tot_in:.0%}）")
     if with_regions:
         print(f"併入共視區域：{tot_regions} 對（來源 {regions_dir}；a 側 = i 圖）")
     else:
         print("未併入共視區域（--no_regions）")
-    print("自檢：輸出無 gt_* / az_coarse_* / roma_* 欄位，且無受限來源的房屋")
-    return written
+    ds = datasets_dir
+    if not ds:
+        from .config import datasets_root
+        ds = datasets_root()
+    if os.path.isdir(ds):
+        print("自檢：輸出無 gt_* / az_coarse_* / roma_* 欄位，且無受限來源的房屋")
+    else:
+        print("自檢：輸出無 gt_* / az_coarse_* / roma_* 欄位；受限來源未驗到（資料集目錄不存在）")
+    if pose_status == "absent":
+        print("降級：相對位姿整批缺席")
+    return ExportResult(written, pose_status)
 
 
 def main():
+    s = Settings()
     ap = argparse.ArgumentParser(description="每間房的內部 JSON → 對外交付子集")
-    ap.add_argument("--in_dir", default=os.path.join(HERE, "stitch_tool", "data"),
-                    help="內部 house JSON 目錄（預設 stitch_tool/data）")
-    ap.add_argument("--out_dir", default=os.path.join(HERE, "Output", "public_houses"),
-                    help="輸出目錄（預設 Output/public_houses）")
+    ap.add_argument("--in_dir", default=None,
+                    help="內部 house JSON 目錄（預設 Settings.house_data_dir()）")
+    ap.add_argument("--out_dir", default=None,
+                    help="輸出目錄（預設 Settings.public_dir()）")
     ap.add_argument("--no_regions", action="store_true",
                     help="不併入共視區域（預設併入，來源 --regions_dir）")
     ap.add_argument("--regions_dir", default=None,
                     help="per-pair JSON 目錄（預設 config.regions_root()）")
     a = ap.parse_args()
+    in_dir = a.in_dir or s.house_data_dir()
+    out_dir = a.out_dir or s.public_dir()
     try:
-        export_houses(a.in_dir, a.out_dir, regions_dir=a.regions_dir,
-                      with_regions=not a.no_regions)
+        result = export_houses(in_dir, out_dir, regions_dir=a.regions_dir,
+                               with_regions=not a.no_regions,
+                               datasets_dir=s.datasets_root())
     except RomaGeoError as e:
         raise SystemExit("[error] %s" % e)
+    if getattr(result, "pose_status", "complete") == "absent":
+        raise SystemExit(2)
 
 
 if __name__ == "__main__":

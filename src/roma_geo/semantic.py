@@ -1,7 +1,8 @@
 """語意門抽取與通道方位矯正。矯正只改輸出一，不改相對位姿。"""
-import glob
 import json
 import os
+
+from .names import glob_in_dir, require_path_component
 
 CONTAIN_FRAC = 0.8
 MERGE_GAP_DEG = 1.0
@@ -136,6 +137,7 @@ def _load_extract_doors():
 
 def extract_house_doors(semantic_root, house, merge_gap_deg=MERGE_GAP_DEG):
     """對一間房的語意圖跑門抽取。回傳 {image_stem: [door, ...]}。"""
+    require_path_component(house, input_name="房子 %s" % house)
     extract_doors = _load_extract_doors()
     tid = _house_tid(house)
     dirs = [os.path.join(semantic_root, house)]
@@ -146,7 +148,7 @@ def extract_house_doors(semantic_root, house, merge_gap_deg=MERGE_GAP_DEG):
     for d in dirs:
         if not os.path.isdir(d):
             continue
-        for mp in sorted(glob.glob(os.path.join(d, "*_mask.png"))):
+        for mp in sorted(glob_in_dir(d, "*_mask.png")):
             img = os.path.basename(mp)[:-len("_mask.png")]
             if img in seen:
                 continue

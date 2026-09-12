@@ -219,7 +219,7 @@ class TestP1DegradedPairsAllHaveAzimuth(unittest.TestCase):
             pub = json.load(open(exp.outputs["public_json"], encoding="utf-8"))
             self.assertEqual(len(pub["pairs"]), 3)
             import check_deliverables as cd
-            r = cd.check_public_houses(s.public_dir())
+            r = cd.check_public_houses(s.public_dir(), datasets_dir=s.datasets_root())
             self.assertEqual(r.status, cd.OK, r.problems)
 
 
