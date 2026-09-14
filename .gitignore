@@ -11,6 +11,9 @@ datasets/
 *.pth
 
 # --- 暫存與衍生產物（可重生，不是交付資產）---
+# 單次實驗整包：從 Kaggle zip 解到 Output/9-13…、Output/9-14… 這類日期資料夾。
+# 內含 log、npz、house json 複本。不影響已入庫的 Output/roma_regions/_summary.csv。
+Output/[0-9]*/
 # RoMa 匹配快取：純加速用，刪除後可重新產生（全量單卡數小時）。
 roma_match/cache/
 roma_match/results/
@@ -26,6 +29,9 @@ Output/public_houses/
 # 配對來源快照：由 environments/batch_match.py 於首次執行時從 _summary.csv 產生，
 # 屬本機執行狀態（記錄這一輪要算哪些對），不是交付資產。
 Output/roma_regions/_pairs.csv
+# 評估腳本重生：roi_accuracy_eval.py / val10_chain_eval.py
+Output/roma_regions/_roi_accuracy.csv
+Output/roma_regions/_val10_chain.csv
 pose_regions/pose_out_cache_demo/
 pose_out/
 
