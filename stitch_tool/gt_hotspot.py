@@ -82,6 +82,33 @@ def load_gt(hotspot_paths, width) -> dict:
     return gt
 
 
+def load_gt_locations(hotspot_paths) -> dict:
+    """讀取 HOTSPOT 像素座標。回傳 `{src_img: {tgt_img: (x, y)}}`。
+
+    排序與後寫覆蓋規則與 `load_gt` 相同。不換算方位；案例圖要把標註打在點上。
+    """
+    loc = {}
+    for hs_path in sorted(hotspot_paths):
+        try:
+            J = json.load(open(hs_path, encoding="utf-8"))
+        except Exception:
+            continue
+        for room in J.get("HOTSPOTOFROOM", []):
+            src = room.get("IDName")
+            if not src:
+                continue
+            tgts = (room.get("ToIDName", {}) or {}).get("IDName", []) or []
+            coords = (room.get("HSLoc", {}) or {}).get("Coordinate", []) or []
+            d = loc.setdefault(src, {})
+            for k, tgt in enumerate(tgts):
+                if k >= len(coords):
+                    continue
+                x = float(coords[k].get("x", 0.0))
+                y = float(coords[k].get("y", 0.0))
+                d[tgt] = (x, y)
+    return loc
+
+
 def gt_pair_fields(gt: dict, img_i: str, img_j: str) -> dict:
     """把 GT 對映到單一對 `(img_i, img_j)`，回傳房子資料每對要寫入的三個欄位。
 
