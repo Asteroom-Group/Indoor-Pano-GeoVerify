@@ -17,6 +17,7 @@ pose_regions：相對位姿與共視區域估計(RoMa 匹配的幾何驗證層)
     venv/Scripts/python.exe pose_regions/batch_pose_from_cache.py
     venv/Scripts/python.exe pose_regions/estimate_relative_pose.py --selftest
     venv/Scripts/python.exe pose_regions/render_region_overlay.py --sample
+    venv/Scripts/python.exe pose_regions/roi_accuracy_eval.py
 """
 
 from .estimate_relative_pose import (

@@ -39,6 +39,25 @@ def az_overlap(a0, a1, b0, b1):
     return total
 
 
+def circ_err(a, b):
+    """兩方位的最短圓角距離（度，0~180）。有號與 0~360 皆可。"""
+    return abs((float(a) - float(b) + 180.0) % 360.0 - 180.0)
+
+
+def az_contains(az, a0, a1):
+    """點是否落在 [a0, a1] 正向弧上（可過縫）。空區間為 False，整圈為 True。"""
+    segs = _arc_segments(a0, a1)
+    if not segs:
+        return False
+    x = float(az) % 360.0
+    for start, end in segs:
+        if start - 1e-9 <= x <= end + 1e-9:
+            return True
+        if start - 1e-9 <= x + 360.0 <= end + 1e-9:
+            return True
+    return False
+
+
 def region_az_span(side):
     """從共視區域一側取出方位區間 (az0, az1, width_deg)。沒有 az_range 時回 None。"""
     if not side:
