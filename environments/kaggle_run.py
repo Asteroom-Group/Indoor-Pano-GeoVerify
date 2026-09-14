@@ -11,6 +11,7 @@ Kaggle Notebook 儲存格腳本：把本專案從零建起來並執行驗收。
   2. environments/check_env.py        版本與 GPU 驗收
   3. tests/smoke_test.py              端到端功能測試
   4. environments/cross_env_check.py  跨環境一致性檢查（呼叫 roma_geo.verify_pairs）
+  完整鏈另含：select_pairs（連通矩陣挑對）→ batch_match → 幾何 → 排序 → 工具資料
 
 資料集會自動偵測：掃 /kaggle/input 底下的 DollhouseTask_* 找出根目錄，
 再透過環境變數 ROMA_GEO_DATASETS 交給 config.py 解析，不建立符號連結。
@@ -33,13 +34,43 @@ TAG         = "kaggle"         # 產出檔名的標籤
 SKIP_SETUP  = False            # 環境已建好時設 True，省下重裝時間
 TAIL_LINES  = 15               # 每個步驟在儲存格顯示的末尾行數；完整輸出一律進 log 檔
 
-# ---- 完整鏈條：批次匹配 → 幾何驗證 → 排序評估 → 工具資料 ----
+# ---- 完整鏈條：矩陣挑對 → 批次匹配 → 幾何驗證 → 排序評估 → 工具資料 ----
 FULL_CHAIN   = True            # False 則只跑到一致性檢查為止
 BATCH_LIMIT  = 0               # 批次匹配的配對數上限；0 = 全部
 WORKERS      = "auto"          # 平行 worker 數；auto = GPU 張數。Kaggle 雙 T4 會用上兩張
 TIME_BUDGET_H = 8.0            # 批次匹配的時間預算（小時）。Kaggle 單一工作階段有時限，
                                # 超過即停止並保留已完成的快取，下次重跑會接續。
 # ====================================================================
+
+# 環境驗收、挑對、批次匹配失敗即中止。挑對失敗時若繼續，batch_match 會退回
+# 舊 _summary.csv 快照（約 7,069 對），與現行連通矩陣無關。
+BLOCKING_STEPS = {
+    "2 環境驗收",
+    "5 從連通矩陣挑配對",
+    "6 批次匹配（填滿快取）",
+}
+
+
+def full_chain_steps(py, workers, batch_limit, time_budget_h, regions_dir):
+    """完整鏈命令列。先從連通矩陣寫 _pairs.csv，再匹配，避免吃舊 summary 快照。"""
+    return [
+        ("5 從連通矩陣挑配對",
+         "%s environments/select_pairs.py --force" % py),
+        ("6 批次匹配（填滿快取）",
+         "%s environments/batch_match.py --workers %s --aggregate_scores%s%s"
+         % (py, workers,
+            " --limit %d" % batch_limit if batch_limit else "",
+            " --time_budget_h %g" % time_budget_h if time_budget_h else "")),
+        ("7 幾何驗證批次（區域 JSON + _summary.csv）",
+         "%s pose_regions/batch_pose_from_cache.py --out %s --resume"
+         % (py, regions_dir)),
+        ("8 排序評估（_ranking_eval.csv）",
+         "%s pose_regions/covis_ranking_eval.py" % py),
+        ("9 工具房屋資料（stitch_tool/data）",
+         "%s stitch_tool/prepare_house_data.py" % py),
+        ("10 工具語意門資料（stitch_tool/semantic）",
+         "%s stitch_tool/prepare_semantic_doors.py" % py),
+    ]
 
 import glob
 import os
@@ -280,35 +311,18 @@ def main():
          % (py, N_PAIRS, TAG, out_dir)),
     ]
 
-    # 完整鏈條：從匹配產出到工具可讀的資料。批次匹配開快取寫檔，可續跑。
+    # 完整鏈條：矩陣挑對 → 匹配 → 工具可讀資料。批次匹配開快取寫檔，可續跑。
     if FULL_CHAIN:
-        steps += [
-            # workers=auto：偵測到幾張 GPU 就開幾個 worker。
-            ("5 批次匹配（填滿快取）",
-             "%s environments/batch_match.py --workers %s --aggregate_scores%s%s"
-             % (py, WORKERS,
-                " --limit %d" % BATCH_LIMIT if BATCH_LIMIT else "",
-                " --time_budget_h %g" % TIME_BUDGET_H if TIME_BUDGET_H else "")),
-            ("6 幾何驗證批次（區域 JSON + _summary.csv）",
-             "%s pose_regions/batch_pose_from_cache.py --out %s --resume"
-             % (py, regions_dir)),
-            ("7 排序評估（_ranking_eval.csv）",
-             "%s pose_regions/covis_ranking_eval.py" % py),
-            ("8 工具房屋資料（stitch_tool/data）",
-             "%s stitch_tool/prepare_house_data.py" % py),
-            ("9 工具語意門資料（stitch_tool/semantic）",
-             "%s stitch_tool/prepare_semantic_doors.py" % py),
-        ]
+        steps += full_chain_steps(
+            py, WORKERS, BATCH_LIMIT, TIME_BUDGET_H, regions_dir)
 
-    # 環境驗收與批次匹配失敗即中止（後者失敗會讓步驟 6 拿空快取覆寫 _summary.csv）。
     # 其餘步驟容許失敗，以便一次看完全貌。
-    blocking = {"2 環境驗收", "5 批次匹配（填滿快取）"}
     results = []
     for title, cmd in steps:
         print("\n" + "#" * 72 + "\n#  " + title + "\n" + "#" * 72)
         rc = run(cmd, cwd=repo, env=env, check=False)
         results.append((title, rc))
-        if rc != 0 and title in blocking:
+        if rc != 0 and title in BLOCKING_STEPS:
             print("\n[abort] %s 失敗（rc=%d），中止後續步驟。\n"
                   "        完整輸出見 %s" % (title, rc, LOG_PATH))
             break

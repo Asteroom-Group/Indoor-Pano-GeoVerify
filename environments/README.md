@@ -117,26 +117,31 @@ repo 已在本機時也可直接當一般腳本執行，此時沿用既有目錄
 
 2 驗的是「跑不跑得動」，3 驗的是「跑出來對不對」，4 驗的是「整批的結論穩不穩」。
 
-後五步為完整鏈條（`FULL_CHAIN = True`）：
+後六步為完整鏈條（`FULL_CHAIN = True`）：
 
 | 步驟 | 腳本 | 產出 |
 |---|---|---|
-| 5 批次匹配 | `environments/batch_match.py` | `roma_match/cache/*.npz` + `roma_scores.npz` |
-| 6 幾何驗證批次 | `pose_regions/batch_pose_from_cache.py` | `Output/roma_regions/*.json` + `_summary.csv` |
-| 7 排序評估 | `pose_regions/covis_ranking_eval.py` | `Output/roma_regions/_ranking_eval.csv` |
-| 8 工具房屋資料 | `stitch_tool/prepare_house_data.py` | `stitch_tool/data/*.json` |
-| 9 工具語意門資料 | `stitch_tool/prepare_semantic_doors.py` | `stitch_tool/semantic/*.json` |
+| 5 從連通矩陣挑配對 | `environments/select_pairs.py --force` | `Output/roma_regions/_pairs.csv` |
+| 6 批次匹配 | `environments/batch_match.py` | `roma_match/cache/*.npz` + `roma_scores.npz` |
+| 7 幾何驗證批次 | `pose_regions/batch_pose_from_cache.py` | `Output/roma_regions/*.json` + `_summary.csv` |
+| 8 排序評估 | `pose_regions/covis_ranking_eval.py` | `Output/roma_regions/_ranking_eval.csv` |
+| 9 工具房屋資料 | `stitch_tool/prepare_house_data.py` | `stitch_tool/data/*.json` |
+| 10 工具語意門資料 | `stitch_tool/prepare_semantic_doors.py` | `stitch_tool/semantic/*.json` |
 
-第 5 步跑完 `_pairs.csv` 的全部配對，特性：
+第 5 步依 `ROMA_GEO_MATRICES`／`matrices/<版本>/`（現行 `candidate_val`，同學 val 10 房）
+與門檻 `PAIR_THRESHOLD`（logit ≥ 0.0 ⇔ 機率 ≥ 0.5）寫出配對清單。必須在匹配前跑，
+且失敗即中止；否則 `batch_match` 會退回舊 `_summary.csv` 快照（約 7,069 對）。
+
+第 6 步跑完 `_pairs.csv` 的全部配對，特性：
 
 - **多 GPU**：`WORKERS = "auto"` 時每張卡一個 worker，由 `ParallelScorer` 分派。
   單張卡走序列路徑。
 - **可續跑**：已有對應 npz 的配對直接略過。`TIME_BUDGET_H` 逼近工作階段時限即停止並
   保留已完成的部分，重跑接續（需把上一輪的 `roma_cache.zip` 掛回來或留在 working
-  目錄）。第 6 步的 `--resume` 同理。
+  目錄）。第 7 步的 `--resume` 同理。
 - 順帶重算 `roma_scores.npz`，供 `prepare_house_data.py` 補上 `roma_conf_*` 欄位。
 
-第 4 步關快取（強制每對重算），第 5 步開快取寫檔。
+第 4 步關快取（強制每對重算），第 6 步開快取寫檔。
 
 **資料集自動偵測**：掃 `/kaggle/input` 底下的 `DollhouseTask_*` 找出根目錄，
 透過 `ROMA_GEO_DATASETS` 交給 `config.py` 解析。
