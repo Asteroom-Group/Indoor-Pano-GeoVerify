@@ -88,15 +88,17 @@ python environments/cross_env_check.py --n 30 --tag <環境標籤>
 貼上後改頂端的 CONFIG 區塊：
 
 ```python
-REPO_URL    = "https://github.com/<owner>/<repo>.git"
+REPO_URL    = "https://github.com/Asteroom-Group/Indoor-Pano-GeoVerify.git"
 REPO_BRANCH = "main"
-SECRET_NAME = "GITHUB_TOKEN"   # 私有 repo 用；公開 repo 設為 ""
+SECRET_NAME = "GEO_ACCESS"     # 私有 repo 用；公開 repo 設為 ""
 N_PAIRS     = 30
 TAG         = "kaggle"
 SKIP_SETUP  = False            # 環境已建好時設 True
 FULL_CHAIN  = True             # False 則只跑前四步
 WORKERS     = "auto"           # auto = GPU 張數
-TIME_BUDGET_H = 8.0
+SESSION_DEADLINE_H = 11.5      # 整場牆鐘；到點先寫進度 JSON 再停
+ZIP_RESERVE_MIN = 20           # 預留給寫檔的分鐘數
+TIME_BUDGET_H = 0              # 匹配額外上限（小時）；0 = 用場次剩餘時間
 ```
 
 repo 已在本機時也可直接當一般腳本執行，此時沿用既有目錄不重新 clone。
@@ -136,10 +138,12 @@ repo 已在本機時也可直接當一般腳本執行，此時沿用既有目錄
 
 - **多 GPU**：`WORKERS = "auto"` 時每張卡一個 worker，由 `ParallelScorer` 分派。
   單張卡走序列路徑。
-- **可續跑**：已有對應 npz 的配對直接略過。`TIME_BUDGET_H` 逼近工作階段時限即停止並
-  保留已完成的部分，重跑接續（需把上一輪的 `roma_cache.zip` 掛回來或留在 working
-  目錄）。第 7 步的 `--resume` 同理。
+- **可續跑**：已有對應 npz 的配對直接略過。`SESSION_DEADLINE_H`（預設 11.5 小時，
+  內含 `ZIP_RESERVE_MIN` 寫檔預留）到點即停止、寫出 `roma_progress.json`。
+  下一輪把該 JSON 掛進資料集即可接續（已完成的配對會跳過）。`roma_cache.zip`
+  等大檔只在特徵全部抽完後才打包。第 7 步的 `--resume` 同理。
 - 順帶重算 `roma_scores.npz`，供 `prepare_house_data.py` 補上 `roma_conf_*` 欄位。
+  若停機時已沒時間，彙總會留到下一輪。
 
 第 4 步關快取（強制每對重算），第 6 步開快取寫檔。
 
@@ -158,7 +162,19 @@ repo 已在本機時也可直接當一般腳本執行，此時沿用既有目錄
 | 檔案 | 內容 | 條件 |
 |---|---|---|
 | `roma_geo_run.log` | 完整執行輸出 | 一律 |
+| `roma_progress.json` | 配對清單與已完成識別碼；下一輪掛這份即可接續 | 一律 |
 | `roma_geo_results.zip` | 各步驟的 CSV／MD 報告 | 一律 |
-| `roma_cache.zip` | RoMa 匹配快取 `*.npz` | `FULL_CHAIN = True` |
-| `roma_regions.zip` | 共視區域 per-pair JSON | `FULL_CHAIN = True` |
-| `stitch_tool_data.zip` | 工具的房屋與語意門資料 | `FULL_CHAIN = True` |
+| `roma_cache.zip` | RoMa 匹配快取 `*.npz` | 特徵全部抽完 |
+| `roma_regions.zip` | 共視區域 per-pair JSON | 特徵全部抽完且後續步驟有跑 |
+| `stitch_tool_data.zip` | 工具的房屋與語意門資料 | 特徵全部抽完且後續步驟有跑 |
+
+### 逾時接續
+
+Kaggle GPU 約 12 小時硬殺。腳本在 11.5 小時（最後 20 分鐘留給寫檔）停止重活，
+只寫 `roma_progress.json`。cache 等大檔等到特徵全部抽完才打成一份 ZIP。
+
+下一輪：
+
+1. 從 Output 下載 `roma_progress.json`
+2. 把它加進 Kaggle 資料集並掛到 Notebook（與全景圖資料集一起）
+3. 再跑同一份腳本；開頭會掃 `/kaggle/input` 讀 JSON，匹配階段跳過已完成的配對

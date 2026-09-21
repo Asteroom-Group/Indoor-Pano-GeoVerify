@@ -19,8 +19,8 @@
 每張卡一個 worker（`CUDA_VISIBLE_DEVICES` 隔離），可在雙 T4 環境約略減半總時間。
 單張卡則走序列路徑（省去多進程開銷，且進度回報較細）。
 
-**可續跑**：已存在對應 npz 的配對會直接略過，因此工作階段中斷後重跑即可接續
-（需把上一輪的 roma_cache.zip 掛回來或留在 working 目錄）。
+**可續跑**：已存在對應 npz 的配對會直接略過。Kaggle 上一輪的 `roma_progress.json`
+掛進資料集後，JSON 裡已完成的配對同樣會跳過（不必先還原 cache）。
 
 快取檔名由 `roma_match.matcher._get_cache_info()` 決定，本腳本不自行拼字串，
 避免與讀取端的約定分歧。
@@ -38,16 +38,42 @@ import sys
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_ENV = os.path.dirname(os.path.abspath(__file__))
 _SRC = os.path.join(ROOT, "src")
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 if ROOT not in sys.path:
     sys.path.append(ROOT)
+if _ENV not in sys.path:
+    sys.path.append(_ENV)
 
 from roma_geo.config import regions_root                   # noqa: E402
 
 REGIONS_DIR = regions_root()                    # 可用 ROMA_GEO_OUTPUT 覆寫，見 config.py
 SUMMARY = os.path.join(REGIONS_DIR, "_summary.csv")
+
+# 平行路徑每批結束才能檢查時限。批次太大，最後一批會整段超時。
+NOMINAL_PER_WORKER = 200
+# 尚未量到實際速率時，以偏慢的 T4 先估，避免第一批就開 400 對。
+PRIOR_SEC_PER_PAIR = 12.0
+
+
+def next_chunk_len(n_workers, n_left, remaining_s, sec_per_pair,
+                   per_worker=NOMINAL_PER_WORKER):
+    """下一平行批次要送幾對。0 = 現在就停，不要再開一批。"""
+    if n_left <= 0:
+        return 0
+    n_workers = max(1, int(n_workers))
+    nominal = min(n_left, max(n_workers * per_worker, n_workers))
+    if remaining_s is None:
+        return nominal
+    if remaining_s <= 0:
+        return 0
+    rate = sec_per_pair if (sec_per_pair and sec_per_pair > 0) else PRIOR_SEC_PER_PAIR
+    max_pairs = int(remaining_s * n_workers / rate)
+    if max_pairs < 1:
+        return 0
+    return min(nominal, max_pairs)
 
 # 配對來源與批次產物分開存放:batch_pose_from_cache.py 會把 _summary.csv 重寫成
 # 「當下快取有幾對」,直接拿它當來源會在續跑時遺失尚未完成的配對。
@@ -78,12 +104,23 @@ def ensure_pair_source(explicit=None):
     return PAIRS
 
 
-def load_tasks(summary_csv, limit, mode, matcher):
-    """讀配對來源，解析影像路徑，並濾掉已有快取的配對。
+def load_progress_skip_keys(progress_path):
+    """進度 JSON 裡已完成的配對，下一輪即使沒有 npz 也跳過。"""
+    if not progress_path or not os.path.isfile(progress_path):
+        return set()
+    import json
+    from kaggle_checkpoint import done_key_set
+    with open(progress_path, encoding="utf-8") as f:
+        return done_key_set(json.load(f))
+
+
+def load_tasks(summary_csv, limit, mode, matcher, skip_keys=None):
+    """讀配對來源，解析影像路徑，並濾掉已有快取或進度檔已完成的配對。
 
     回傳 (tasks, n_hit, n_miss)：tasks 為 [(img_a, img_b), ...]。
     """
     from pose_regions import find_house_image
+    from kaggle_checkpoint import is_done_pair
 
     if not os.path.exists(summary_csv):
         raise SystemExit("找不到配對來源 %s" % summary_csv)
@@ -93,6 +130,7 @@ def load_tasks(summary_csv, limit, mode, matcher):
     if limit:
         rows = rows[:limit]
 
+    skip_keys = skip_keys or set()
     cache_mode = "romascan" if mode == "core" else mode
     tasks, n_hit, n_miss = [], 0, 0
     for r in rows:
@@ -101,7 +139,9 @@ def load_tasks(summary_csv, limit, mode, matcher):
         if not (pa and pb):
             n_miss += 1
             continue
-        # 用 matcher 自己的命名規則判斷是否已有快取，不自行拼檔名。
+        if is_done_pair(r["house"], r["img_a"], r["img_b"], skip_keys):
+            n_hit += 1
+            continue
         cache_path, _ = matcher._get_cache_info(pa, pb, cache_mode)
         if os.path.exists(cache_path):
             n_hit += 1
@@ -151,23 +191,32 @@ def run_parallel(tasks, n_workers, mode, budget):
     print("  使用 %d 個 worker / %d 張 GPU" % (scorer.n_workers, scorer.num_gpus), flush=True)
 
     # 分批以取得時間預算的檢查點(run_stage 阻塞,中途無法中止)。
-    # 每批重新 spawn worker 並重載權重,故批次不宜過小。
-    chunk = max(scorer.n_workers * 200, 200)
+    # 每批重新 spawn worker 並重載權重,故時間充裕時批次不宜過小；
+    # 逼近時限則縮小下一批，避免最後一批整段超時。
     n_done = n_fail = 0
     t0 = time.time()
-    for s in range(0, len(tasks), chunk):
-        part = tasks[s:s + chunk]
+    i = 0
+    sec_per_pair = None
+    while i < len(tasks):
+        remaining = None if not budget else budget - (time.time() - t0)
+        n = next_chunk_len(scorer.n_workers, len(tasks) - i, remaining, sec_per_pair)
+        if n <= 0:
+            print("\n[stop] 達到時間預算，已完成 %d/%d 對；快取保留，重跑會接續。"
+                  % (i, len(tasks)), flush=True)
+            break
+        part = tasks[i:i + n]
         got = scorer.run_stage(part, stage="match")
         n_done += len(got)
         n_fail += len(part) - len(got)      # run_stage 只回傳成功項,差額即失敗數
+        i += n
         el = time.time() - t0
-        rate = el / max(n_done, 1)
+        sec_per_pair = el / max(n_done, 1)
         print("  [%d/%d] 已用 %.1f min · %.2f s/對(整體) · 預估剩餘 %.1f min"
-              % (min(s + chunk, len(tasks)), len(tasks), el / 60, rate,
-                 rate * (len(tasks) - s - len(part)) / 60), flush=True)
+              % (i, len(tasks), el / 60, sec_per_pair,
+                 sec_per_pair * (len(tasks) - i) / 60), flush=True)
         if budget and el > budget:
             print("\n[stop] 達到時間預算，已完成 %d/%d 對；快取保留，重跑會接續。"
-                  % (min(s + chunk, len(tasks)), len(tasks)), flush=True)
+                  % (i, len(tasks)), flush=True)
             break
     return n_done, n_fail
 
@@ -234,6 +283,8 @@ def main():
                     help="配對來源 CSV；省略則使用 _pairs.csv 快照（首次從 _summary.csv 建立）")
     ap.add_argument("--aggregate_scores", action="store_true",
                     help="結束後重算 roma_match/roma_scores.npz（供 prepare_house_data 使用）")
+    ap.add_argument("--progress", default=None,
+                    help="roma_progress.json；其中 done 的配對即使沒有 npz 也跳過")
     args = ap.parse_args()
 
     import torch
@@ -259,11 +310,12 @@ def main():
     m = RoMaMatcher(conf_threshold=0.1, use_cache=True, model_type="roma_v2", workers=1)
 
     pair_src = ensure_pair_source(args.summary)
-    tasks, n_hit, n_miss = load_tasks(pair_src, args.limit, args.mode, m)
+    skip_keys = load_progress_skip_keys(args.progress)
+    tasks, n_hit, n_miss = load_tasks(pair_src, args.limit, args.mode, m, skip_keys)
     budget = args.time_budget_h * 3600.0
 
     print("=" * 72)
-    print("  批次匹配 | 待算 %d 對 | 已快取 %d 對 | 缺圖 %d 對" % (len(tasks), n_hit, n_miss))
+    print("  批次匹配 | 待算 %d 對 | 已完成/已快取 %d 對 | 缺圖 %d 對" % (len(tasks), n_hit, n_miss))
     print("  mode=%s | GPU %d 張 | worker %d%s"
           % (args.mode, n_gpu, n_workers,
              "" if not budget else " | 時間預算 %.1f h" % args.time_budget_h))
@@ -281,8 +333,12 @@ def main():
     el = time.time() - t0
 
     if args.aggregate_scores:
-        print("\n--- 彙總 RoMa 證據強度（roma_scores.npz）---", flush=True)
-        aggregate_scores(pair_src, args.limit)
+        if budget and (time.time() - t0) > budget:
+            print("\n[skip] 已達時間預算，略過彙總 roma_scores.npz；下一輪會補。",
+                  flush=True)
+        else:
+            print("\n--- 彙總 RoMa 證據強度（roma_scores.npz）---", flush=True)
+            aggregate_scores(pair_src, args.limit)
 
     print("\n" + "=" * 72)
     print("  新算 %d 對 · 快取命中 %d 對 · 缺圖 %d 對 · 失敗 %d 對"
