@@ -148,9 +148,10 @@ class TestResumeFromJson(unittest.TestCase):
             with open(os.path.join(ds, "roma_progress.json"), "w", encoding="utf-8") as f:
                 json.dump(src, f)
             repo = os.path.join(d, "Roma_Geo")
-            found = self.kc.find_progress_json(os.path.join(d, "input"))
-            payload = self.kc.restore_progress(repo, found)
+            path, payload = self.kc.load_resume(os.path.join(d, "input"))
             self.assertEqual(payload["done"], [["H", "a", "b"]])
+            restored = self.kc.restore_progress(repo, path)
+            self.assertEqual(restored["done"], [["H", "a", "b"]])
             pairs_path = os.path.join(repo, "Output", "roma_regions", "_pairs.csv")
             self.assertTrue(os.path.isfile(pairs_path))
             with open(pairs_path, encoding="utf-8") as f:
@@ -165,6 +166,42 @@ class TestResumeFromJson(unittest.TestCase):
         self.assertTrue(self.kc.is_done_pair("H", "imgA.jpg", "imgB.jpg", skip))
         self.assertTrue(self.kc.is_done_pair("H", "imgB", "imgA", skip))
         self.assertFalse(self.kc.is_done_pair("H", "imgA", "other", skip))
+
+    def test_empty_dataset_has_no_resume_and_starts_from_scratch(self):
+        with temp_dir() as d:
+            os.makedirs(os.path.join(d, "input", "progress-placeholder"))
+            path, payload = self.kc.load_resume(os.path.join(d, "input"))
+            self.assertIsNone(path)
+            self.assertIsNone(payload)
+
+    def test_empty_json_is_not_usable_progress(self):
+        with temp_dir() as d:
+            ds = os.path.join(d, "input", "empty-json")
+            os.makedirs(ds)
+            with open(os.path.join(ds, "roma_progress.json"), "w", encoding="utf-8"):
+                pass
+            path, payload = self.kc.load_resume(os.path.join(d, "input"))
+            self.assertTrue(path.endswith("roma_progress.json"))
+            self.assertIsNone(payload)
+
+    def test_json_with_no_pairs_and_no_done_starts_from_scratch(self):
+        with temp_dir() as d:
+            ds = os.path.join(d, "input", "blank")
+            os.makedirs(ds)
+            with open(os.path.join(ds, "roma_progress.json"), "w", encoding="utf-8") as f:
+                json.dump({"schema_version": 1, "pairs": [], "done": []}, f)
+            path, payload = self.kc.load_resume(os.path.join(d, "input"))
+            self.assertIsNone(payload)
+            self.assertTrue(path.endswith("roma_progress.json"))
+
+    def test_broken_json_starts_from_scratch(self):
+        with temp_dir() as d:
+            ds = os.path.join(d, "input", "broken")
+            os.makedirs(ds)
+            with open(os.path.join(ds, "roma_progress.json"), "w", encoding="utf-8") as f:
+                f.write("{not-json")
+            path, payload = self.kc.load_resume(os.path.join(d, "input"))
+            self.assertIsNone(payload)
 
 
 class TestCacheZipOnlyWhenComplete(unittest.TestCase):
