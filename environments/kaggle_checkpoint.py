@@ -195,39 +195,6 @@ def find_progress_json(input_root):
     return hits[0] if hits else None
 
 
-def usable_progress(payload):
-    """有配對清單或已完成識別碼才算能接續；空物件從頭跑。"""
-    if not isinstance(payload, dict):
-        return False
-    return bool(payload.get("pairs") or payload.get("done"))
-
-
-def read_progress_file(path):
-    """讀 JSON。空檔、壞檔、非物件都回 None。"""
-    try:
-        with open(path, encoding="utf-8") as f:
-            text = f.read().strip()
-        if not text:
-            return None
-        payload = json.loads(text)
-    except (OSError, ValueError, TypeError):
-        return None
-    if not isinstance(payload, dict):
-        return None
-    return payload
-
-
-def load_resume(input_root):
-    """回傳 (路徑, payload)。沒有檔 → (None, None)；空的或壞的 → (路徑, None)。"""
-    path = find_progress_json(input_root)
-    if not path:
-        return None, None
-    payload = read_progress_file(path)
-    if not usable_progress(payload):
-        return path, None
-    return path, payload
-
-
 def restore_progress(repo, json_path):
     """把進度 JSON 拷進 repo，並還原 _pairs.csv。回傳 payload。"""
     with open(json_path, encoding="utf-8") as f:

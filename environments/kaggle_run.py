@@ -364,16 +364,12 @@ def main():
 
     resume_payload = None
     if on_kaggle:
-        found, payload = kc.load_resume("/kaggle/input")
-        if payload:
+        found = kc.find_progress_json("/kaggle/input")
+        if found:
             resume_payload = kc.restore_progress(repo, found)
             print("[resume] %s：已完成 %d/%d 對，本輪跳過這些配對。"
                   % (found, resume_payload.get("n_done") or len(resume_payload.get("done") or []),
                      resume_payload.get("n_pairs") or len(resume_payload.get("pairs") or [])))
-        elif found:
-            print("[resume] %s 是空的或讀不到，從頭跑。" % found)
-        else:
-            print("[resume] 資料集沒有進度檔，從頭跑。")
 
     if on_kaggle and not SKIP_SETUP:
         run("bash %s" % os.path.join(repo, "environments", "setup_env.sh"), cwd=repo)
