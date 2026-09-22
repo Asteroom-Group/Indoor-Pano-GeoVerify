@@ -63,9 +63,6 @@
 | `test_addendum8.py` | 追加8：交付檔名稱驗證與原子寫入、配對清單覆寫、安裝路徑、匯入邊界、失敗契約、測試自備資料集 |
 | `test_addendum9.py` | 追加9：名稱守衛在過濾之後、本次清單與批次來源分開、檢查工具路徑與略過、逐對產物降級 |
 | `test_addendum10.py` | 追加10：相對位姿逐對判定、測試自備名稱樣本、搜尋路徑敘述 |
-| `test_kaggle_run_pairs.py` | kaggle_run 完整鏈須先從連通矩陣挑對 |
-| `test_kaggle_checkpoint.py` | 場次 11.5h 停機、單一進度 JSON、特徵抽完才打 cache ZIP |
-| `test_batch_match_budget.py` | 平行匹配在時限前縮小批次，避免最後一批整段超時 |
 
 期望值一律由**規約或獨立算法**推得，不從受測程式碼反推。合成資料以指定的 R、t 正向
 投影出兩側觀測，受測程式碼須解回同一組 R、t；`wedge_width` 另以不同的列舉方式暴力

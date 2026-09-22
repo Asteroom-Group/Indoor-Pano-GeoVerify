@@ -19,17 +19,16 @@ Kaggle Notebook 儲存格腳本：把本專案從零建起來並執行驗收。
 [Kaggle 準備事項]
   - Notebook 開啟 GPU 與網際網路
   - 掛載含 DollhouseTask_* 的資料集
-  - 接續上一輪時，把 roma_progress.json 掛進資料集
-  - 私有 repo 需在 Kaggle Secrets 設定 GEO_ACCESS（見下方 CONFIG）
+  - 私有 repo 需在 Kaggle Secrets 設定 GITHUB_TOKEN（見下方 CONFIG）
 
 ⚠ GPU 限制：需選 T4（sm_75）或 L4（sm_89）。Tesla P100（sm_60）與 V100（sm_70）
    不適用，本腳本在安裝前檢查並中止。
 """
 
 # ==================== CONFIG（貼進 cell 後改這裡）====================
-REPO_URL    = "https://github.com/Asteroom-Group/Indoor-Pano-GeoVerify.git"
+REPO_URL    = "https://github.com/<owner>/<repo>.git"  # 專案 repo
 REPO_BRANCH = "main"
-SECRET_NAME = "GEO_ACCESS"     # 私有 repo：Kaggle Secrets 的名稱；公開 repo 設為 ""
+SECRET_NAME = "GITHUB_TOKEN"   # 私有 repo：Kaggle Secrets 的名稱；公開 repo 設為 ""
 N_PAIRS     = 30               # 一致性檢查的取樣對數（快速正確性關卡）
 TAG         = "kaggle"         # 產出檔名的標籤
 SKIP_SETUP  = False            # 環境已建好時設 True，省下重裝時間
@@ -39,11 +38,8 @@ TAIL_LINES  = 15               # 每個步驟在儲存格顯示的末尾行數�
 FULL_CHAIN   = True            # False 則只跑到一致性檢查為止
 BATCH_LIMIT  = 0               # 批次匹配的配對數上限；0 = 全部
 WORKERS      = "auto"          # 平行 worker 數；auto = GPU 張數。Kaggle 雙 T4 會用上兩張
-SESSION_DEADLINE_H = 11.5      # 整場牆鐘（小時）。Kaggle GPU 約 12h 硬殺，
-                               # 到點先寫 roma_progress.json 再停。
-ZIP_RESERVE_MIN = 20           # 預留給寫檔的分鐘數（含在上面 11.5h 內；
-                               # 特徵抽完時這段拿來打 cache ZIP）
-TIME_BUDGET_H = 0              # 批次匹配額外上限（小時）；0 = 用場次剩餘時間
+TIME_BUDGET_H = 8.0            # 批次匹配的時間預算（小時）。Kaggle 單一工作階段有時限，
+                               # 超過即停止並保留已完成的快取，下次重跑會接續。
 # ====================================================================
 
 # 環境驗收、挑對、批次匹配失敗即中止。挑對失敗時若繼續，batch_match 會退回
@@ -55,30 +51,16 @@ BLOCKING_STEPS = {
 }
 
 
-def batch_match_command(py, workers, batch_limit, time_budget_h, progress_path=None):
-    extra = ""
-    if batch_limit:
-        extra += " --limit %d" % batch_limit
-    if time_budget_h:
-        extra += " --time_budget_h %g" % time_budget_h
-    if progress_path:
-        extra += " --progress %s" % progress_path
-    return "%s environments/batch_match.py --workers %s --aggregate_scores%s" % (
-        py, workers, extra)
-
-
-def should_zip_features(payload):
-    """cache ZIP 只在特徵全部抽完後打。"""
-    return bool(payload and payload.get("features_complete"))
-
-
 def full_chain_steps(py, workers, batch_limit, time_budget_h, regions_dir):
     """完整鏈命令列。先從連通矩陣寫 _pairs.csv，再匹配，避免吃舊 summary 快照。"""
     return [
         ("5 從連通矩陣挑配對",
          "%s environments/select_pairs.py --force" % py),
         ("6 批次匹配（填滿快取）",
-         batch_match_command(py, workers, batch_limit, time_budget_h)),
+         "%s environments/batch_match.py --workers %s --aggregate_scores%s%s"
+         % (py, workers,
+            " --limit %d" % batch_limit if batch_limit else "",
+            " --time_budget_h %g" % time_budget_h if time_budget_h else "")),
         ("7 幾何驗證批次（區域 JSON + _summary.csv）",
          "%s pose_regions/batch_pose_from_cache.py --out %s --resume"
          % (py, regions_dir)),
@@ -91,13 +73,11 @@ def full_chain_steps(py, workers, batch_limit, time_budget_h, regions_dir):
     ]
 
 import glob
-import importlib.util
 import os
 import re
 import shutil
 import subprocess
 import sys
-import time
 import zipfile
 
 WORKING = "/kaggle/working"
@@ -232,19 +212,6 @@ def obtain_repo():
     return target
 
 
-def load_checkpoint(repo):
-    """從 clone 下來的 repo 載入停機／進度模組（儲存格貼上的是編排，邏輯以分支為準）。"""
-    path = os.path.join(repo, "environments", "kaggle_checkpoint.py")
-    if not os.path.isfile(path):
-        raise SystemExit(
-            "clone 的分支沒有 environments/kaggle_checkpoint.py。\n"
-            "        請把 REPO_BRANCH 指到含場次停機點的版本後重跑。")
-    spec = importlib.util.spec_from_file_location("kaggle_checkpoint", path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
 def find_python(repo):
     for rel in (("venv", "bin", "python"), ("venv", "Scripts", "python.exe")):
         p = os.path.join(repo, *rel)
@@ -309,45 +276,7 @@ def zip_cache(repo, dest):
     return dest
 
 
-def pack_and_write_progress(kc, repo, out_dir, on_kaggle, regions_dir,
-                            last_ok, next_step, status, reason, elapsed_h,
-                            previous=None):
-    """一律寫進度 JSON。cache / regions ZIP 只在特徵抽完後才打。"""
-    payload = kc.make_progress(
-        repo, last_completed_step=last_ok, next_step=next_step,
-        status=status, reason=reason, elapsed_h=elapsed_h,
-        deadline_h=SESSION_DEADLINE_H, previous=previous)
-    progress_path = os.path.join(out_dir, kc.PROGRESS_JSON)
-    kc.write_progress(progress_path, payload)
-    kc.write_progress(os.path.join(repo, kc.PROGRESS_JSON), payload)
-    print("[progress] %s  status=%s  done=%d/%d  next=%s"
-          % (progress_path, payload["status"], payload["n_done"],
-             payload["n_pairs"], payload["next_step"]))
-
-    if not on_kaggle:
-        return payload
-
-    zip_outputs(repo, os.path.join(WORKING, "roma_geo_results.zip"))
-    if not (FULL_CHAIN and should_zip_features(payload)):
-        print("[progress] 特徵尚未抽完，本場只寫 JSON。下一輪把 %s 掛進資料集即可接續。"
-              % progress_path)
-        return payload
-
-    packed = kc.pack_cache_zip(repo, os.path.join(WORKING, kc.CACHE_ZIP))
-    if packed:
-        print("[cache] %.1f MB -> %s（特徵已全部抽完）"
-              % (os.path.getsize(packed) / 1e6, packed))
-    zip_dir(regions_dir, os.path.join(WORKING, "roma_regions.zip"),
-            repo, "*.json")
-    zip_dir(os.path.join(repo, "stitch_tool"),
-            os.path.join(WORKING, "stitch_tool_data.zip"), repo, "*.json")
-    return payload
-
-
 def main():
-    t0 = time.time()
-    deadline = t0 + SESSION_DEADLINE_H * 3600
-
     on_kaggle = is_kaggle()
     if on_kaggle:
         os.makedirs(WORKING, exist_ok=True)
@@ -356,20 +285,10 @@ def main():
         check_gpu()
 
     repo = obtain_repo()
-    kc = load_checkpoint(repo)
 
     ds = find_datasets_root() if on_kaggle else None
     if ds:
         os.environ["ROMA_GEO_DATASETS"] = ds
-
-    resume_payload = None
-    if on_kaggle:
-        found = kc.find_progress_json("/kaggle/input")
-        if found:
-            resume_payload = kc.restore_progress(repo, found)
-            print("[resume] %s：已完成 %d/%d 對，本輪跳過這些配對。"
-                  % (found, resume_payload.get("n_done") or len(resume_payload.get("done") or []),
-                     resume_payload.get("n_pairs") or len(resume_payload.get("pairs") or [])))
 
     if on_kaggle and not SKIP_SETUP:
         run("bash %s" % os.path.join(repo, "environments", "setup_env.sh"), cwd=repo)
@@ -381,10 +300,6 @@ def main():
 
     out_dir = WORKING if on_kaggle else os.path.join(repo, "environments")
     regions_dir = os.path.join(repo, "Output", "roma_regions")
-    progress_path = os.path.join(out_dir, kc.PROGRESS_JSON)
-    resume_has_pairs = bool(resume_payload and resume_payload.get("pairs"))
-    if resume_payload:
-        kc.write_progress(progress_path, resume_payload)
 
     # 前四步為快速關卡。一致性檢查關快取，強制每對重算。
     steps = [
@@ -401,87 +316,32 @@ def main():
         steps += full_chain_steps(
             py, WORKERS, BATCH_LIMIT, TIME_BUDGET_H, regions_dir)
 
+    # 其餘步驟容許失敗，以便一次看完全貌。
     results = []
-    last_ok = None
-    next_step = None
-    stopped_early = False
-    abort_reason = None
     for title, cmd in steps:
-        if kc.due_to_pack(deadline, time.time(), ZIP_RESERVE_MIN):
-            print("\n[stop] 接近場次時限 %.1f h（含 %d min 寫檔預留），"
-                  "停止後續步驟並寫出進度 JSON。"
-                  % (SESSION_DEADLINE_H, ZIP_RESERVE_MIN))
-            stopped_early = True
-            next_step = title
-            abort_reason = "session_deadline"
-            break
-        if title.startswith("5 ") and resume_has_pairs:
-            print("\n" + "#" * 72 + "\n#  " + title + "\n" + "#" * 72)
-            print("[resume] 沿用進度檔的配對清單，略過 select_pairs --force。")
-            results.append((title, 0))
-            last_ok = title
-            continue
-        if title.startswith("6 "):
-            budget_h = kc.match_budget_hours(
-                deadline, time.time(), ZIP_RESERVE_MIN, TIME_BUDGET_H)
-            if budget_h <= 0:
-                print("\n[stop] 匹配可用時間已用盡，停止並寫出進度 JSON。")
-                stopped_early = True
-                next_step = title
-                abort_reason = "session_deadline"
-                break
-            cmd = batch_match_command(
-                py, WORKERS, BATCH_LIMIT, budget_h, progress_path)
         print("\n" + "#" * 72 + "\n#  " + title + "\n" + "#" * 72)
         rc = run(cmd, cwd=repo, env=env, check=False)
         results.append((title, rc))
-        if rc == 0:
-            last_ok = title
         if rc != 0 and title in BLOCKING_STEPS:
             print("\n[abort] %s 失敗（rc=%d），中止後續步驟。\n"
                   "        完整輸出見 %s" % (title, rc, LOG_PATH))
-            abort_reason = "step_failed"
             break
-        if title.startswith("6 ") and rc == 0:
-            snap = kc.make_progress(
-                repo, last_completed_step=title, next_step=None,
-                status="in_progress", reason="match_step",
-                elapsed_h=(time.time() - t0) / 3600.0,
-                deadline_h=SESSION_DEADLINE_H, previous=resume_payload)
-            if not snap.get("features_complete"):
-                print("\n[stop] 特徵尚未抽完（%d/%d），本場不打 cache ZIP、也不跑幾何之後的步驟。"
-                      % (snap["n_done"], snap["n_pairs"]))
-                stopped_early = True
-                next_step = title
-                abort_reason = "features_incomplete"
-                break
 
-    if stopped_early:
-        status, reason = "session_stop", abort_reason or "session_deadline"
-    elif abort_reason == "step_failed":
-        status, reason = "incomplete", "step_failed"
-    elif results and all(rc == 0 for _, rc in results) and len(results) == len(steps):
-        status, reason = "complete", "finished"
-        next_step = None
-    else:
-        status, reason = "incomplete", abort_reason or "unfinished"
-
-    elapsed_h = (time.time() - t0) / 3600.0
-    pack_and_write_progress(
-        kc, repo, out_dir, on_kaggle, regions_dir,
-        last_ok, next_step, status, reason, elapsed_h,
-        previous=resume_payload)
+    if on_kaggle:
+        zip_outputs(repo, os.path.join(WORKING, "roma_geo_results.zip"))
+        if FULL_CHAIN:
+            zip_cache(repo, os.path.join(WORKING, "roma_cache.zip"))
+            zip_dir(regions_dir, os.path.join(WORKING, "roma_regions.zip"),
+                    repo, "*.json")
+            zip_dir(os.path.join(repo, "stitch_tool"),
+                    os.path.join(WORKING, "stitch_tool_data.zip"), repo, "*.json")
 
     print("\n" + "=" * 72)
     for title, rc in results:
         print("  %-22s %s" % (title, "PASS" if rc == 0 else "CHECK (rc=%d)" % rc))
-    if stopped_early:
-        print("  場次停機              下一輪掛 roma_progress.json 接續")
     print("  完整輸出              %s" % LOG_PATH)
     print("=" * 72)
-    if stopped_early:
-        return 0
-    return 0 if results and all(rc == 0 for _, rc in results) else 1
+    return 0 if all(rc == 0 for _, rc in results) else 1
 
 
 # 不使用 argparse：儲存格的 sys.argv 不是本腳本的參數。要調整行為請改 CONFIG 區塊。
