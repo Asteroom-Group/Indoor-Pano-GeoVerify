@@ -36,6 +36,8 @@ res = verify_pair("a.jpg", "b.jpg")
 pub = to_public(res)
 ```
 
+同房判別吃兩張圖，幾何結果先讀產出目錄，沒有再跑上面這段並寫回。用法見 `src/roma_geo/same_room/README.md`。
+
 尚未建立環境時，第一次呼叫會指出缺少哪些相依，以及相依版本在 `environments/requirements-core.txt`。
 
 呼叫端指定影像路徑即可。不必先切換工作目錄，也不必設定環境變數。快取目錄可用 `cache_dir=` 傳入。
@@ -157,6 +159,7 @@ python config.py
 | 模組 | 職責 |
 |---|---|
 | `roma_geo` | 單對入口：`verify_pair` / `verify_pairs` / `to_public` |
+| `roma_geo.same_room` | 同房判別：`by_wedge` / `by_door` |
 | `pipeline` | 逐步呼叫與整房流程 |
 | `config.Settings` | 路徑與門檻，由呼叫端指定 |
 | `ingest_connections` | 上游連通 JSON 轉矩陣 |
