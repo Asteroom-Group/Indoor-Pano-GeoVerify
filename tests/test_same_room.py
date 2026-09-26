@@ -8,7 +8,8 @@ from _support import env_override, temp_dir  # noqa: F401
 
 from roma_geo.same_room import by_door, by_wedge
 from roma_geo.same_room.arcs import covered_length
-from roma_geo.same_room.door import decides_same_room as door_decides
+from roma_geo.same_room.door import decides_same_room as door_decides, kept_regions
+from roma_geo.same_room.draw import cross_room_door_hits
 from roma_geo.same_room.geometry import geometry_for, load_named, load_saved
 from roma_geo.same_room.kept import dump_groups, is_hallway, is_outdoor, load_groups, pair_keys
 from roma_geo.same_room.mengtian import (
@@ -63,6 +64,7 @@ class TestDoor(unittest.TestCase):
         outside = _region((80, 150), (10, 90))
         doors_a = [(0.0, 40.0)]
         self.assertTrue(door_decides([inside, outside], doors_a, []))
+        self.assertEqual(kept_regions([inside, outside], doors_a, []), [outside])
 
     def test_no_region_left_is_not_same_room(self):
         self.assertFalse(door_decides([], [], []))
@@ -260,16 +262,18 @@ class TestMengtian(unittest.TestCase):
         ]
         door_rows = [wedge_rows[0]]
         text = render(
-            [("同環，且連通", slice_stats(wedge_rows))],
-            [("同環，且連通", slice_stats(door_rows))],
-            ["備註"],
+            [("全部連通", slice_stats(wedge_rows))],
+            [("全部連通", slice_stats(door_rows))],
+            ["只看總表裡標連通的 pair，共 1812 對。"],
         )
         wedge_part, door_part = text.split("## 門", 1)
         self.assertIn("楔形命中", wedge_part)
         self.assertNotIn("門命中", wedge_part)
         self.assertIn("門命中", door_part)
         self.assertIn("只看有語意圖的房子", door_part)
-        self.assertIn("清單", text)
+        self.assertIn("只看總表裡標連通的 pair", text)
+        self.assertIn("全部連通", text)
+        self.assertNotIn("未進總表", text)
         self.assertNotIn("資料夾", text)
         self.assertIn("同環的定義比較多元", text)
         self.assertIn("現有資料集也沒有合適的 GT", text)
@@ -281,3 +285,75 @@ class TestMengtian(unittest.TestCase):
         self.assertTrue(has_semantic(maps, "H"))
         self.assertFalse(has_semantic(maps, "X"))
         self.assertEqual(doors_of(maps, "H", "aaa"), [])
+
+
+class TestDrawCrossRoom(unittest.TestCase):
+    def _write_pair(self, root, house, a, b, regions):
+        out = os.path.join(root, "roma_regions")
+        os.makedirs(out, exist_ok=True)
+        geometry = _geometry(regions=regions)
+        geometry["house"] = house
+        geometry["img_a"] = a
+        geometry["img_b"] = b
+        path = os.path.join(out, "%s_%s_%s.json" % (house, a, b))
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(geometry, fh)
+        return out, path
+
+    def test_lists_door_hits_that_the_label_calls_cross_room(self):
+        with temp_dir() as root:
+            regions = [_region((80, 150), (10, 90))]
+            out, path = self._write_pair(root, "H", "a", "b", regions)
+            summary = [
+                {"house": "H", "img_a": "a", "img_b": "b", "gt_label": "1", "same_room": "0"},
+                {"house": "H", "img_a": "a", "img_b": "c", "gt_label": "1", "same_room": "1"},
+                {"house": "H", "img_a": "a", "img_b": "d", "gt_label": "0", "same_room": "0"},
+            ]
+            maps = {"H": {"a": [], "b": []}}
+            hits = cross_room_door_hits(summary, maps, out)
+        self.assertEqual([(h["house"], h["img_a"], h["img_b"]) for h in hits],
+                         [("H", "a", "b")])
+        self.assertEqual(hits[0]["json_path"], path)
+
+    def test_a_region_only_inside_a_door_is_not_listed(self):
+        with temp_dir() as root:
+            regions = [_region((0, 20), (40, 100))]
+            out, _ = self._write_pair(root, "H", "a", "b", regions)
+            summary = [
+                {"house": "H", "img_a": "a", "img_b": "b", "gt_label": "1", "same_room": "0"},
+            ]
+            maps = {"H": {"a": [{"az0": 0.0, "width_deg": 40.0}], "b": []}}
+            hits = cross_room_door_hits(summary, maps, out)
+        self.assertEqual(hits, [])
+
+    def test_house_without_a_map_is_not_listed(self):
+        with temp_dir() as root:
+            regions = [_region((80, 150), (10, 90))]
+            out, _ = self._write_pair(root, "H", "a", "b", regions)
+            summary = [
+                {"house": "H", "img_a": "a", "img_b": "b", "gt_label": "1", "same_room": "0"},
+            ]
+            hits = cross_room_door_hits(summary, {}, out)
+        self.assertEqual(hits, [])
+
+    def test_draw_paints_the_regions_left_after_the_door_filter(self):
+        from roma_geo.same_room.draw import draw_hits
+        inside = _region((0, 20), (40, 100))
+        outside = _region((80, 150), (10, 90))
+        geometry = _geometry(regions=[inside, outside])
+        hit = {
+            "house": "H", "img_a": "a", "img_b": "b",
+            "json_path": "H_a_b.json",
+            "geometry": geometry,
+            "kept": [outside],
+        }
+        seen = []
+
+        def render(json_path, out_dir, target_w, draw_az, geometry=None):
+            seen.append((geometry.get("regions"), draw_az))
+            return os.path.join(out_dir, "H_a_b.jpg")
+
+        with temp_dir() as root:
+            saved = draw_hits([hit], root, render=render)
+        self.assertEqual(seen, [([outside], False)])
+        self.assertTrue(saved[0].endswith("H_a_b.jpg"))

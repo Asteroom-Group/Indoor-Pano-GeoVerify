@@ -164,8 +164,9 @@ def render(wedge_sections, door_sections, notes):
     lines = [
         "# 蒙恬同環與其他連通",
         "",
-        "同環是清單裡、同一房間名底下的圖兩兩成對。",
-        "其他連通是總表裡導航相連、且不在這些對裡的配對。",
+        "表格只看總表裡標連通的 pair。",
+        "同環是同一房間名底下、且在這批連通裡的配對。",
+        "其他連通是這批連通裡、不在同環的配對。",
         "",
         "## 楔形",
         "",
@@ -338,16 +339,17 @@ def build(kept_root, summary_path, datasets, regions_dir, semantic_dir, produce)
         return [row for row in rows if row.get("has_semantic")]
 
     missing_n = sum(1 for row in ring if row.get("missing"))
+    all_connected = ring + other
     notes = [
-        "同環清單 %d 對。總表裡有幾何結果且連通的 %d 對，未進總表 %d 對，進了總表但未標連通 %d 對。"
-        % (len(ring_keys), len(split["ring_connected"]),
-           len(split["ring_missing"]), len(split["ring_unconnected"])),
+        "只看總表裡標連通的 pair，共 %d 對。其中同環 %d 對，其他連通 %d 對。"
+        % (len(all_connected), len(ring), len(other)),
         "走廊只認名稱含 Hallway 或走廊。戶外認 yard、street、deck、road、driveway、porch、patio、dt out、陽台、戶外這類字。Tool Shed、attic、Garage 沒有這些字，留在其餘室內。",
     ]
     if missing_n:
         notes.append("連通同環裡有 %d 對沒讀到幾何結果。" % missing_n)
     wedge_sections = [
-        ("同環，且連通", slice_stats(ring)),
+        ("全部連通", slice_stats(all_connected)),
+        ("同環", slice_stats(ring)),
         ("其他連通", slice_stats(other)),
         ("同環走廊", slice_stats(hallway_ring)),
         ("同環戶外", slice_stats(outdoor_ring)),
@@ -356,7 +358,8 @@ def build(kept_root, summary_path, datasets, regions_dir, semantic_dir, produce)
         ("其他連通，兩端都是戶外", slice_stats(outdoor_other)),
     ]
     door_sections = [
-        ("同環，且連通", slice_stats(mapped(ring))),
+        ("全部連通", slice_stats(mapped(all_connected))),
+        ("同環", slice_stats(mapped(ring))),
         ("其他連通", slice_stats(mapped(other))),
         ("同環走廊", slice_stats(mapped(hallway_ring))),
         ("同環戶外", slice_stats(mapped(outdoor_ring))),

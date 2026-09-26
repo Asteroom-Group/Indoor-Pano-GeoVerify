@@ -86,9 +86,9 @@ def _az_line(img, az_deg, W, s, color, label, dashed=False):
     return img
 
 
-def render_pair(json_path, out_dir=OUT_DIR, target_w=2048, draw_az=True):
+def render_pair(json_path, out_dir=OUT_DIR, target_w=2048, draw_az=True, geometry=None):
     """draw_az=False:只畫共視區域遮罩,不畫 az/GT 方位線(deck 素材用。線條對非本組讀者不直觀)。"""
-    d = json.load(open(json_path, encoding="utf-8"))
+    d = geometry if geometry is not None else json.load(open(json_path, encoding="utf-8"))
     house, na, nb = d["house"], d["img_a"], d["img_b"]
     pa, pb = find_house_image(house, na), find_house_image(house, nb)
     if not (pa and pb):

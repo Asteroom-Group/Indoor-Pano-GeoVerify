@@ -16,12 +16,19 @@ def named_paths(regions_dir, house, stem_a, stem_b):
     return [os.path.join(regions_dir, name) for name in names]
 
 
-def load_named(regions_dir, house, stem_a, stem_b):
+def existing_path(regions_dir, house, stem_a, stem_b):
     for path in named_paths(regions_dir, house, stem_a, stem_b):
         if os.path.isfile(path):
-            with open(path, encoding="utf-8") as fh:
-                return json.load(fh)
+            return path
     return None
+
+
+def load_named(regions_dir, house, stem_a, stem_b):
+    path = existing_path(regions_dir, house, stem_a, stem_b)
+    if path is None:
+        return None
+    with open(path, encoding="utf-8") as fh:
+        return json.load(fh)
 
 
 def load_saved(regions_dir, img_a, img_b):

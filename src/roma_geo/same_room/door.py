@@ -35,14 +35,24 @@ def side_in_door(az_range, door_arcs, contain):
     return covered_length(start, width, door_arcs) / width >= contain
 
 
-def decides_same_room(regions, doors_a, doors_b, contain=CONTAIN):
+def region_in_door(region, arcs_a, arcs_b, contain):
+    side_a = (region or {}).get("a") or {}
+    side_b = (region or {}).get("b") or {}
+    in_a = side_in_door(side_a.get("az_range"), arcs_a, contain)
+    in_b = side_in_door(side_b.get("az_range"), arcs_b, contain)
+    return in_a or in_b
+
+
+def kept_regions(regions, doors_a, doors_b, contain=CONTAIN):
+    """拿掉某一側有八成以上落在門裡的共視。剩下的才拿去判同房。"""
     arcs_a = as_arcs(doors_a)
     arcs_b = as_arcs(doors_b)
+    kept = []
     for region in regions or []:
-        side_a = region.get("a") or {}
-        side_b = region.get("b") or {}
-        in_a = side_in_door(side_a.get("az_range"), arcs_a, contain)
-        in_b = side_in_door(side_b.get("az_range"), arcs_b, contain)
-        if not in_a and not in_b:
-            return True
-    return False
+        if not region_in_door(region, arcs_a, arcs_b, contain):
+            kept.append(region)
+    return kept
+
+
+def decides_same_room(regions, doors_a, doors_b, contain=CONTAIN):
+    return bool(kept_regions(regions, doors_a, doors_b, contain))
