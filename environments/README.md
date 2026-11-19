@@ -26,6 +26,10 @@ cd environments
 .\setup_env.ps1
 ```
 
+`setup_env.ps1` 須以 UTF-8 with BOM 存檔。Windows PowerShell 5.1 讀取沒有 BOM 的腳本時
+改用系統 ANSI 字碼頁（繁體中文 Windows 為 cp950），中文字會吃掉相鄰的引號，整份腳本
+解析失敗。編輯後若出現解析錯誤，先確認存檔編碼。
+
 Linux / Kaggle：
 
 ```bash

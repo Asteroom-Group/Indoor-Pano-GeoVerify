@@ -1,0 +1,7 @@
+root = true
+
+# Windows PowerShell 5.1 讀沒有 BOM 的腳本時改用系統 ANSI 字碼頁（繁中 Windows 為 cp950），
+# 腳本內的中文會吃掉相鄰的引號而整份解析失敗。PowerShell 7 有無 BOM 皆可讀。
+[*.ps1]
+charset = utf-8-bom
+end_of_line = crlf

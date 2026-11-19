@@ -1,12 +1,17 @@
 # shell 腳本必須是 LF：CRLF 會讓 bash 在 `}` 之類的 token 後看到 \r 而語法錯誤。
 *.sh text eol=lf
 
+# PowerShell 腳本必須存成 UTF-8 with BOM（BOM 存在 blob 內，git 不會動它）。
+# Windows PowerShell 5.1 讀沒有 BOM 的腳本時改用系統 ANSI 字碼頁，繁中 Windows 為 cp950，
+# 中文字會吃掉相鄰的引號而整份解析失敗。部分編輯器存檔時會拿掉 BOM，
+# 支援 EditorConfig 的編輯器會依專案設定保留。
+*.ps1 text eol=crlf
+
 # 其餘文字檔交由 git 正規化，二進位檔不動。
 *.py text
 *.md text
 *.json text
 *.txt text
-*.ps1 text eol=crlf
 *.npy binary
 *.npz binary
 *.jpg binary
